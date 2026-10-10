@@ -105,6 +105,17 @@ Scout reads `rules.json` (File → Edit Site Rules…, or Settings → Edit rule
 
 `match` can be `example.com` (with subdomains), `*.example.com` (subdomains only), `example.com/path`, a list of these, `*` for every site, or a regular expression like `/\/login/i`. Rules apply in order and later matches win. The first run creates examples for Wikipedia, YouTube, and sign-in, banking and payment pages (no suggestions, no autoplay). A broken file is reported in the sidebar and the previous rules stay in use.
 
+## AI query ideas
+
+Optional (Settings → AI query ideas). An AI model reads your pinned keywords, the page's top keywords and its title, and suggests up to 2 extra search queries that look for other angles: background, related people or organisations, primary sources, opposing views. The status line marks these queries "(AI)". Keyword-only results still show first, so the AI never slows down the first results.
+
+| Option | Setup | Privacy |
+| --- | --- | --- |
+| Local model | Install [Ollama](https://ollama.com) and run `ollama pull llama3.2` (or any chat model). Address `http://localhost:11434/v1`. LM Studio also works at `http://localhost:1234/v1`. | Nothing leaves your computer |
+| Grok (xAI) | API key from xAI. Press **Test** to see the model names your key can use and pick one. | Keywords and page titles are sent to xAI |
+
+The model never receives page text or addresses, and pages with suggestions turned off by a site rule are never sent. If the model is unreachable or answers badly, Scout uses its normal keyword queries and shows a note. The Grok key is stored like the search keys (encrypted with the system keychain when available).
+
 ## Search sources
 
 Open **Settings** in the sidebar to turn sources on or off. **Test** runs one search with that source and shows the result or the error.

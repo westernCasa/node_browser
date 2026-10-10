@@ -101,6 +101,36 @@
         </div>
         <p class="help">Wikipedia runs for every search. For web results Scout uses the first working source in this order: Brave, SearXNG, DuckDuckGo.</p>
         <div id="sources-list"></div>
+        <div class="rail-head rules-head">
+          <div>
+            <p class="kicker">Search</p>
+            <h1>AI query ideas</h1>
+          </div>
+        </div>
+        <p class="help">An AI model suggests extra search queries from your pinned keywords, the page's top keywords and its title. It never receives the page text or address.</p>
+        <div class="source" id="ai-box">
+          <div class="top">
+            <label class="toggle"><input type="checkbox" id="ai-enabled" /> Use AI query ideas</label>
+          </div>
+          <label class="field"><span>Model</span>
+            <select id="ai-provider">
+              <option value="local">Local model (Ollama or LM Studio)</option>
+              <option value="grok">Grok (xAI, cloud)</option>
+            </select>
+          </label>
+          <div id="ai-local">
+            <label class="field"><span>Server address</span><input id="ai-local-url" type="text" spellcheck="false" placeholder="http://localhost:11434/v1" /></label>
+            <label class="field"><span>Model name</span><input id="ai-local-model" type="text" spellcheck="false" list="ai-models" placeholder="llama3.2" /></label>
+          </div>
+          <div id="ai-grok" hidden>
+            <label class="field"><span>xAI API key</span><input id="ai-grok-key" type="password" spellcheck="false" /></label>
+            <label class="field"><span>Model name</span><input id="ai-grok-model" type="text" spellcheck="false" list="ai-models" /></label>
+          </div>
+          <datalist id="ai-models"></datalist>
+          <div class="state" id="ai-state"></div>
+          <div class="actions"><button id="ai-test" title="Save, list the server's models and try one request">Test</button></div>
+          <p class="help" id="ai-privacy"></p>
+        </div>
         <button class="chip wide" id="sources-save">Save</button>
         <p class="help" id="sources-msg"></p>
         <div class="rail-head rules-head">

@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld("scout", {
   keywords: (id, banned) => ipcRenderer.invoke("page:keywords", id, banned),
   suggestFor: (payload) => ipcRenderer.invoke("suggest:for", payload),
   getSettings: () => ipcRenderer.invoke("settings:get"),
+  testAI: (draft) => ipcRenderer.invoke("ai:test", draft),
   editRules: () => ipcRenderer.invoke("rules:edit"),
   findStart: (id, text, opts) => ipcRenderer.invoke("find:start", id, text, opts),
   researchGet: () => ipcRenderer.invoke("research:get"),

@@ -5,6 +5,7 @@ const { URL } = require("url");
 const { rankTerms, buildQueries, SessionDF } = require("./keywords");
 const { PROVIDERS, Registry, defaultSettings } = require("./providers");
 const Rules = require("./rules");
+const AI = require("./ai");
 const { ResearchStore } = require("./research");
 let research = null; // current research session store (B17), created when the app is ready
 
@@ -669,6 +670,21 @@ function secretFields(id) {
   return (PROVIDERS[id]?.fields || []).filter((f) => f.secret).map((f) => f.key);
 }
 
+function encryptSecret(value) {
+  return value && safeStorage.isEncryptionAvailable() ? { enc: safeStorage.encryptString(value).toString("base64") } : { plain: value || "" };
+}
+
+function decryptSecret(saved) {
+  if (saved?.enc && safeStorage.isEncryptionAvailable()) {
+    try {
+      return safeStorage.decryptString(Buffer.from(saved.enc, "base64"));
+    } catch (_) {
+      return "";
+    }
+  }
+  return typeof saved?.plain === "string" ? saved.plain : "";
+}
+
 function loadSettings() {
   if (settingsCache) return settingsCache;
   const base = defaultSettings();
@@ -692,6 +708,14 @@ function loadSettings() {
     }
     base.providers[id] = merged;
   }
+  // AI query ideas (B20). The Grok key is stored like the search keys.
+  const ai = raw.ai || {};
+  base.ai = {
+    enabled: Boolean(ai.enabled),
+    provider: ai.provider === "grok" ? "grok" : "local",
+    local: { ...AI.AI_DEFAULTS.local, ...(ai.local || {}) },
+    grok: { model: ai.grok?.model || AI.AI_DEFAULTS.grok.model, key: decryptSecret(ai.grok?.key) },
+  };
   settingsCache = base;
   return settingsCache;
 }
@@ -706,6 +730,18 @@ function saveSettings(next) {
     for (const k of allowed) if (k in incoming) current.providers[id][k] = k === "enabled" ? Boolean(incoming[k]) : String(incoming[k] || "").trim();
     if (JSON.stringify(current.providers[id]) !== before) search.reset(id);
   }
+  const inAi = next?.ai;
+  if (inAi) {
+    const a = current.ai;
+    const before = JSON.stringify(a);
+    if ("enabled" in inAi) a.enabled = Boolean(inAi.enabled);
+    if (inAi.provider === "grok" || inAi.provider === "local") a.provider = inAi.provider;
+    if (inAi.local?.url !== undefined) a.local.url = String(inAi.local.url).trim();
+    if (inAi.local?.model !== undefined) a.local.model = String(inAi.local.model).trim();
+    if (inAi.grok?.model !== undefined) a.grok.model = String(inAi.grok.model).trim();
+    if (inAi.grok?.key !== undefined) a.grok.key = String(inAi.grok.key).trim();
+    if (JSON.stringify(a) !== before) aiReset();
+  }
   const disk = { providers: {} };
   for (const [id, conf] of Object.entries(current.providers)) {
     const copy = { ...conf };
@@ -717,6 +753,8 @@ function saveSettings(next) {
     }
     disk.providers[id] = copy;
   }
+  const a = current.ai;
+  disk.ai = { enabled: a.enabled, provider: a.provider, local: a.local, grok: { model: a.grok.model, key: encryptSecret(a.grok.key) } };
   fs.writeFileSync(settingsFile(), JSON.stringify(disk, null, 2));
   return publicSettings();
 }
@@ -733,14 +771,79 @@ function publicSettings() {
     }
     providers[id] = copy;
   }
+  const a = s.ai;
   return {
     providers,
+    ai: { enabled: a.enabled, provider: a.provider, local: { ...a.local }, grok: { model: a.grok.model, keySet: Boolean(a.grok.key) } },
+    aiStatus: { ...aiState },
     meta: Object.values(PROVIDERS).map((p) => ({ id: p.id, label: p.label, role: p.role, fields: p.fields })),
     encrypted: safeStorage.isEncryptionAvailable(),
   };
 }
 
 const search = new Registry({ getText, getConfig: (id) => loadSettings().providers[id] || {} });
+
+// ---- AI query ideas (B20) ----
+// One call per distinct set of inputs, cached 30 min. Requests for the same
+// inputs share one in-flight call (the "reference" search pass starts it,
+// the "all" pass waits for it).
+const aiCache = new Map();
+const aiInflight = new Map();
+const aiState = { lastOk: 0, lastError: "", lastQueries: [] };
+
+function aiReset() {
+  aiCache.clear();
+  aiInflight.clear();
+  aiState.lastError = "";
+}
+
+function aiQueries(input) {
+  const conf = loadSettings().ai;
+  if (!AI.ready(conf)) return Promise.resolve([]);
+  const e = AI.endpoint(conf);
+  const key = JSON.stringify([conf.provider, e.base, e.model, input.pinned, input.keywords.slice(0, 8), input.title]);
+  const hit = aiCache.get(key);
+  if (hit && Date.now() - hit.at < CACHE_TTL) return Promise.resolve(hit.queries);
+  if (aiInflight.has(key)) return aiInflight.get(key);
+  const job = AI.expand(input, conf)
+    .then((queries) => {
+      aiCache.set(key, { at: Date.now(), queries });
+      if (aiCache.size > 200) aiCache.delete(aiCache.keys().next().value);
+      Object.assign(aiState, { lastOk: Date.now(), lastError: "", lastQueries: queries });
+      return queries;
+    })
+    .catch((err) => {
+      aiState.lastError = String(err.message || err);
+      return [];
+    })
+    .finally(() => aiInflight.delete(key));
+  aiInflight.set(key, job);
+  return job;
+}
+
+// Settings panel Test button: list models, then try one expansion with sample input.
+async function aiTest(draft) {
+  const conf = { ...loadSettings().ai, ...(draft || {}), enabled: true };
+  const out = { ok: false, models: [], queries: [], error: "" };
+  try {
+    out.models = await AI.listModels(conf);
+  } catch (err) {
+    out.error = String(err.message || err);
+    return out;
+  }
+  const model = AI.endpoint(conf).model;
+  if (out.models.length && !out.models.includes(model)) {
+    out.error = `Model "${model}" is not on this server. Available: ${out.models.slice(0, 12).join(", ")}`;
+    return out;
+  }
+  try {
+    out.queries = await AI.expand({ pinned: [], keywords: ["sourdough", "starter", "hydration", "rye"], title: "Why sourdough starters fail" }, conf);
+    out.ok = true;
+  } catch (err) {
+    out.error = String(err.message || err);
+  }
+  return out;
+}
 
 function sameUrl(a, b) {
   const norm = (u) => String(u || "").replace(/#.*$/, "").replace(/\/$/, "").replace(/^http:/, "https:");
@@ -791,10 +894,23 @@ async function suggest(keywords, excludeUrl) {
 
 // Main entry point (B09): pinned keywords + ranked terms -> short queries -> results.
 async function suggestFor({ pinned = [], ranked = [], title = "", excludeUrl = "", part = "all" } = {}) {
-  const queries = buildQueries({ pinned, ranked, title });
-  if (!queries.length) return { results: [], queries: [], notes: [] };
+  const base = buildQueries({ pinned, ranked, title });
+  if (!base.length) return { results: [], queries: [], notes: [] };
+  const terms = ranked.map((r) => (typeof r === "string" ? r : r.term));
+  const aiJob = aiQueries({ pinned, keywords: terms, title });
+  if (part === "reference") {
+    // Fast pass: keyword queries only. The AI call keeps running in the background.
+    const { results } = await runQueries(base, excludeUrl, part);
+    return { results, queries: base, aiQueries: [], notes: [], part };
+  }
+  // Full pass: the first keyword query plus up to 2 AI queries (B20). If the
+  // AI is off or fails, the keyword queries are used as before.
+  const extra = (await aiJob).filter((q) => !base.some((b) => b.toLowerCase() === q.toLowerCase()));
+  const queries = extra.length ? [base[0], ...extra.slice(0, 2)] : base;
   const { results, notes } = await runQueries(queries, excludeUrl, part);
-  return { results, queries, notes: part === "all" ? notes : [], part };
+  const conf = loadSettings().ai;
+  if (conf.enabled && !extra.length && aiState.lastError) notes.push(`AI query ideas unavailable: ${aiState.lastError}`);
+  return { results, queries, aiQueries: extra.slice(0, 2), notes, part };
 }
 
 // Session-wide document frequency, so words that appear on every page lose weight.
@@ -1340,6 +1456,7 @@ ipcMain.handle("page:extract", (_e, id) => extractPage(id));
 ipcMain.handle("suggest:search", (_e, keywords, excludeUrl) => suggest(keywords, excludeUrl));
 ipcMain.handle("suggest:for", (_e, payload) => suggestFor(payload));
 ipcMain.handle("settings:get", () => publicSettings());
+ipcMain.handle("ai:test", (_e, draft) => aiTest(draft));
 ipcMain.handle("find:start", (_e, id, text, opts = {}) => {
   const wc = tabs.get(id)?.view.webContents;
   if (!wc || !text) return null;

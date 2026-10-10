@@ -480,7 +480,8 @@ async function crawl() {
     }
     if (stale()) return;
     data.results = notDismissed(data.results);
-    const qs = (data.queries || []).map((q) => `"${q}"`).join(" · ");
+    const aiSet = new Set(data.aiQueries || []);
+    const qs = (data.queries || []).map((q) => `"${q}"` + (aiSet.has(q) ? " (AI)" : "")).join(" · ");
     statusEl.textContent = `${data.results.length} results` + (qs ? ` for ${qs}` : "");
     if (data.notes?.length) statusEl.textContent += " — " + data.notes.join(" ");
     renderResults(data.results);
@@ -831,8 +832,79 @@ function stateLine(st) {
   return { text: "Not used yet", cls: "" };
 }
 
+// AI section of the Settings pane (B20).
+const aiEls = {
+  enabled: document.getElementById("ai-enabled"),
+  provider: document.getElementById("ai-provider"),
+  localUrl: document.getElementById("ai-local-url"),
+  localModel: document.getElementById("ai-local-model"),
+  grokKey: document.getElementById("ai-grok-key"),
+  grokModel: document.getElementById("ai-grok-model"),
+  state: document.getElementById("ai-state"),
+  privacy: document.getElementById("ai-privacy"),
+  models: document.getElementById("ai-models"),
+};
+
+function paintAIProvider() {
+  const grok = aiEls.provider.value === "grok";
+  document.getElementById("ai-local").hidden = grok;
+  document.getElementById("ai-grok").hidden = !grok;
+  aiEls.privacy.textContent = grok
+    ? "Grok runs on xAI's servers: your keywords and page titles are sent to xAI. Sites with suggestions turned off by a site rule are never sent."
+    : "A local model runs on this computer, so nothing leaves it. Install Ollama (ollama.com) and run: ollama pull llama3.2. LM Studio works too (address http://localhost:1234/v1).";
+}
+
+function fillAI(ai, status) {
+  aiEls.enabled.checked = Boolean(ai.enabled);
+  aiEls.provider.value = ai.provider;
+  aiEls.localUrl.value = ai.local.url || "";
+  aiEls.localModel.value = ai.local.model || "";
+  aiEls.grokModel.value = ai.grok.model || "";
+  aiEls.grokKey.value = "";
+  aiEls.grokKey.placeholder = ai.grok.keySet ? "Saved. Type to replace." : "Starts with xai-";
+  paintAIProvider();
+  aiEls.state.className = "state " + (status?.lastError ? "bad" : status?.lastOk ? "ok" : "");
+  aiEls.state.textContent = !ai.enabled
+    ? "Off"
+    : status?.lastError
+      ? status.lastError
+      : status?.lastOk
+        ? `Working · last ideas: ${status.lastQueries.join(" · ")}`
+        : "Not used yet";
+}
+
+function aiDraft() {
+  const d = {
+    enabled: aiEls.enabled.checked,
+    provider: aiEls.provider.value,
+    local: { url: aiEls.localUrl.value, model: aiEls.localModel.value },
+    grok: { model: aiEls.grokModel.value },
+  };
+  if (aiEls.grokKey.value) d.grok.key = aiEls.grokKey.value; // blank keeps the saved key
+  return d;
+}
+
+aiEls.provider.addEventListener("change", paintAIProvider);
+document.getElementById("ai-test").addEventListener("click", async () => {
+  await saveSources(false);
+  aiEls.state.className = "state";
+  aiEls.state.textContent = "Testing…";
+  const r = await api.testAI();
+  aiEls.models.innerHTML = "";
+  for (const m of r.models || []) {
+    const o = document.createElement("option");
+    o.value = m;
+    aiEls.models.appendChild(o);
+  }
+  aiEls.state.className = "state " + (r.ok ? "ok" : "bad");
+  aiEls.state.textContent = r.ok
+    ? `Working. Sample ideas: ${r.queries.join(" · ")}${r.models.length ? ` · ${r.models.length} model${r.models.length === 1 ? "" : "s"} on the server` : ""}`
+    : r.error;
+});
+
 async function renderSources() {
   const [settings, status] = await Promise.all([api.getSettings(), api.searchStatus()]);
+  fillAI(settings.ai, settings.aiStatus);
   sourcesDraft = { providers: {} };
   sourcesList.innerHTML = "";
   for (const meta of settings.meta) {
@@ -918,7 +990,7 @@ async function renderSources() {
 
 async function saveSources(rerender = true) {
   if (!sourcesDraft) return;
-  await api.setSettings(sourcesDraft);
+  await api.setSettings({ ...sourcesDraft, ai: aiDraft() });
   if (rerender) await renderSources();
 }
 

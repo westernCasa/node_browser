@@ -19,3 +19,4 @@ On Linux without a display, run each script under `xvfb-run -a`.
 | 03-rules-and-fast-results | Wikipedia results first, site rules (extract, popups, autoplay, suggest off), live reload, broken rules file |
 | 04-find-zoom-history | History search, address-bar suggestions, find in page, zoom badge, History shelf |
 | 05-research-session | Trail, recurring keywords, dismiss, read badges, export, pins after restart, new session |
+| 06-ai-query-ideas | Local model and Grok (fake servers): Test and model list, bad key, wrong model name, AI queries in search, what is sent, local model down |

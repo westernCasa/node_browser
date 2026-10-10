@@ -499,3 +499,14 @@ html, body {
 .card .dismiss:hover { color: var(--text); }
 .rail { overflow-x: hidden; }
 .trail-row .t, .card h3 { overflow-wrap: anywhere; }
+/* AI query ideas (B20) */
+.source .field select {
+  width: 100%;
+  height: 26px;
+  border: 1px solid var(--line);
+  background: var(--bg-2);
+  color: var(--text);
+  border-radius: 4px;
+  font: 12px/1 inherit;
+}
+#ai-box .help { margin-top: 8px; }
