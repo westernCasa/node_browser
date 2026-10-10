@@ -342,3 +342,19 @@ html, body {
   font: 11px/1 inherit;
   cursor: pointer;
 }
+
+/* Keyword pins and hidden list (B10) */
+.rail-actions { display: flex; gap: 4px; }
+.rail-actions .chip { height: 24px; padding: 0 8px; font-size: 11px; }
+.key { cursor: pointer; }
+.key.pinned { border-color: var(--accent); color: var(--accent); }
+.hidden-keys { color: var(--mute); font-size: 11px; margin-top: 6px; }
+.hidden-keys button {
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  font: inherit;
+  padding: 0 0 0 4px;
+}
+.card .src .q { color: var(--mute); text-transform: none; letter-spacing: 0; }

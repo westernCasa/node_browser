@@ -2,6 +2,7 @@ const { app, BrowserWindow, BrowserView, ipcMain, session, shell, protocol, net,
 const path = require("path");
 const fs = require("fs");
 const { URL } = require("url");
+const { rankTerms, buildQueries, SessionDF } = require("./keywords");
 
 const HOME_URL = "https://en.wikipedia.org/wiki/Main_Page";
 const CHROME_TOP = 112;
@@ -337,9 +338,35 @@ async function extractPage(id) {
     names.push(...namesFrom(document.querySelector('[itemprop="author"],[rel="author"],.author,.byline')?.innerText || ""));
 
     const uniq = (arr) => [...new Set(arr.map(clean).filter((x) => x && x.length > 1))].slice(0, 16);
+
+    // Page text (B07): title, description, headings, selection, and the
+    // readable text currently in the viewport (navigation and footers skipped).
+    const SKIP = "nav, footer, aside, header nav, [role=navigation], [role=contentinfo], [role=banner] nav, [aria-hidden=true], .navbox, .sidebar, .menu, .cookie, #cookie, .ad, .ads";
+    const meta = (sel) => document.querySelector(sel)?.content || "";
+    const description = clean(meta('meta[name="description"]') || meta('meta[property="og:description"]'));
+    const headings = [];
+    for (const h of document.querySelectorAll("h1, h2, h3")) {
+      if (h.closest(SKIP)) continue;
+      const t = clean(h.innerText);
+      if (t && t.length < 160) headings.push({ t, inView: inView(h), top: h.tagName === "H1" });
+    }
+    headings.sort((a, b) => (b.top - a.top) || (b.inView - a.inView));
+    let text = "";
+    for (const el of document.querySelectorAll("p, li, dd, blockquote, td, figcaption, h1, h2, h3, h4, article div:not(:has(*))")) {
+      if (text.length > 6000) break;
+      if (!inView(el) || el.closest(SKIP)) continue;
+      const t = clean(el.innerText);
+      if (t.length > 20) text += t + " \n";
+    }
+    const selection = clean(String(window.getSelection ? window.getSelection() : "")).slice(0, 600);
     return {
       url: location.href,
       title: document.title || "",
+      description,
+      headings: headings.slice(0, 20).map((h) => h.t),
+      selection,
+      text: text.slice(0, 6000),
+      lang: document.documentElement.lang || "",
       names: uniq(names),
       mediaMeta: uniq(mediaMeta),
       mediaLinks: uniq(mediaLinks),
@@ -353,43 +380,97 @@ async function extractPage(id) {
   }
 }
 
-function keywordize(page, extra = []) {
-  const stop = new Set(
-    "a an the and or of to in on for with from by as at is are was were be this that these those it its into over about after before between than then so if but not no yes you your we they he she their our my page wikipedia free encyclopedia search home skip content official site www com org net".split(
-      " "
-    )
-  );
-  const blob = [
-    page?.title,
-    page?.description,
-    page?.keywords,
-    page?.selection,
-    ...(page?.headings || []),
-    ...(extra || []),
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase()
-    .replace(/https?:\/\/\S+/g, " ")
-    .replace(/[^a-z0-9+#.\-\s]/g, " ");
+// ---- Network layer (B12, B13) ----
+// Every outbound request goes through getText(): results are cached for 30 min,
+// identical requests in flight are shared, each host has a minimum gap between
+// requests, at most 4 requests run at once, and every request times out.
+const CACHE_TTL = 30 * 60 * 1000;
+const CACHE_MAX = 500;
+const HOST_GAP_MS = { "html.duckduckgo.com": 2500, default: 400 };
+const MAX_PARALLEL = 4;
+const cache = new Map();
+const inflight = new Map();
+const hostNext = new Map();
+const providerCooldown = new Map(); // provider -> time it may be used again
+let running = 0;
+const waiting = [];
 
-  const counts = new Map();
-  for (const raw of blob.split(/\s+/)) {
-    const w = raw.replace(/^\.+|\.+$/g, "");
-    if (w.length < 3 || stop.has(w) || /^\d+$/.test(w)) continue;
-    counts.set(w, (counts.get(w) || 0) + (w.length > 6 ? 2 : 1));
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function cacheGet(key) {
+  const hit = cache.get(key);
+  if (!hit) return undefined;
+  if (Date.now() - hit.at > CACHE_TTL) {
+    cache.delete(key);
+    return undefined;
   }
-  return [...counts.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 8)
-    .map(([w]) => w);
+  return hit.value;
+}
+
+function cacheSet(key, value) {
+  cache.delete(key);
+  cache.set(key, { at: Date.now(), value });
+  if (cache.size > CACHE_MAX) cache.delete(cache.keys().next().value);
+}
+
+async function slot() {
+  if (running < MAX_PARALLEL) {
+    running++;
+    return;
+  }
+  await new Promise((r) => waiting.push(r));
+  running++;
+}
+
+function release() {
+  running--;
+  const next = waiting.shift();
+  if (next) next();
+}
+
+async function hostTurn(host) {
+  const gap = HOST_GAP_MS[host] ?? HOST_GAP_MS.default;
+  const now = Date.now();
+  const at = Math.max(now, hostNext.get(host) || 0);
+  hostNext.set(host, at + gap);
+  if (at > now) await sleep(at - now);
+}
+
+async function getText(url, { headers = {}, maxBytes = 300000, timeout = 10000 } = {}) {
+  const key = "GET " + url;
+  const hit = cacheGet(key);
+  if (hit) return hit;
+  if (inflight.has(key)) return inflight.get(key);
+  const job = (async () => {
+    await slot();
+    try {
+      await hostTurn(new URL(url).hostname);
+      const res = await fetch(url, {
+        headers: { "User-Agent": USER_AGENT, ...headers },
+        redirect: "follow",
+        signal: AbortSignal.timeout(timeout),
+      });
+      const text = (await res.text()).slice(0, maxBytes);
+      const out = { ok: res.ok, status: res.status, url: res.url || url, text };
+      if (res.ok) cacheSet(key, out);
+      return out;
+    } finally {
+      release();
+    }
+  })();
+  inflight.set(key, job);
+  try {
+    return await job;
+  } finally {
+    inflight.delete(key);
+  }
 }
 
 function decodeEntities(s) {
   return String(s || "")
     .replace(/&amp;/g, "&")
     .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
+    .replace(/&#x27;|&#39;/g, "'")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/<[^>]+>/g, "")
@@ -397,12 +478,21 @@ function decodeEntities(s) {
     .trim();
 }
 
+// ---- Search providers ----
+// Each provider: async (query) => [{url, title, snippet, source, image?}]
+// Phase 2 (B15) turns this into a pluggable list with Brave / SearXNG options.
 async function ddgSearch(query) {
-  const url = "https://html.duckduckgo.com/html/?q=" + encodeURIComponent(query);
-  const res = await fetch(url, {
-    headers: { "User-Agent": USER_AGENT, Accept: "text/html" },
+  if ((providerCooldown.get("ddg") || 0) > Date.now()) return [];
+  const res = await getText("https://html.duckduckgo.com/html/?q=" + encodeURIComponent(query), {
+    headers: { Accept: "text/html" },
   });
-  const html = await res.text();
+  const html = res.text;
+  // DuckDuckGo answers rate-limited clients with HTTP 202 or a challenge page.
+  if (res.status === 202 || res.status === 403 || /anomaly-modal|challenge-form/i.test(html)) {
+    providerCooldown.set("ddg", Date.now() + 10 * 60 * 1000);
+    cache.delete("GET https://html.duckduckgo.com/html/?q=" + encodeURIComponent(query));
+    return [];
+  }
   const results = [];
   const re =
     /<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?(?:class="result__snippet"[^>]*>([\s\S]*?)<\/)/gi;
@@ -411,29 +501,10 @@ async function ddgSearch(query) {
     let href = decodeEntities(m[1]);
     try {
       const u = new URL(href, "https://duckduckgo.com/");
-      if (u.pathname === "/l/" && u.searchParams.get("uddg")) {
-        href = u.searchParams.get("uddg");
-      } else {
-        href = u.href;
-      }
+      href = u.pathname === "/l/" && u.searchParams.get("uddg") ? u.searchParams.get("uddg") : u.href;
     } catch (_) {}
-    results.push({
-      url: href,
-      title: decodeEntities(m[2]),
-      snippet: decodeEntities(m[3] || ""),
-      source: "search",
-    });
-  }
-  if (results.length) return results;
-
-  const alt = /<a rel="nofollow" class="result-link" href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
-  while ((m = alt.exec(html)) && results.length < 8) {
-    results.push({
-      url: decodeEntities(m[1]),
-      title: decodeEntities(m[2]),
-      snippet: "",
-      source: "search",
-    });
+    if (/duckduckgo\.com\/y\.js/.test(href)) continue; // ads
+    results.push({ url: href, title: decodeEntities(m[2]), snippet: decodeEntities(m[3] || ""), source: "search" });
   }
   return results;
 }
@@ -442,9 +513,9 @@ async function wikiSearch(query) {
   const url =
     "https://en.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch=" +
     encodeURIComponent(query) +
-    "&gsrlimit=5&prop=pageimages|extracts|info&inprop=url&exintro=1&explaintext=1&pithumbsize=640&format=json";
-  const res = await fetch(url, { headers: { "User-Agent": USER_AGENT } });
-  const data = await res.json();
+    "&gsrlimit=5&prop=pageimages|extracts|info&inprop=url&exintro=1&explaintext=1&exchars=300&pithumbsize=640&format=json";
+  const res = await getText(url);
+  const data = JSON.parse(res.text || "{}");
   const pages = Object.values(data.query?.pages || {});
   pages.sort((a, b) => (a.index || 0) - (b.index || 0));
   return pages.map((p) => ({
@@ -457,21 +528,64 @@ async function wikiSearch(query) {
   }));
 }
 
-async function suggest(keywords, excludeUrl) {
-  const q = (Array.isArray(keywords) ? keywords.join(" ") : String(keywords || "")).trim();
-  if (!q) return { keywords: [], results: [] };
-  const [web, wiki] = await Promise.allSettled([ddgSearch(q), wikiSearch(q)]);
+function sameUrl(a, b) {
+  const norm = (u) => String(u || "").replace(/#.*$/, "").replace(/\/$/, "").replace(/^http:/, "https:");
+  return norm(a) === norm(b);
+}
+
+// Run several queries against the providers and merge the lists round-robin,
+// so each query and each provider gets a share of the top results.
+async function runQueries(queries, excludeUrl) {
+  const jobs = [];
+  queries.forEach((q, i) => {
+    jobs.push(wikiSearch(q).then((r) => r.map((x) => ({ ...x, query: q }))));
+    if (i < 2) jobs.push(ddgSearch(q).then((r) => r.map((x) => ({ ...x, query: q }))));
+  });
+  const lists = (await Promise.allSettled(jobs)).map((r) => (r.status === "fulfilled" ? r.value : []));
   const merged = [];
   const seen = new Set();
-  const skip = (excludeUrl || "").replace(/\/$/, "");
-  for (const item of [...(wiki.value || []), ...(web.value || [])]) {
-    if (!item?.url || !item.title) continue;
-    const key = item.url.replace(/\/$/, "");
-    if (seen.has(key) || key === skip) continue;
-    seen.add(key);
-    merged.push(item);
+  for (let i = 0; merged.length < 12 && lists.some((l) => l.length > i); i++) {
+    for (const list of lists) {
+      const item = list[i];
+      if (!item?.url || !item.title) continue;
+      const key = item.url.replace(/#.*$/, "").replace(/\/$/, "");
+      if (seen.has(key) || sameUrl(item.url, excludeUrl)) continue;
+      if (/wikipedia\.org\/wiki\/(Main_Page|Special:)/.test(item.url)) continue;
+      seen.add(key);
+      merged.push(item);
+      if (merged.length >= 12) break;
+    }
   }
-  return { keywords: q.split(/\s+/).filter(Boolean).slice(0, 8), results: merged.slice(0, 12) };
+  const notes = [];
+  if ((providerCooldown.get("ddg") || 0) > Date.now()) notes.push("Web search is rate-limited for a few minutes; showing Wikipedia only.");
+  return { results: merged, notes };
+}
+
+// Legacy entry point (Tauri bridge and manual keyword list): one query from the list.
+async function suggest(keywords, excludeUrl) {
+  const words = Array.isArray(keywords) ? keywords : String(keywords || "").split(/\s+/);
+  const queries = buildQueries({ pinned: [], ranked: words.filter(Boolean) });
+  if (!queries.length) return { keywords: [], results: [], queries: [] };
+  const { results, notes } = await runQueries(queries, excludeUrl);
+  return { keywords: words.slice(0, 8), results, queries, notes };
+}
+
+// Main entry point (B09): pinned keywords + ranked terms -> short queries -> results.
+async function suggestFor({ pinned = [], ranked = [], title = "", excludeUrl = "" } = {}) {
+  const queries = buildQueries({ pinned, ranked, title });
+  if (!queries.length) return { results: [], queries: [], notes: [] };
+  const { results, notes } = await runQueries(queries, excludeUrl);
+  return { results, queries, notes };
+}
+
+// Session-wide document frequency, so words that appear on every page lose weight.
+const sessionDF = new SessionDF();
+
+async function pageKeywords(id, banned = []) {
+  const page = await extractPage(id);
+  if (!page || page.error) return { page, ranked: [] };
+  const ranked = rankTerms(page, { df: sessionDF, banned, limit: 12 });
+  return { page: { url: page.url, title: page.title, selection: page.selection }, ranked };
 }
 
 function youtubeId(url) {
@@ -640,11 +754,8 @@ async function preview(url, keywords = []) {
     return { url, title: url, description: "", image: "", video: url, kind: "video" };
   }
   try {
-    const res = await fetch(url, {
-      headers: { "User-Agent": USER_AGENT, Accept: "text/html" },
-      redirect: "follow",
-    });
-    const html = (await res.text()).slice(0, 280000);
+    const res = await getText(url, { headers: { Accept: "text/html" }, maxBytes: 280000, timeout: 8000 });
+    const html = res.text;
     const pick = (re) => {
       const m = html.match(re);
       return m ? decodeEntities(m[1]) : "";
@@ -974,6 +1085,8 @@ ipcMain.handle("tab:audio-reset", (_e, id) => {
 });
 ipcMain.handle("page:extract", (_e, id) => extractPage(id));
 ipcMain.handle("suggest:search", (_e, keywords, excludeUrl) => suggest(keywords, excludeUrl));
+ipcMain.handle("suggest:for", (_e, payload) => suggestFor(payload));
+ipcMain.handle("page:keywords", (_e, id, banned) => pageKeywords(id, banned));
 ipcMain.handle("suggest:preview", (_e, url, keywords) => preview(url, keywords));
 
 function libraryRoot() {
@@ -1134,4 +1247,3 @@ ipcMain.handle("library:grab", async (_e, id, explicitUrl) => {
   return addRecord("media", name, tab.view.webContents.getURL(), found.url);
 });
 
-exports.keywordize = keywordize;

@@ -44,13 +44,17 @@
             <p class="kicker">Next pages</p>
             <h1>Suggestions</h1>
           </div>
-          <button class="chip" id="refresh-suggest">Crawl</button>
+          <div class="rail-actions">
+            <button class="chip active" id="auto-btn" title="Re-search when the visible page changes">Auto</button>
+            <button class="chip" id="refresh-suggest" title="Search now">Crawl</button>
+          </div>
         </div>
-        <p class="help">Every 5s: media metadata, media links, and names in view.</p>
+        <p class="help">Keywords come from the visible page. Click a keyword to pin it. × hides it. Select text on a page to search for it.</p>
         <div class="keys" id="keys"></div>
         <form id="key-form" class="key-form">
-          <input id="key-input" type="text" placeholder="Add keyword" />
+          <input id="key-input" type="text" placeholder="Add keyword (pinned)" />
         </form>
+        <div class="hidden-keys" id="hidden-keys" hidden></div>
         <div class="notice" id="notice" hidden></div>
         <div class="status" id="suggest-status">Waiting for a page to settle.</div>
         <div class="results" id="results"></div>

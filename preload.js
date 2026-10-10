@@ -14,6 +14,8 @@ contextBridge.exposeInMainWorld("scout", {
   extract: (id) => ipcRenderer.invoke("page:extract", id),
   suggest: (keywords, excludeUrl) => ipcRenderer.invoke("suggest:search", keywords, excludeUrl),
   preview: (url, keywords) => ipcRenderer.invoke("suggest:preview", url, keywords),
+  keywords: (id, banned) => ipcRenderer.invoke("page:keywords", id, banned),
+  suggestFor: (payload) => ipcRenderer.invoke("suggest:for", payload),
   shot: (id) => ipcRenderer.invoke("library:shot", id),
   savePage: (id) => ipcRenderer.invoke("library:save", id),
   grabMedia: (id, url) => ipcRenderer.invoke("library:grab", id, url),

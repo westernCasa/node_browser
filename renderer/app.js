@@ -11,13 +11,57 @@ const keyInput = document.getElementById("key-input");
 
 let tabs = [];
 let activeId = null;
-let keywords = [];
 let layout = "focus";
 let suggestTimer = null;
-let lastSettledUrl = "";
-let lastKeywordKey = "";
 let crawlBusy = false;
 let crawlClock = null;
+
+// Keyword state (B10). Pinned keywords are chosen by the user and are never
+// replaced by the automatic reading of the page. Hidden keywords are never shown.
+const store = {
+  get(key, fallback) {
+    try {
+      const v = localStorage.getItem(key);
+      return v == null ? fallback : JSON.parse(v);
+    } catch {
+      return fallback;
+    }
+  },
+  set(key, value) {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch {}
+  },
+};
+let pinned = [];
+let banned = store.get("scout.banned", []);
+let auto = []; // ranked terms from the page: [{term, score, kind}]
+let autoOn = store.get("scout.auto", true);
+let lastCrawl = { at: 0, url: "", terms: [], selection: "" };
+const RECRAWL_GAP_MS = 20000; // B11: minimum time between automatic searches
+const AUTO_SHOWN = 8;
+
+const lower = (s) => String(s).toLowerCase();
+const isPinned = (t) => pinned.some((p) => lower(p) === lower(t));
+const isBanned = (t) => banned.includes(lower(t));
+
+function autoTerms() {
+  return auto.map((r) => r.term).filter((t) => !isPinned(t) && !isBanned(t));
+}
+
+// Chips shown in the panel: pins first, then the top automatic terms.
+function shownKeywords() {
+  return [...pinned, ...autoTerms().slice(0, AUTO_SHOWN)];
+}
+
+function overlap(a, b) {
+  const A = new Set(a.map(lower));
+  const B = new Set(b.map(lower));
+  if (!A.size && !B.size) return 1;
+  let n = 0;
+  for (const x of A) if (B.has(x)) n++;
+  return n / Math.max(A.size, B.size);
+}
 
 const STOP = new Set(
   "a an the and or of to in on for with from by as at is are was were be this that these those it its into over about after before between than then so if but not no yes you your we they he she their our my page wikipedia free encyclopedia search home skip content official site www com org net".split(
@@ -106,18 +150,51 @@ function renderTabs() {
 
 function renderKeys() {
   keysEl.innerHTML = "";
-  for (const k of keywords) {
-    const chip = document.createElement("span");
-    chip.className = "key";
-    chip.innerHTML = `${escapeHtml(k)}`;
+  const chip = (term, isPin) => {
+    const el = document.createElement("span");
+    el.className = "key" + (isPin ? " pinned" : "");
+    el.title = isPin ? "Pinned. Click to unpin." : "Click to pin. Pinned keywords go into every search.";
+    el.textContent = (isPin ? "📌 " : "") + term;
+    el.addEventListener("click", () => {
+      if (isPin) pinned = pinned.filter((p) => lower(p) !== lower(term));
+      else pinned = [...pinned, term];
+      renderKeys();
+      crawl();
+    });
     const btn = document.createElement("button");
     btn.textContent = "×";
-    btn.addEventListener("click", () => {
-      keywords = keywords.filter((x) => x !== k);
+    btn.title = isPin ? "Unpin" : "Hide this keyword";
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (isPin) {
+        pinned = pinned.filter((p) => lower(p) !== lower(term));
+      } else {
+        banned = [...new Set([...banned, lower(term)])];
+        store.set("scout.banned", banned);
+      }
+      renderKeys();
+      crawl();
+    });
+    el.appendChild(btn);
+    keysEl.appendChild(el);
+  };
+  for (const p of pinned) chip(p, true);
+  for (const t of autoTerms().slice(0, AUTO_SHOWN)) chip(t, false);
+
+  const hiddenEl = document.getElementById("hidden-keys");
+  hiddenEl.hidden = !banned.length;
+  hiddenEl.innerHTML = "";
+  if (banned.length) {
+    const label = document.createElement("span");
+    label.textContent = "Hidden: " + banned.slice(-6).join(", ") + (banned.length > 6 ? ` +${banned.length - 6}` : "");
+    const clear = document.createElement("button");
+    clear.textContent = "Show all";
+    clear.addEventListener("click", () => {
+      banned = [];
+      store.set("scout.banned", banned);
       renderKeys();
     });
-    chip.appendChild(btn);
-    keysEl.appendChild(chip);
+    hiddenEl.append(label, clear);
   }
 }
 
@@ -137,7 +214,7 @@ function renderResults(items) {
           ? `<img class="media" src="${escapeHtml(item.image)}" alt="" />`
           : `<div class="media-fallback">Fetching preview</div>`
       }</div>
-      <div class="src">${escapeHtml(item.source || "web")}</div>
+      <div class="src">${escapeHtml(item.source || "web")}${item.query ? ` <span class="q">· ${escapeHtml(item.query)}</span>` : ""}</div>
       <h3>${escapeHtml(item.title)}</h3>
       <p>${escapeHtml(item.snippet || item.description || "")}</p>
       <div class="host">${escapeHtml(hostOf(item.url))}</div>
@@ -191,7 +268,7 @@ async function hydratePreview(card, url, seed) {
   try {
     if (seed?.image || seed?.video) setCardMedia(card, seed);
     if (api?.preview) {
-      setCardMedia(card, await api.preview(url, keywords));
+      setCardMedia(card, await api.preview(url, shownKeywords()));
       return;
     }
     const id = (() => {
@@ -225,71 +302,92 @@ function openUrl(url, newTab) {
   else demoNavigate(url);
 }
 
+// Run a search with the current pins and page keywords.
 async function crawl() {
   if (crawlBusy) return;
-  if (!keywords.length) {
-    statusEl.textContent = "Need at least one keyword.";
+  const current = tabs.find((t) => t.id === activeId);
+  if (!shownKeywords().length) {
+    statusEl.textContent = "No keywords yet. Add one, or load a page.";
     return;
   }
   crawlBusy = true;
-  const current = tabs.find((t) => t.id === activeId);
-  statusEl.textContent = "Crawling viewport…";
+  statusEl.textContent = "Searching…";
   try {
-    if (api) {
-      const data = await api.suggest(keywords, current?.url);
-      statusEl.textContent = `${data.results.length} related · every 5s`;
-      renderResults(data.results);
+    let data;
+    if (api?.suggestFor) {
+      data = await api.suggestFor({
+        pinned,
+        ranked: autoTerms(),
+        title: current?.title || "",
+        excludeUrl: current?.url || "",
+      });
+    } else if (api) {
+      data = await api.suggest(shownKeywords(), current?.url);
     } else {
-      const data = await wikiFallback(keywords.join(" "));
-      statusEl.textContent = `${data.length} Wikipedia hits · demo`;
-      renderResults(data);
+      data = { results: await wikiFallback(shownKeywords().join(" ")), queries: [] };
     }
+    const qs = (data.queries || []).map((q) => `"${q}"`).join(" · ");
+    statusEl.textContent = `${data.results.length} results` + (qs ? ` for ${qs}` : "");
+    if (data.notes?.length) statusEl.textContent += " — " + data.notes.join(" ");
+    renderResults(data.results);
   } catch (err) {
-    statusEl.textContent = "Suggest failed: " + err.message;
+    statusEl.textContent = "Search failed: " + errText(err);
   } finally {
     crawlBusy = false;
   }
 }
 
-async function crawlViewport(force) {
+// Read the active page and decide whether to search again (B11).
+// reason: "settle" (page finished loading), "tick" (5 s timer), "manual" (Crawl button)
+async function crawlViewport(reason) {
   const tab = tabs.find((t) => t.id === activeId);
-  if (!tab?.url || !api) {
-    if (!api && tab) {
-      keywords = deriveKeywords({ title: tab.title, url: tab.url });
-      renderKeys();
-      await crawl();
-    }
+  if (!tab) return;
+  if (!api) {
+    auto = deriveKeywords({ names: [tab.title] }).map((term) => ({ term }));
+    renderKeys();
+    await crawl();
     return;
   }
+  if (!tab.url || (reason === "tick" && (tab.loading || !autoOn || crawlBusy))) return;
   try {
-    const page = await api.extract(tab.id);
-    const next = deriveKeywords(page);
-    const key = next.join(" ");
-    if (!force && key && key === lastKeywordKey) {
-      statusEl.textContent = `${resultsEl.querySelectorAll(".card").length || 0} related · viewport unchanged`;
-      return;
+    let ranked;
+    let selection = "";
+    if (api.keywords) {
+      const res = await api.keywords(tab.id, banned);
+      ranked = res.ranked || [];
+      selection = res.page?.selection || "";
+    } else {
+      ranked = deriveKeywords(await api.extract(tab.id)).map((term) => ({ term }));
     }
-    keywords = next;
-    lastKeywordKey = key;
-    lastSettledUrl = tab.url;
+    const terms = ranked.map((r) => r.term).slice(0, 6);
+    const now = Date.now();
+    const newPage = tab.url !== lastCrawl.url;
+    const newSelection = selection && selection !== lastCrawl.selection;
+    const drifted = overlap(terms, lastCrawl.terms) < 0.5;
+    const due = now - lastCrawl.at >= RECRAWL_GAP_MS;
+    // Same page finishing another load (frames, lazy content): only re-search if due.
+    if (reason === "settle" && !newPage && !due) return;
+    if (reason === "tick") {
+      const go = newPage || (newSelection && now - lastCrawl.at >= 3000) || (drifted && due);
+      if (!go) return;
+    }
+    auto = ranked;
+    lastCrawl = { at: now, url: tab.url, terms, selection };
     renderKeys();
     await crawl();
   } catch (err) {
-    statusEl.textContent = "Could not read viewport: " + err.message;
+    statusEl.textContent = "Could not read the page: " + errText(err);
   }
 }
 
 function startCrawlClock() {
   if (crawlClock) clearInterval(crawlClock);
-  crawlClock = setInterval(() => crawlViewport(false), 5000);
+  crawlClock = setInterval(() => crawlViewport("tick"), 5000);
 }
 
 async function afterSettle(tab) {
-  if (!tab?.url) return;
-  if (tab.id !== activeId) return;
-  lastSettledUrl = "";
-  lastKeywordKey = "";
-  await crawlViewport(true);
+  if (!tab?.url || tab.id !== activeId) return;
+  await crawlViewport("settle");
 }
 
 async function wikiFallback(q) {
@@ -312,7 +410,18 @@ document.getElementById("new-tab").addEventListener("click", () => {
 document.getElementById("back").addEventListener("click", () => api && activeId && api.goBack(activeId));
 document.getElementById("forward").addEventListener("click", () => api && activeId && api.goForward(activeId));
 document.getElementById("reload").addEventListener("click", () => api && activeId && api.reload(activeId));
-document.getElementById("refresh-suggest").addEventListener("click", crawl);
+document.getElementById("refresh-suggest").addEventListener("click", () => crawlViewport("manual"));
+const autoBtn = document.getElementById("auto-btn");
+const paintAuto = () => {
+  autoBtn.classList.toggle("active", autoOn);
+  autoBtn.textContent = autoOn ? "Auto" : "Auto off";
+};
+autoBtn.addEventListener("click", () => {
+  autoOn = !autoOn;
+  store.set("scout.auto", autoOn);
+  paintAuto();
+});
+paintAuto();
 
 omniForm.addEventListener("submit", (e) => {
   e.preventDefault();
@@ -322,10 +431,12 @@ omniForm.addEventListener("submit", (e) => {
 
 document.getElementById("key-form").addEventListener("submit", (e) => {
   e.preventDefault();
-  const v = keyInput.value.trim().toLowerCase();
+  const v = keyInput.value.trim();
   keyInput.value = "";
-  if (!v || keywords.includes(v)) return;
-  keywords = [...keywords, v].slice(0, 10);
+  if (!v || isPinned(v)) return;
+  pinned = [...pinned, v].slice(0, 6);
+  banned = banned.filter((b) => b !== lower(v));
+  store.set("scout.banned", banned);
   renderKeys();
   crawl();
 });
@@ -506,7 +617,6 @@ function demoCreate(url) {
   tabs.push({ id, url, title: hostOf(url), loading: false });
   activeId = id;
   renderTabs();
-  lastSettledUrl = "";
   afterSettle(tabs.find((t) => t.id === id));
 }
 function demoActivate(id) {
@@ -531,7 +641,6 @@ function demoNavigate(input) {
   t.url = url;
   t.title = hostOf(url);
   renderTabs();
-  lastSettledUrl = "";
   afterSettle(t);
 }
 
