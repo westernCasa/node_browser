@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Scout 3</title>
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    html, body { margin: 0; height: 100%; background: #121212; color: #ececec; }
+    .shell { height: 100vh; width: 100vw; display: grid; grid-template-columns: 1fr 225px; grid-template-rows: 112px 1fr; }
+    .chrome { grid-column: 1 / -1; background: #1a1a1a; border-bottom: 1px solid #2e2e2e; display: flex; flex-direction: column; }
+    .tabrow, .nav { display: flex; align-items: center; gap: 6px; padding: 6px 8px; }
+    .omni { flex: 1; }
+    .omni input { width: 100%; height: 28px; }
+    .rail { grid-column: 2; grid-row: 2; background: #1a1a1a; border-left: 1px solid #2e2e2e; overflow: auto; }
+  </style>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="shell">
+    <header class="chrome">
+      <div class="tabrow">
+        <div class="tabs" id="tabs"></div>
+        <button class="icon" id="new-tab" title="New tab">+</button>
+      </div>
+      <div class="nav">
+        <button class="icon" id="back" title="Back">←</button>
+        <button class="icon" id="forward" title="Forward">→</button>
+        <button class="icon" id="reload" title="Reload">↻</button>
+        <form id="omni-form" class="omni">
+          <input id="omni" type="text" spellcheck="false" placeholder="Search or enter address" />
+        </form>
+        <button class="chip" id="layout-btn" title="Tile every tab so media can play together">Mosaic</button>
+        <button class="chip" id="shot-btn" title="Shortcut: S">Shot <kbd>S</kbd></button>
+        <button class="chip" id="save-btn">Save</button>
+        <button class="chip" id="media-btn">Media</button>
+        <button class="chip" id="library-btn">Library</button>
+      </div>
+    </header>
+
+    <aside class="rail" id="rail">
+      <div id="suggest-pane">
+        <div class="rail-head">
+          <div>
+            <p class="kicker">Next pages</p>
+            <h1>Suggestions</h1>
+          </div>
+          <button class="chip" id="refresh-suggest">Crawl</button>
+        </div>
+        <p class="help">Every 5s: media metadata, media links, and names in view.</p>
+        <div class="keys" id="keys"></div>
+        <form id="key-form" class="key-form">
+          <input id="key-input" type="text" placeholder="Add keyword" />
+        </form>
+        <div class="status" id="suggest-status">Waiting for a page to settle.</div>
+        <div class="results" id="results"></div>
+      </div>
+      <div id="library" hidden></div>
+    </aside>
+  </div>
+  <section id="shelf" hidden>
+    <div class="shelf-bar">
+      <div>
+        <p class="kicker">On this computer</p>
+        <h1>Library</h1>
+      </div>
+      <div class="shelf-filters" id="shelf-filters">
+        <button class="chip active" data-folder="all">All</button>
+        <button class="chip" data-folder="screenshots">Shots</button>
+        <button class="chip" data-folder="media">Media</button>
+        <button class="chip" data-folder="saves">Saves</button>
+      </div>
+      <button class="chip" id="library-folder">Show folder</button>
+      <button class="chip" id="library-close">Close</button>
+    </div>
+    <div class="shelf-grid" id="library-list"></div>
+  </section>
+  <script src="tauri-bridge.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

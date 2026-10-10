@@ -1,0 +1,16 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "main window",
+  "windows": ["*"],
+  "permissions": [
+    "core:default",
+    "core:webview:default",
+    "core:webview:allow-create-webview-window",
+    "core:webview:allow-create-webview",
+    "core:window:allow-close",
+    "core:window:allow-set-focus",
+    "core:event:default",
+    "opener:default"
+  ]
+}
