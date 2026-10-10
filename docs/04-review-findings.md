@@ -37,11 +37,11 @@ Review of Scout 3 (the version built with Grok), done on 2026-10-09. The "Resolu
 
 | Issue | Resolution |
 | --- | --- |
-| `BrowserView` deprecated since Electron 30 | Open (B18) |
+| `BrowserView` deprecated since Electron 30 | Fixed: tabs use `WebContentsView` (B18) |
 | All tabs played sound at once | Fixed: only the active tab is audible (B03) |
 | Every `window.open` became a new tab, including ad popups | Fixed: popups need a recent user click (B04) |
 | Media download always saved video as `.mp4`; stream URLs failed silently | Fixed: extension from content-type, clear messages (B05) |
-| No history, find-in-page, zoom or tab shortcuts | Shortcuts added (B02); history, find and zoom open (B19) |
+| No history, find-in-page, zoom or tab shortcuts | Fixed: shortcuts (B02); history, find and zoom (B19) |
 | Tauri bridge missing Library, Shot, Save, Media | Open (B23) |
 | Tauri tabs open as separate OS windows, so no Mosaic | Open (B24) |
 | Version labels disagreed (scout2 0.3.0, Cargo 0.2.0, "Scout 3") | Fixed: all 0.3.0, named Scout (B06) |
@@ -54,3 +54,7 @@ Review of Scout 3 (the version built with Grok), done on 2026-10-09. The "Resolu
 | Page extraction returned nothing: a line break inside the injected script broke a string | Testing Phase 1 | Fixed in commit 9b41213 |
 | Pages without their own background showed black text on a near-black background (`#111111`) | Testing Phase 1 | Tabs default to white (9b41213) |
 | A search requested while another was running was dropped, so a hidden keyword could stay in the query | Testing Phase 2 | Queued and run when the current search ends (5bcb0c0) |
+| Results from a page already left arrived late and replaced the current page's results and status | Testing Phase 3 (site rules) | Results for a page you have left are dropped (8a2a2d0) |
+| Find in page showed no count for the first search (Electron's `findNext` flag means "start a new search") | Testing Phase 3 | Flag inverted (aadbce0) |
+| Elements with the `hidden` attribute still showed when their CSS set `display` (the find bar stayed after Esc) | Testing Phase 3 | Global `[hidden]` rule (aadbce0) |
+| Start page and search-results pages counted as "pages read" in the trail | Testing Phase 3 | Skipped (6873d07) |
