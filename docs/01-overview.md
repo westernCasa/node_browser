@@ -12,16 +12,16 @@ The long-term goal is a "shell for behaviours": the browser's actions (what to r
 
 | Area | Status |
 | --- | --- |
-| Electron desktop build | Working. Phases 0 to 3 of the roadmap are done, except B20 (AI query expansion). |
-| Tauri build (desktop and mobile) | Does not compile. Phase 4. |
-| Backlog | 25 items, 20 done. Open: B20, B21-B24. |
-| Testing | 5 end-to-end test scripts (57 checks) in `test/e2e`, run in Electron 32.3.3 with search sources stubbed. Live search results still need a check on a real machine. |
+| Electron desktop build | Working. Phases 0 to 3 of the roadmap are done. Next: Phase 4, desktop release readiness. |
+| Tauri build (desktop and mobile) | Does not compile. On hold (Phase 5) until the desktop app passes Phase 4. |
+| Backlog | 31 items, 21 done. Open: B26-B31 (Phase 4), B21-B24 (Phase 5, on hold). |
+| Testing | 6 end-to-end test scripts (69 checks) in `test/e2e`, run in Electron 32.3.3 with search sources and AI servers stubbed. Live results still need a check on a real machine (B26). |
 
 ## Where things are
 
 | Item | Location |
 | --- | --- |
-| Code | `scout-6.zip` (latest), sent in the Claude chat. Includes git history. |
+| Code | `scout-7.zip` (latest), sent in the Claude chat. Includes git history. |
 | Review doc with diagrams and editable backlog | https://claude.ai/code/artifact/b6ec4995-3117-41d0-a3c4-948c16e699fc |
 | Roadmap and backlog | `scout/02-roadmap-backlog.md` in this project |
 | How the code works | `scout/03-architecture.md` |
@@ -51,6 +51,7 @@ Quick checks that run without opening the browser:
 npm run test:keywords    # keywords and queries picked for two sample pages
 npm run test:providers   # search-source fallback order with fake responses
 npm run test:rules       # which site rules apply to sample URLs
+npm run test:ai          # AI query parsing and errors with fake servers
 ```
 
 The end-to-end tests are described in `test/e2e/README.md`.
@@ -60,6 +61,7 @@ The end-to-end tests are described in `test/e2e/README.md`.
 - **Tabs and Mosaic.** Each tab is a real Chromium page. Mosaic tiles all tabs so several can play at once. Only the active tab is audible; others play muted unless you unmute them.
 - **Suggestions sidebar.** Keywords come from the visible page. Click a keyword to pin it, × to hide it, or select text on a page to search for it. Wikipedia results appear within about a second; web results are merged in when they arrive.
 - **Research sessions (Trail).** Pages read with their top keywords, keywords that recur across pages, results opened or hidden. Pins are saved per session. Sessions can be renamed, switched, and exported as Markdown notes.
+- **AI query ideas (Settings).** Optional. A local model (Ollama or LM Studio) or Grok suggests up to 2 extra queries from pinned keywords, page keywords and the title. Never sent: page text or addresses.
 - **Search sources (Settings).** Wikipedia for every search, plus web results from the first working source: Brave Search API, SearXNG, then DuckDuckGo.
 - **Site rules (Settings, or File → Edit Site Rules).** Per-site autoplay, sound, popups, Mosaic, whether the page is read for keywords, and which parts of the page to read or skip.
 - **Find, zoom and history.** Find in page, per-tab zoom, address-bar suggestions from history, and a History shelf in the Library.
@@ -82,6 +84,9 @@ The end-to-end tests are described in `test/e2e/README.md`.
 | Cmd/Ctrl+Shift+U | Mute or unmute the tab |
 | Cmd/Ctrl+Shift+S, or S on a page | Screenshot the tab |
 
-## Decision needed
+## Decisions
 
-B20 (AI query expansion) needs a choice of AI provider and an API key. Phase 4 (Tauri and mobile) starts with a go or no-go decision on mobile.
+| Date | Decision |
+| --- | --- |
+| 2026-10-10 | AI query ideas use a local model or Grok (xAI). |
+| 2026-10-10 | Mobile (Tauri) is on hold until the desktop app passes Phase 4 (daily use for a week with no blocking bugs). |

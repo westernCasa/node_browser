@@ -1,6 +1,6 @@
 # Scout Browser: Roadmap and Backlog
 
-Last updated: 2026-10-10 (after Phase 3). The editable version (with status dropdowns) is in the review doc: https://claude.ai/code/artifact/b6ec4995-3117-41d0-a3c4-948c16e699fc
+Last updated: 2026-10-10 (after B20; mobile on hold). The editable version (with status dropdowns) is in the review doc: https://claude.ai/code/artifact/b6ec4995-3117-41d0-a3c4-948c16e699fc
 
 ## Roadmap
 
@@ -11,8 +11,9 @@ Each phase ends at a gate that must pass before the next phase starts. No dates 
 | 0. Safety and basics | No silent permissions, shortcuts work inside pages, one tab plays sound at a time | B01-B06 | Camera and mic prompt per site; S works on any page; popups need a click | Done |
 | 1. Keyword engine | Keywords come from the page text, and the user's pins and hides stick | B07-B11 | Text-only articles give relevant keywords; a pinned word survives scrolling | Done |
 | 2. Network layer | Cached, rate-limited search through swappable sources | B12-B15 | An hour of browsing with no search blocks; repeat pages load previews from cache | Done (gate still needs a live check) |
-| 3. Behaviour shell | Per-site rules, research session, WebContentsView, history and find | B16-B20, B25 | A new site behaviour can be added by editing a rules file, without code changes | Done except B20. Gate passed in testing (rules edited live) |
-| 4. Tauri and mobile | Decide go or no-go on mobile, then port the shell to Rust | B21-B24 | To be set at the start of Phase 4 | Next |
+| 3. Behaviour shell | Per-site rules, research session, WebContentsView, history and find, AI query ideas | B16-B20, B25 | A new site behaviour can be added by editing a rules file, without code changes | Done. Gate passed in testing (rules edited live) |
+| 4. Desktop release readiness | Installable, stable and easy to set up on macOS and Windows | B26-B31 | Scout is your daily research browser for a week with no blocking bugs | Next |
+| 5. Tauri and mobile | Decide go or no-go on mobile, then port the shell to Rust | B21-B24 | To be set when Phase 5 starts | On hold until Phase 4 passes |
 
 ## Backlog
 
@@ -39,15 +40,24 @@ Effort: XS under 1 hour, S half a day, M 1-2 days, L 3+ days. Finding IDs (C1, K
 | B17 | 3 | Research session: keyword trail across pages, visited suggestions | P1 | L | Done |
 | B18 | 3 | Move from BrowserView to WebContentsView | P1 | M | Done |
 | B19 | 3 | History, find-in-page, zoom | P2 | M | Done |
-| B20 | 3 | Optional AI query expansion | P2 | M | Not started (needs a choice of AI provider and key) |
-| B21 | 4 | Add tauri.conf.json, withGlobalTauri, icons (C2) | P2 | S | Not started |
-| B22 | 4 | Make Rust commands async; fix argument names (C3, C4) | P2 | S | Not started |
-| B23 | 4 | Port Library, Shot, Save, Media to Rust | P2 | M | Not started |
-| B24 | 4 | Decide the mobile tab model | P2 | M | Not started |
+| B20 | 3 | Optional AI query expansion (local model or Grok) | P2 | M | Done |
+| B21 | 5 | Add tauri.conf.json, withGlobalTauri, icons (C2) | P2 | S | Not started |
+| B22 | 5 | Make Rust commands async; fix argument names (C3, C4) | P2 | S | Not started |
+| B23 | 5 | Port Library, Shot, Save, Media to Rust | P2 | M | Not started |
+| B24 | 5 | Decide the mobile tab model | P2 | M | Not started |
 | B25 | 3 | Show Wikipedia results first while web results load (web requests are spaced 2.5 s apart, so a search can take 6 s) | P1 | S | Done |
+| B26 | 4 | Check on a real machine: live Wikipedia, DuckDuckGo, Brave, Grok and local model results, and an hour of browsing (Phase 2 gate) | P0 | S | Not started |
+| B27 | 4 | Installable builds for macOS (.dmg) and Windows (.exe) with an app icon | P0 | M | Not started |
+| B28 | 4 | Visual editor for site rules in Settings, so no JSON editing is needed | P1 | M | Not started |
+| B29 | 4 | Sleep background tabs that are not playing media, to save memory with many tabs open | P1 | M | Not started |
+| B30 | 4 | First-run setup: start page, search sources, AI option | P2 | S | Not started |
+| B31 | 4 | Error log and a Copy diagnostics button for bug reports | P2 | S | Not started |
 
 ## Open checks
 
 - Run Scout on a real machine and confirm live results from Wikipedia and DuckDuckGo.
 - Add a Brave Search API key under Settings and confirm Brave results appear.
 - Browse for an hour to check the Phase 2 gate (no search blocks).
+- Turn on AI query ideas with Ollama or Grok, press Test, and check the "(AI)" queries give useful results.
+
+These checks are backlog item B26.

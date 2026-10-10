@@ -15,9 +15,9 @@ Review of Scout 3 (the version built with Grok), done on 2026-10-09. The "Resolu
 | ID | Issue | Where (original code) | Effect | Resolution |
 | --- | --- | --- | --- | --- |
 | C1 | Camera and microphone granted to every site with no prompt | `main.js:695` | Any page could record audio and video silently | Fixed in Phase 0 (B01) |
-| C2 | Tauri build has no `tauri.conf.json` | `src-tauri/` | `npx tauri dev` fails | Open, Phase 4 (B21) |
-| C3 | Tauri commands use blocking HTTP on the main thread | `lib.rs` | Window freezes during every crawl | Open, Phase 4 (B22) |
-| C4 | Tauri layout commands take `_mode` and `_w` | `lib.rs:245`, `lib.rs:250` | Arguments do not match the JS call | Open, Phase 4 (B22) |
+| C2 | Tauri build has no `tauri.conf.json` | `src-tauri/` | `npx tauri dev` fails | Open, Phase 5 on hold (B21) |
+| C3 | Tauri commands use blocking HTTP on the main thread | `lib.rs` | Window freezes during every crawl | Open, Phase 5 on hold (B22) |
+| C4 | Tauri layout commands take `_mode` and `_w` | `lib.rs:245`, `lib.rs:250` | Arguments do not match the JS call | Open, Phase 5 on hold (B22) |
 | C5 | S shortcut only listened on the toolbar | `app.js:411` | Did nothing while a web page had focus | Fixed in Phase 0 (B02) |
 | C6 | Auto-crawl had no cache or rate limit | `app.js:264`, `main.js:430`, `main.js:606` | Up to 2 searches + 12 page fetches every 5 s | Fixed in Phases 1 and 2 (B11-B14) |
 

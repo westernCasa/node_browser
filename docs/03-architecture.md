@@ -1,6 +1,6 @@
 # Scout Browser: Architecture
 
-Last updated: 2026-10-10 (commit 4bab266, after Phase 3). Describes the Electron build.
+Last updated: 2026-10-10 (commit 3db81f4, after B20). Describes the Electron build.
 
 ## Files
 
@@ -10,15 +10,16 @@ Last updated: 2026-10-10 (commit 4bab266, after Phase 3). Describes the Electron
 | `keywords.js` | 325 | Keyword pipeline: scoring, phrases, query builder |
 | `providers.js` | 274 | Search sources (Wikipedia, Brave, SearXNG, DuckDuckGo) and the registry that picks between them |
 | `rules.js` | 155 | Site rules: default file, validation, URL matching, merging |
+| `ai.js` | 173 | AI query ideas: OpenAI-compatible client for a local model or Grok, prompt, answer parsing, model list |
 | `research.js` | 177 | Research sessions: trail, pins, opened, dismissed, recurring keywords, Markdown export |
 | `preload.js` | 57 | Exposes `window.scout` to the toolbar UI over IPC |
 | `view-preload.js` | 39 | Runs in every web page: reports clicks (tab focus, popup permission) and the S shortcut |
 | `renderer/index.html`, `app.js`, `styles.css` | 143 / 1,236 / 501 | Toolbar, find bar, tabs, sidebar (Suggestions, Trail, Settings), Library and History shelf |
 | `renderer/tauri-bridge.js`, `src-tauri/` | | Tauri build. Does not compile yet (Phase 4) |
-| `test/*-demo.js` | | Checks without the browser: `npm run test:keywords`, `test:providers`, `test:rules` |
+| `test/*-demo.js` | | Checks without the browser: `npm run test:keywords`, `test:providers`, `test:rules`, `test:ai` |
 | `test/e2e/` | | End-to-end tests (Playwright driving Electron) with local test pages; see its README |
 
-`keywords.js`, `providers.js`, `rules.js` and `research.js` have no Electron code, so they can be tested with plain Node.
+`keywords.js`, `providers.js`, `rules.js`, `research.js` and `ai.js` have no Electron code, so they can be tested with plain Node.
 
 ## How the pieces connect
 
@@ -37,6 +38,22 @@ Last updated: 2026-10-10 (commit 4bab266, after Phase 3). Describes the Electron
 | 5. Build queries | `keywords.js` `buildQueries()` | Up to 3 queries of at most 4 words: the strongest terms; the top term plus the next tier; the page's own title (dropped when something is pinned). Pins go into every query. |
 | 6. Search | `main.js` `runQueries()` + `providers.js` | Two calls. First `part: "reference"`: Wikipedia only, returned at once, while web requests start in the background. Then `part: "all"`: Wikipedia (from cache) plus web results for the first two queries, merged round-robin, duplicates and the current page removed, up to 12 kept. |
 | 7. Show | `app.js` `crawl()`, `renderResults()` | Wikipedia results show first; the full list replaces them, keeping cards already on screen. Results hidden in this session are filtered out. Results for a page the user has already left are dropped. Cards show source and query, a "read" badge if opened or read in this session, and a × to hide. |
+
+## AI query ideas
+
+`ai.js` calls any OpenAI-compatible chat API (`POST <base>/chat/completions`, `GET <base>/models`):
+
+| Option | Base address | Auth | Default model |
+| --- | --- | --- | --- |
+| Local model | `http://localhost:11434/v1` (Ollama) or `http://localhost:1234/v1` (LM Studio), editable | None | `llama3.2` |
+| Grok | `https://api.x.ai/v1` | `Authorization: Bearer <key>` | `grok-4.3` (Test lists the names the key can use) |
+
+- **Input:** pinned keywords, up to 8 page keywords, the page title. Never page text or addresses. Pages with `suggest: false` are never searched, so never sent.
+- **Prompt:** asks for 2-3 queries of 2-6 words on other angles (background, related people or organisations, primary sources, opposing views), JSON only.
+- **Parsing:** accepts plain JSON, JSON inside prose or a code block, or a numbered or bulleted list. Drops quotes, `site:` and similar operators, sentences and duplicates. Adds any pinned keyword the model left out.
+- **Flow:** the fast "reference" search pass starts the AI call without waiting; the full pass waits for it (timeout 25 s local, 12 s Grok), then searches the first keyword query plus up to 2 AI queries. If the AI is off, fails or times out, the normal keyword queries are used and the status line says why.
+- **Caching:** 30 minutes per distinct input; identical calls in flight are shared. Changing AI settings clears the cache.
+- **Test button:** saves, lists the server's models, reports a model name that is not on the server, then runs one sample request.
 
 ## Search sources
 
@@ -113,7 +130,7 @@ All in Electron's `userData` folder:
 
 | File | Contents |
 | --- | --- |
-| `settings.json` | Search sources: on/off, Wikipedia language, Brave key, SearXNG URL. The Brave key is encrypted with the system keychain (`safeStorage`) when available, otherwise stored as plain text (the Sources panel says which). |
+| `settings.json` | Search sources: on/off, Wikipedia language, Brave key, SearXNG URL. AI: on/off, local or Grok, local address and model, Grok model and key. The Brave and Grok keys are encrypted with the system keychain (`safeStorage`) when available, otherwise stored as plain text (the Sources panel says which). |
 | `permissions.json` | Remembered permission answers per site |
 | `rules.json` | Site rules (created with examples on first run) |
 | `history.json` | Visited pages |
@@ -132,7 +149,7 @@ The renderer stores hidden keywords and the Auto setting in local storage.
 | Site rules | `rules:edit`, `rules:reload` |
 | Research session | `research:get`, `research:list`, `research:new`, `research:switch`, `research:rename`, `research:pins`, `research:visit`, `research:opened`, `research:dismiss`, `research:undismiss`, `research:export` |
 | Keywords and search | `page:extract`, `page:keywords`, `suggest:search` (legacy, used by Tauri), `suggest:for`, `suggest:preview` |
-| Sources | `settings:get`, `settings:set`, `search:status`, `search:test` |
+| Sources and AI | `settings:get`, `settings:set`, `search:status`, `search:test`, `ai:test` |
 | Library | `library:root`, `library:list`, `library:remove`, `library:open-folder`, `library:reveal`, `library:shot`, `library:save`, `library:grab` |
 
 ## Known limits
