@@ -12,6 +12,8 @@ module.exports = {
   ...require("./page-scripts"),
   ...require("./storage"),
   ...require("./compat"),
+  ...require("./urls"),
+  ...require("./controller"),
   AI: require("./ai"),
   Rules: require("./rules"),
 };

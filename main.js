@@ -14,6 +14,7 @@ const { createSuggest } = require("./core/suggest");
 const { createPreview } = require("./core/preview");
 const { extractionScript, autoplayScript, blockAutoplayScript } = require("./core/page-scripts");
 const { fsStorage } = require("./fs-storage");
+const { normalizeUrl } = require("./core/urls");
 let research = null; // current research session store (B17), created when the app is ready
 
 const HOME_URL = "https://en.wikipedia.org/wiki/Main_Page";
@@ -178,15 +179,6 @@ function applyAudio() {
   }
 }
 
-function normalizeUrl(input) {
-  const raw = (input || "").trim();
-  if (!raw) return "https://en.wikipedia.org/wiki/Special:Search";
-  if (/^[a-z]+:\/\//i.test(raw)) return raw;
-  if (raw.includes(" ") || !raw.includes(".")) {
-    return "https://duckduckgo.com/?q=" + encodeURIComponent(raw);
-  }
-  return "https://" + raw;
-}
 
 // Autoplay per site rule: "on" starts media (falls back to muted if the page
 // refuses sound), "muted" starts it muted, "off" pauses media the page starts

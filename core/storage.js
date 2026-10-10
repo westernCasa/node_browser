@@ -18,4 +18,13 @@ function memoryStorage(initial = {}, onWrite = null) {
   };
 }
 
-module.exports = { memoryStorage };
+/** A view of another storage where every name gets a prefix (e.g. "sessions/"). */
+function prefixedStorage(storage, prefix) {
+  return {
+    read: (name) => storage.read(prefix + name),
+    write: (name, text) => storage.write(prefix + name, text),
+    list: () => storage.list().filter((n) => n.startsWith(prefix)).map((n) => n.slice(prefix.length)),
+  };
+}
+
+module.exports = { memoryStorage, prefixedStorage };
