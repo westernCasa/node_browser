@@ -56,6 +56,7 @@
           <div class="rail-actions">
             <button class="chip active" id="auto-btn" title="Re-search when the visible page changes">Auto</button>
             <button class="chip" id="refresh-suggest" title="Search now">Crawl</button>
+            <button class="chip" id="trail-btn" title="This research session: pages read, recurring keywords">Trail</button>
             <button class="chip" id="sources-btn" title="Search sources and site rules">Settings</button>
           </div>
         </div>
@@ -69,6 +70,26 @@
         <div class="status" id="suggest-status">Waiting for a page to settle.</div>
         <div class="rule-line" id="rule-line" hidden></div>
         <div class="results" id="results"></div>
+      </div>
+      <div id="trail-pane" hidden>
+        <div class="rail-head">
+          <div>
+            <p class="kicker">Research session</p>
+            <h1>Trail</h1>
+          </div>
+          <button class="chip" id="trail-back">Back</button>
+        </div>
+        <input id="session-name" class="session-name" type="text" spellcheck="false" title="Session name" />
+        <div class="actions-row">
+          <select id="session-select" title="Switch session"></select>
+          <button class="chip" id="session-new">New</button>
+          <button class="chip" id="session-export" title="Save the session as Markdown notes in the Library">Export</button>
+        </div>
+        <p class="help" id="session-meta"></p>
+        <p class="kicker sub">Recurring keywords</p>
+        <div class="keys" id="threads"></div>
+        <p class="kicker sub">Pages read</p>
+        <div id="trail-list"></div>
       </div>
       <div id="sources-pane" hidden>
         <div class="rail-head">

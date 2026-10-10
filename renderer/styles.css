@@ -448,3 +448,52 @@ html, body {
   border-radius: 6px;
   padding: 0 10px;
 }
+
+/* Research session (B17) */
+.rail-actions { flex-wrap: wrap; justify-content: flex-end; }
+.session-name {
+  width: 100%;
+  height: 28px;
+  margin: 4px 0 6px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 0 8px;
+  font: 600 13px/1 inherit;
+}
+#session-select {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  background: var(--bg-3);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.kicker.sub { margin: 12px 0 6px; }
+.trail-row { border-top: 1px solid var(--line); padding: 8px 0; }
+.trail-row .t { font-weight: 600; cursor: pointer; }
+.trail-row .t:hover { color: var(--accent); }
+.trail-row .m { color: var(--mute); font-size: 11px; margin: 2px 0 4px; }
+.trail-row .ks { display: flex; flex-wrap: wrap; gap: 4px; }
+.trail-row .ks span {
+  font-size: 11px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 1px 6px;
+  cursor: pointer;
+}
+.trail-row .ks span:hover { border-color: var(--accent); color: var(--accent); }
+.card.read { opacity: 0.6; }
+.card .badge { display: inline-block; font-size: 10px; color: var(--accent); margin-left: 6px; }
+.card .dismiss {
+  float: right;
+  border: 0;
+  background: transparent;
+  color: var(--mute);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+.card .dismiss:hover { color: var(--text); }

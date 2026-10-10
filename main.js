@@ -5,6 +5,8 @@ const { URL } = require("url");
 const { rankTerms, buildQueries, SessionDF } = require("./keywords");
 const { PROVIDERS, Registry, defaultSettings } = require("./providers");
 const Rules = require("./rules");
+const { ResearchStore } = require("./research");
+let research = null; // current research session store (B17), created when the app is ready
 
 const HOME_URL = "https://en.wikipedia.org/wiki/Main_Page";
 const CHROME_TOP = 112;
@@ -1267,6 +1269,7 @@ app.whenReady().then(() => {
   installPermissionHandlers(session.defaultSession);
   loadRules();
   watchRules();
+  research = new ResearchStore(path.join(app.getPath("userData"), "sessions"));
   buildMenu();
   createWindow();
 });
@@ -1439,6 +1442,37 @@ function extensionFor(contentType, url, kind) {
   if (fromUrl) return fromUrl.toLowerCase();
   return kind === "video" ? "mp4" : "jpg";
 }
+
+// ---- Research session IPC (B17) ----
+ipcMain.handle("research:get", () => research.snapshot());
+ipcMain.handle("research:list", () => research.list());
+ipcMain.handle("research:new", (_e, name) => {
+  research.create(name);
+  return research.snapshot();
+});
+ipcMain.handle("research:switch", (_e, id) => {
+  research.switchTo(String(id));
+  return research.snapshot();
+});
+ipcMain.handle("research:rename", (_e, name) => {
+  research.rename(name);
+  return research.snapshot();
+});
+ipcMain.handle("research:pins", (_e, pins) => research.setPins(pins));
+ipcMain.handle("research:visit", (_e, url, title, keywords) => research.visit(url, title, keywords));
+ipcMain.handle("research:opened", (_e, item) => research.opened(item));
+ipcMain.handle("research:dismiss", (_e, url) => research.dismiss(url));
+ipcMain.handle("research:undismiss", () => research.undismissAll());
+ipcMain.handle("research:export", () => {
+  const name = stamp("session", "md");
+  fs.writeFileSync(path.join(libraryRoot(), "saves", name), research.markdown());
+  return addRecord("saves", name, "", `Session notes: ${research.current.name}`);
+});
+app.on("before-quit", () => {
+  try {
+    research?.saveNow();
+  } catch (_) {}
+});
 
 ipcMain.handle("library:root", () => libraryRoot());
 ipcMain.handle("library:list", () =>

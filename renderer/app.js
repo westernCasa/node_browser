@@ -172,6 +172,9 @@ function renderTabs() {
 }
 
 function renderKeys() {
+  // Pins belong to the current research session (B17). Only save once the
+  // session has loaded, so the empty startup render cannot wipe saved pins.
+  if (session) api?.researchPins?.(pinned);
   keysEl.innerHTML = "";
   const chip = (term, isPin) => {
     const el = document.createElement("span");
@@ -274,7 +277,46 @@ function pumpPreviews() {
   }
 }
 
-let decorateCard = null; // set by the research session (B17)
+// ---- Research session (B17) ----
+let session = null; // snapshot from main: { id, name, pins, trail, opened, dismissed, threads }
+
+function notDismissed(items) {
+  const gone = new Set(session?.dismissed || []);
+  return (items || []).filter((x) => !gone.has(x.url));
+}
+
+function readUrls() {
+  return new Set([...(session?.trail || []).map((r) => r.url), ...(session?.opened || []).map((o) => o.url)]);
+}
+
+// Marks cards already read in this session and adds a dismiss button.
+function decorateCard(card, item) {
+  card.classList.toggle("read", readUrls().has(item.url));
+  const src = card.querySelector(".src");
+  if (src && card.classList.contains("read") && !src.querySelector(".badge")) {
+    src.insertAdjacentHTML("beforeend", `<span class="badge">read</span>`);
+  }
+  if (card.__decorated || !api?.researchDismiss) return;
+  card.__decorated = true;
+  const x = document.createElement("button");
+  x.className = "dismiss";
+  x.title = "Not useful: hide this result for this session";
+  x.textContent = "×";
+  x.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    await api.researchDismiss(item.url);
+    session?.dismissed.push(item.url);
+    card.remove();
+  });
+  card.prepend(x);
+  for (const b of card.querySelectorAll(".card-actions button")) {
+    b.addEventListener("click", () => {
+      api.researchOpened?.(item);
+      session?.opened.push({ url: item.url, title: item.title, query: item.query || "" });
+      card.classList.add("read");
+    });
+  }
+}
 
 function buildCard(item) {
   const card = document.createElement("article");
@@ -425,6 +467,7 @@ async function crawl() {
       // Wikipedia first (fast), then the full list once web results arrive (B25).
       const first = await api.suggestFor({ ...payload, part: "reference" });
       if (stale()) return;
+      first.results = notDismissed(first.results);
       if (first.results.length) {
         renderResults(first.results);
         statusEl.textContent = `${first.results.length} Wikipedia results · loading web results…`;
@@ -436,6 +479,7 @@ async function crawl() {
       data = { results: await wikiFallback(shownKeywords().join(" ")), queries: [] };
     }
     if (stale()) return;
+    data.results = notDismissed(data.results);
     const qs = (data.queries || []).map((q) => `"${q}"`).join(" · ");
     statusEl.textContent = `${data.results.length} results` + (qs ? ` for ${qs}` : "");
     if (data.notes?.length) statusEl.textContent += " — " + data.notes.join(" ");
@@ -498,6 +542,7 @@ async function crawlViewport(reason) {
     }
     auto = ranked;
     lastCrawl = { at: now, url: tab.url, terms, selection };
+    api.researchVisit?.(tab.url, tab.title, terms.slice(0, 5));
     renderKeys();
     await crawl();
   } catch (err) {
@@ -882,14 +927,19 @@ async function openSources() {
     showNotice("Search sources can only be changed in the desktop app.");
     return;
   }
-  suggestPane.hidden = true;
-  sourcesPane.hidden = false;
+  showPane("sources");
   await renderSources();
 }
 
 function closeSources() {
-  sourcesPane.hidden = true;
-  suggestPane.hidden = false;
+  showPane("suggest");
+}
+
+// One sidebar pane at a time: suggestions, trail or settings.
+function showPane(name) {
+  suggestPane.hidden = name !== "suggest";
+  sourcesPane.hidden = name !== "sources";
+  document.getElementById("trail-pane").hidden = name !== "trail";
 }
 
 document.getElementById("sources-btn").addEventListener("click", openSources);
@@ -978,6 +1028,122 @@ omni.addEventListener("input", () => {
     }
   }, 120);
 });
+
+// ---- Trail pane (B17) ----
+const trailList = document.getElementById("trail-list");
+const sessionName = document.getElementById("session-name");
+const sessionSelect = document.getElementById("session-select");
+
+async function refreshSession() {
+  if (!api?.researchGet) return;
+  session = await api.researchGet();
+}
+
+function adoptSession(s) {
+  session = s;
+  pinned = [...(s.pins || [])];
+  renderKeys();
+  // Re-mark visible cards for the new session.
+  for (const c of resultsEl.querySelectorAll(".card")) if (c.__item) decorateCard(c, c.__item);
+}
+
+async function renderTrail() {
+  await refreshSession();
+  if (!session) return;
+  sessionName.value = session.name;
+  const list = await api.researchList();
+  sessionSelect.innerHTML = "";
+  for (const s of list) {
+    const o = document.createElement("option");
+    o.value = s.id;
+    o.textContent = `${s.name} (${s.pages})`;
+    o.selected = s.current;
+    sessionSelect.appendChild(o);
+  }
+  document.getElementById("session-meta").textContent =
+    `${session.trail.length} pages read · ${session.opened.length} suggestions opened · ${session.dismissed.length} hidden` +
+    (session.pins.length ? ` · pinned: ${session.pins.join(", ")}` : "");
+
+  const pin = (term) => {
+    if (!isPinned(term)) pinned = [...pinned, term];
+    renderKeys();
+    showPane("suggest");
+    crawl();
+  };
+  const threadsEl = document.getElementById("threads");
+  threadsEl.innerHTML = session.threads.length ? "" : `<p class="help">Keywords that show up on more than one page appear here.</p>`;
+  for (const t of session.threads) {
+    const chip = document.createElement("span");
+    chip.className = "key";
+    chip.title = "Click to pin";
+    chip.textContent = `${t.term} · ${t.pages}`;
+    chip.addEventListener("click", () => pin(t.term));
+    threadsEl.appendChild(chip);
+  }
+
+  trailList.innerHTML = session.trail.length ? "" : `<p class="help">Pages you read appear here, newest first.</p>`;
+  for (const r of [...session.trail].reverse()) {
+    const row = document.createElement("div");
+    row.className = "trail-row";
+    const t = document.createElement("div");
+    t.className = "t";
+    t.textContent = r.title;
+    t.title = r.url;
+    t.addEventListener("click", () => openUrl(r.url, false));
+    const m = document.createElement("div");
+    m.className = "m";
+    m.textContent = `${hostOf(r.url)} · ${whenText(r.lastAt)}${r.visits > 1 ? ` · ${r.visits}×` : ""}`;
+    const ks = document.createElement("div");
+    ks.className = "ks";
+    for (const k of r.keywords) {
+      const span = document.createElement("span");
+      span.textContent = k;
+      span.title = "Pin this keyword";
+      span.addEventListener("click", () => pin(k));
+      ks.appendChild(span);
+    }
+    row.append(t, m, ks);
+    trailList.appendChild(row);
+  }
+}
+
+document.getElementById("trail-btn").addEventListener("click", async () => {
+  if (!api?.researchGet) return showNotice("The research trail needs the desktop app.");
+  showPane("trail");
+  await renderTrail();
+});
+document.getElementById("trail-back").addEventListener("click", () => showPane("suggest"));
+let renameTimer = null;
+sessionName.addEventListener("input", () => {
+  clearTimeout(renameTimer);
+  renameTimer = setTimeout(() => api.researchRename(sessionName.value), 400);
+});
+sessionSelect.addEventListener("change", async () => {
+  adoptSession(await api.researchSwitch(sessionSelect.value));
+  await renderTrail();
+});
+document.getElementById("session-new").addEventListener("click", async () => {
+  adoptSession(await api.researchNew());
+  auto = [];
+  lastCrawl = { at: 0, url: "", terms: [], selection: "" };
+  renderKeys();
+  renderResults([]);
+  await renderTrail();
+  sessionName.focus();
+  sessionName.select();
+});
+document.getElementById("session-export").addEventListener("click", async () => {
+  const item = await api.researchExport();
+  showNotice(`Saved session notes to the Library: ${item.name}`, [{ label: "Show file", run: () => api.revealFile(item.file) }]);
+});
+
+// Load the current session (and its pins) at startup.
+if (api?.researchGet) {
+  api.researchGet().then((s) => {
+    adoptSession(s);
+    if (pinned.length) statusEl.textContent = `Session "${s.name}" · pinned: ${pinned.join(", ")}`;
+  });
+}
 
 startCrawlClock();
 
