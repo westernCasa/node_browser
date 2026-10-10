@@ -49,7 +49,6 @@ function applyLayout() {
     for (const [id, tab] of tabs) {
       if (id === activeId) {
         tab.view.setBounds(rect);
-        tab.view.setBackgroundColor("#111111");
       } else {
         tab.view.setBounds({ x: 0, y: 0, width: 0, height: 0 });
       }
@@ -191,6 +190,7 @@ function createTab(url, opts = {}) {
       autoplayPolicy: "no-user-gesture-required",
     },
   });
+  view.setBackgroundColor("#ffffff"); // pages without their own background expect white
   view.webContents.setUserAgent(USER_AGENT);
   const tab = { id, view, audio: "auto", lastGesture: 0 };
   tabs.set(id, tab);
@@ -356,7 +356,7 @@ async function extractPage(id) {
       if (text.length > 6000) break;
       if (!inView(el) || el.closest(SKIP)) continue;
       const t = clean(el.innerText);
-      if (t.length > 20) text += t + " \n";
+      if (t.length > 20) text += t + " . ";
     }
     const selection = clean(String(window.getSelection ? window.getSelection() : "")).slice(0, 600);
     return {

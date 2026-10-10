@@ -330,9 +330,9 @@ html, body {
   background: var(--bg-3);
   font-size: 11px;
   color: var(--text);
-  word-break: break-all;
 }
-.notice .row { display: flex; gap: 6px; margin-top: 6px; }
+.notice > div:first-child { word-break: break-all; }
+.notice .row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .notice button {
   border: 1px solid var(--line);
   background: var(--bg);

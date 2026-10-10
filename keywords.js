@@ -45,7 +45,8 @@ const COMMON = new Set(
   problem program public put question quite real reason right room run said school second seem seems set
   several show side small social something sometimes sound start state story study system take taken tell
   thing things think thought time times today together told took turn type under upon value want water week
-  went whole woman women word words work world write year young`.split(/\s+/)
+  went whole woman women word words work world write year young fail fails failed carry carries choice
+  matter matters recommend recommends feed feeds goes keep keeps needs makes making whether below above`.split(/\s+/)
 );
 
 const TOKEN_RE = /[\p{L}\p{N}][\p{L}\p{N}'’+#.-]*/gu;
@@ -100,14 +101,22 @@ function coreTitle(title) {
 }
 
 // Multi-word proper names ("Marie Curie", "Large Hadron Collider") from original-case text.
-const NAME_RE = /\b[\p{Lu}][\p{Ll}\p{Lu}'’.-]+(?:\s+(?:of|de|del|da|van|von|the|and|la|le)?\s*[\p{Lu}][\p{Ll}\p{Lu}'’.-]+){1,3}\b/gu;
+const NAME_RE = /\b[\p{Lu}][\p{Ll}\p{Lu}'’.-]+(?:\s+(?:of|de|del|da|van|von|the|la|le)?\s*[\p{Lu}][\p{Ll}\p{Lu}'’.-]+){1,3}\b/gu;
 const NAME_SKIP = /^(The|A|An|And|For|With|From|This|That|You|Your|Home|Page|Video|Image|Photo|Main|Sign|Log|Read|Click)\s/;
+
+const CONNECTOR = /\s+(?:of|de|del|da|van|von|the|and|la|le)\s+/i;
 
 function phrasesFrom(text) {
   const out = [];
   for (const m of String(text || "").matchAll(NAME_RE)) {
     const p = clean(m[0].replace(NAME_SKIP, ""));
-    if (p.split(" ").length >= 2 && p.length <= 60) out.push(p);
+    // "Chad Robertson of Tartine Bakery" -> "Chad Robertson", "Tartine Bakery".
+    // Short connected names ("Bank of America") stay whole.
+    const parts = p.split(" ").length > 4 && CONNECTOR.test(p) ? p.split(CONNECTOR) : [p];
+    for (const part of parts) {
+      const words = part.split(" ").length;
+      if (words >= 2 && words <= 4 && part.length <= 60) out.push(part);
+    }
   }
   return out;
 }
