@@ -1,6 +1,6 @@
 # Scout Browser: Roadmap and Backlog
 
-Last updated: 2026-10-10 (after B20; mobile on hold). The editable version (with status dropdowns) is in the review doc: https://claude.ai/code/artifact/b6ec4995-3117-41d0-a3c4-948c16e699fc
+Last updated: 2026-10-10 (mobile planning and groundwork). The editable version (with status dropdowns) is in the review doc: https://claude.ai/code/artifact/b6ec4995-3117-41d0-a3c4-948c16e699fc
 
 ## Roadmap
 
@@ -13,7 +13,7 @@ Each phase ends at a gate that must pass before the next phase starts. No dates 
 | 2. Network layer | Cached, rate-limited search through swappable sources | B12-B15 | An hour of browsing with no search blocks; repeat pages load previews from cache | Done (gate still needs a live check) |
 | 3. Behaviour shell | Per-site rules, research session, WebContentsView, history and find, AI query ideas | B16-B20, B25 | A new site behaviour can be added by editing a rules file, without code changes | Done. Gate passed in testing (rules edited live) |
 | 4. Desktop release readiness | Installable, stable and easy to set up on macOS and Windows | B26-B31 | Scout is your daily research browser for a week with no blocking bugs | Next |
-| 5. Tauri and mobile | Decide go or no-go on mobile, then port the shell to Rust | B21-B24 | To be set when Phase 5 starts | On hold until Phase 4 passes |
+| 5. Mobile app | React Native (Expo) app reusing `core/`; see `06-mobile-plan.md` | M01-M15 | To be set when Phase 5 starts | Planning and groundwork done; build waits for the Phase 4 gate. M01-M02 (try it on a phone) can run now |
 
 ## Backlog
 
@@ -41,10 +41,10 @@ Effort: XS under 1 hour, S half a day, M 1-2 days, L 3+ days. Finding IDs (C1, K
 | B18 | 3 | Move from BrowserView to WebContentsView | P1 | M | Done |
 | B19 | 3 | History, find-in-page, zoom | P2 | M | Done |
 | B20 | 3 | Optional AI query expansion (local model or Grok) | P2 | M | Done |
-| B21 | 5 | Add tauri.conf.json, withGlobalTauri, icons (C2) | P2 | S | Not started |
-| B22 | 5 | Make Rust commands async; fix argument names (C3, C4) | P2 | S | Not started |
-| B23 | 5 | Port Library, Shot, Save, Media to Rust | P2 | M | Not started |
-| B24 | 5 | Decide the mobile tab model | P2 | M | Not started |
+| B21 | 5 | Add tauri.conf.json, withGlobalTauri, icons (C2) | P2 | S | Replaced (React Native plan) |
+| B22 | 5 | Make Rust commands async; fix argument names (C3, C4) | P2 | S | Replaced (React Native plan) |
+| B23 | 5 | Port Library, Shot, Save, Media to Rust | P2 | M | Replaced by M05 |
+| B24 | 5 | Decide the mobile tab model | P2 | M | Done in planning: one WebView per tab, Mosaic on tablets (`06-mobile-plan.md`) |
 | B25 | 3 | Show Wikipedia results first while web results load (web requests are spaced 2.5 s apart, so a search can take 6 s) | P1 | S | Done |
 | B26 | 4 | Check on a real machine: live Wikipedia, DuckDuckGo, Brave, Grok and local model results, and an hour of browsing (Phase 2 gate) | P0 | S | Not started |
 | B27 | 4 | Installable builds for macOS (.dmg) and Windows (.exe) with an app icon | P0 | M | Not started |
@@ -61,3 +61,7 @@ Effort: XS under 1 hour, S half a day, M 1-2 days, L 3+ days. Finding IDs (C1, K
 - Turn on AI query ideas with Ollama or Grok, press Test, and check the "(AI)" queries give useful results.
 
 These checks are backlog item B26.
+
+## Mobile backlog
+
+M01-M15 are listed in `06-mobile-plan.md`. The first two only need a phone: run the skeleton with Expo Go (M01) and check WebView behaviour on iPhone and Android (M02).

@@ -16,16 +16,22 @@ Phase 5 groundwork. A React Native (Expo SDK 57) app that reuses the desktop app
 
 ## Run it
 
-You need Node 18+, and either an iPhone or Android phone with the **Expo Go** app is not enough: `react-native-webview` needs a development build.
+You need Node 18+ on your computer.
+
+**Quickest (no Xcode or Android Studio):** install the free **Expo Go** app on your phone, then:
 
 ```bash
 cd mobile
 npm install
+npx expo start         # scan the QR code with Expo Go (iPhone: the Camera app)
+```
+
+The phone and computer must be on the same Wi-Fi. Every native library this skeleton uses (WebView, AsyncStorage, SecureStore, safe area) is part of Expo's standard set, so it should run in Expo Go. If Expo Go reports a missing module, use a development build instead:
+
+```bash
 npx expo run:ios       # Mac with Xcode, simulator or a connected iPhone
 npx expo run:android   # Android Studio with an emulator or a connected phone
 ```
-
-Or build in the cloud with EAS (`npx eas build --profile development`), which needs an Expo account.
 
 Check that everything compiles without a phone:
 

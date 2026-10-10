@@ -13,20 +13,34 @@ The long-term goal is a "shell for behaviours": the browser's actions (what to r
 | Area | Status |
 | --- | --- |
 | Electron desktop build | Working. Phases 0 to 3 of the roadmap are done. Next: Phase 4, desktop release readiness. |
-| Tauri build (desktop and mobile) | Does not compile. On hold (Phase 5) until the desktop app passes Phase 4. |
-| Backlog | 31 items, 21 done. Open: B26-B31 (Phase 4), B21-B24 (Phase 5, on hold). |
+| Mobile app (React Native, Expo) | Planned (`06-mobile-plan.md`). Groundwork done: shared `core/` and a walking-skeleton app in `mobile/` that compiles for iOS and Android. Not yet run on a phone (M01). Full build waits for the Phase 4 gate. |
+| Old Tauri build | Does not compile. Replaced by the React Native plan; to be removed (M15). |
+| Backlog | Desktop: 31 items, 21 done, open B26-B31 (Phase 4). B21-B24 (Tauri) replaced. Mobile: M01-M15 in `06-mobile-plan.md`. |
 | Testing | 6 end-to-end test scripts (69 checks) in `test/e2e`, run in Electron 32.3.3 with search sources and AI servers stubbed. Live results still need a check on a real machine (B26). |
 
 ## Where things are
 
 | Item | Location |
 | --- | --- |
-| Code | `scout-7.zip` (latest), sent in the Claude chat. Includes git history. |
+| Code | `scout-8.zip` (latest), sent in the Claude chat. Includes git history. |
 | Review doc with diagrams and editable backlog | https://claude.ai/code/artifact/b6ec4995-3117-41d0-a3c4-948c16e699fc |
 | Roadmap and backlog | `scout/02-roadmap-backlog.md` in this project |
 | How the code works | `scout/03-architecture.md` |
 | Original review findings and what happened to each | `scout/04-review-findings.md` |
 | Change log and testing notes | `scout/05-changelog.md` |
+| Mobile plan, framework decision, mobile backlog | `scout/06-mobile-plan.md` |
+
+## Repository layout
+
+| Folder or file | What it is |
+| --- | --- |
+| `core/` | Logic shared by desktop and mobile: keywords, search sources, network, AI, site rules, sessions, history, page scripts, suggestion controller |
+| `main.js`, `preload.js`, `view-preload.js`, `fs-storage.js` | Desktop app main process (Electron) |
+| `renderer/` | Desktop toolbar, sidebar and Library UI |
+| `mobile/` | Mobile app (React Native, Expo) walking skeleton |
+| `test/` | Unit demos (`*-demo.js`) and desktop end-to-end tests (`e2e/`) |
+| `docs/` | These documents (also in the Scout Browser project) |
+| `src-tauri/`, `renderer/tauri-bridge.js` | Old Tauri build; does not compile; to be removed (M15) |
 
 ## How to run
 
@@ -52,6 +66,7 @@ npm run test:keywords    # keywords and queries picked for two sample pages
 npm run test:providers   # search-source fallback order with fake responses
 npm run test:rules       # which site rules apply to sample URLs
 npm run test:ai          # AI query parsing and errors with fake servers
+npm run test:controller  # the shared "when to search" logic used by the mobile app
 ```
 
 The end-to-end tests are described in `test/e2e/README.md`.
@@ -90,3 +105,5 @@ The end-to-end tests are described in `test/e2e/README.md`.
 | --- | --- |
 | 2026-10-10 | AI query ideas use a local model or Grok (xAI). |
 | 2026-10-10 | Mobile (Tauri) is on hold until the desktop app passes Phase 4 (daily use for a week with no blocking bugs). |
+| 2026-10-10 | While desktop testing waits: plan the mobile app and lay groundwork now; the full mobile build still waits for the Phase 4 gate. |
+| 2026-10-10 | Recommended framework for mobile: React Native (Expo) instead of Tauri, because it supports several web pages per screen and reuses Scout's JavaScript logic. Reversible; confirm after trying the skeleton (M01). |

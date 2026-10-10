@@ -1,29 +1,45 @@
 # Scout Browser: Architecture
 
-Last updated: 2026-10-10 (commit 3db81f4, after B20). Describes the Electron build.
+Last updated: 2026-10-10 (commit 025fb03, shared core and mobile groundwork). Describes the Electron build and the shared `core/`; the mobile app is covered in `06-mobile-plan.md` and `mobile/README.md`.
 
 ## Files
 
 | File | Lines | Role |
 | --- | --- | --- |
-| `main.js` | 1,562 | Main process: tabs, layout, sound, popups, permissions, menu, page extraction, network layer, settings, site rules, history, find, zoom, search, previews, library, session IPC |
-| `keywords.js` | 325 | Keyword pipeline: scoring, phrases, query builder |
-| `providers.js` | 274 | Search sources (Wikipedia, Brave, SearXNG, DuckDuckGo) and the registry that picks between them |
-| `rules.js` | 155 | Site rules: default file, validation, URL matching, merging |
-| `ai.js` | 173 | AI query ideas: OpenAI-compatible client for a local model or Grok, prompt, answer parsing, model list |
-| `research.js` | 177 | Research sessions: trail, pins, opened, dismissed, recurring keywords, Markdown export |
-| `preload.js` | 57 | Exposes `window.scout` to the toolbar UI over IPC |
+| `main.js` | 1,011 | Desktop main process: tabs, layout, sound, popups, permissions, menu, settings and keys, site-rule loading, IPC, library. Uses `core/` for everything platform-neutral |
+| `fs-storage.js` | 20 | Desktop storage for `core/` (one file per name in a folder) |
+| `preload.js` | 58 | Exposes `window.scout` to the toolbar UI over IPC |
 | `view-preload.js` | 39 | Runs in every web page: reports clicks (tab focus, popup permission) and the S shortcut |
-| `renderer/index.html`, `app.js`, `styles.css` | 143 / 1,236 / 501 | Toolbar, find bar, tabs, sidebar (Suggestions, Trail, Settings), Library and History shelf |
-| `renderer/tauri-bridge.js`, `src-tauri/` | | Tauri build. Does not compile yet (Phase 4) |
-| `test/*-demo.js` | | Checks without the browser: `npm run test:keywords`, `test:providers`, `test:rules`, `test:ai` |
-| `test/e2e/` | | End-to-end tests (Playwright driving Electron) with local test pages; see its README |
+| `renderer/index.html`, `app.js`, `styles.css` | | Toolbar, find bar, tabs, sidebar (Suggestions, Trail, Settings), Library and History shelf |
+| `core/` | 2,131 | Shared logic, no platform imports (table below and `core/README.md`) |
+| `mobile/` | | Mobile app (React Native, Expo) walking skeleton; see `mobile/README.md` |
+| `renderer/tauri-bridge.js`, `src-tauri/` | | Old Tauri build. Does not compile; to be removed (M15) |
+| `test/*-demo.js` | | Checks without the browser: `npm run test:keywords`, `test:providers`, `test:rules`, `test:ai`, `test:controller` |
+| `test/e2e/` | | Desktop end-to-end tests (Playwright driving Electron) with local test pages; see its README |
 
-`keywords.js`, `providers.js`, `rules.js`, `research.js` and `ai.js` have no Electron code, so they can be tested with plain Node.
+### core/
+
+| File | Lines | Role |
+| --- | --- | --- |
+| `keywords.js` | 325 | Keyword ranking, names, query builder, overlap |
+| `providers.js` | 274 | Search sources and the fallback registry |
+| `net.js` | 96 | Cached, throttled, time-limited GET (`createNet`) |
+| `suggest.js` | 142 | Search flow: keyword and AI queries, two passes, merged results (`createSuggest`) |
+| `ai.js` | 175 | AI query ideas (local model or Grok) |
+| `rules.js` | 155 | Site rules |
+| `research.js` | 174 | Research sessions (takes a storage object) |
+| `history.js` | 83 | Visit history and suggestions (`HistoryStore`, takes a storage object) |
+| `preview.js` | 215 | Result-card previews (`createPreview`) |
+| `page-scripts.js` | 214 | Scripts injected into pages: extraction, autoplay, autoplay blocking |
+| `controller.js` | 194 | Suggestion controller: when to search again, pins, hides, results (used by mobile; desktop sidebar still has its own copy, M13) |
+| `storage.js` | 30 | `memoryStorage`, `prefixedStorage` |
+| `urls.js` | 19 | `normalizeUrl` (address bar), `hostOf`, `HOME_URL` |
+| `compat.js` | 16 | `timeoutSignal` for engines without `AbortSignal.timeout` |
+| `index.js` | 19 | Re-exports everything |
 
 ## How the pieces connect
 
-1. The toolbar UI (`renderer/`) calls `window.scout.*`, defined in `preload.js`, which sends IPC messages to `main.js`.
+1. The toolbar UI (`renderer/`) calls `window.scout.*`, defined in `preload.js`, which sends IPC messages to `main.js`. `main.js` builds the shared services from `core/` at startup: `createNet` (with Electron `fetch`), the source `Registry`, `createSuggest`, `createPreview`, `ResearchStore` and `HistoryStore` (with `fs-storage.js`).
 2. `main.js` creates one `WebContentsView` per tab. Each runs `view-preload.js` in a sandbox.
 3. `main.js` sends events back to the UI on two channels: `tab:event` (tab list, page loaded, popup blocked) and `ui:command` (focus address bar, toggle Mosaic, screenshot done, error).
 
@@ -32,16 +48,16 @@ Last updated: 2026-10-10 (commit 3db81f4, after B20). Describes the Electron bui
 | Step | Where | What happens |
 | --- | --- | --- |
 | 1. Trigger | `app.js` `crawlViewport()` | Runs when a page finishes loading, on the Crawl button, and every 5 s. The 5 s check only searches if the page changed, new text was selected (3 s minimum gap), or the top keywords drifted (less than 50% overlap) and 20 s have passed. Auto can be turned off. |
-| 2. Extract | `main.js` `extractPage()` | Script injected into the page. Returns title, meta description, h1-h3 headings, selected text, visible readable text (up to 6,000 characters; nav, footer, aside, menus and cookie banners skipped), and media alt text and file names. |
+| 2. Extract | `main.js` `extractPage()` running `core/page-scripts.js` `extractionScript()` | Script injected into the page. Returns title, meta description, h1-h3 headings, selected text, visible readable text (up to 6,000 characters; nav, footer, aside, menus and cookie banners skipped), and media alt text and file names. |
 | 3. Rank | `keywords.js` `rankTerms()` | Scores each word by where it appears (selection 6, title 4, headings 3, description 2, names 2, text 1, media 0.6), with diminishing returns for repeats. Removes stop words, web boilerplate and the site's own name. Merges plurals. Lowers very common English words. Multiplies by session rarity (`SessionDF`: words seen on most of the last 60 pages lose weight). Finds multi-word names ("Marie Curie") and lets them replace their single words. Returns the top 12. |
 | 4. Pins and hides | `app.js` | Pinned keywords (user-chosen) always go into searches and are never replaced. Hidden keywords are removed and remembered in local storage. |
 | 5. Build queries | `keywords.js` `buildQueries()` | Up to 3 queries of at most 4 words: the strongest terms; the top term plus the next tier; the page's own title (dropped when something is pinned). Pins go into every query. |
-| 6. Search | `main.js` `runQueries()` + `providers.js` | Two calls. First `part: "reference"`: Wikipedia only, returned at once, while web requests start in the background. Then `part: "all"`: Wikipedia (from cache) plus web results for the first two queries, merged round-robin, duplicates and the current page removed, up to 12 kept. |
+| 6. Search | `core/suggest.js` `runQueries()` + `core/providers.js` | Two calls. First `part: "reference"`: Wikipedia only, returned at once, while web requests start in the background. Then `part: "all"`: Wikipedia (from cache) plus web results for the first two queries, merged round-robin, duplicates and the current page removed, up to 12 kept. |
 | 7. Show | `app.js` `crawl()`, `renderResults()` | Wikipedia results show first; the full list replaces them, keeping cards already on screen. Results hidden in this session are filtered out. Results for a page the user has already left are dropped. Cards show source and query, a "read" badge if opened or read in this session, and a × to hide. |
 
 ## AI query ideas
 
-`ai.js` calls any OpenAI-compatible chat API (`POST <base>/chat/completions`, `GET <base>/models`):
+`core/ai.js` calls any OpenAI-compatible chat API (`POST <base>/chat/completions`, `GET <base>/models`):
 
 | Option | Base address | Auth | Default model |
 | --- | --- | --- | --- |
@@ -57,7 +73,7 @@ Last updated: 2026-10-10 (commit 3db81f4, after B20). Describes the Electron bui
 
 ## Search sources
 
-`providers.js` defines each source with an id, label, role, settings fields and a `search(query, ctx)` function. The `Registry` class tracks each source's health.
+`core/providers.js` defines each source with an id, label, role, settings fields and a `search(query, ctx)` function. The `Registry` class tracks each source's health.
 
 | Source | Role | Setup | Failure handling |
 | --- | --- | --- | --- |
@@ -70,7 +86,7 @@ For each query the registry uses the first web source that is enabled, configure
 
 ## Network layer
 
-All outbound requests from `main.js` go through `getText()`:
+All outbound requests go through `getText()` from `core/net.js`:
 
 - Cached for 30 minutes, up to 500 entries. Only successful responses are cached.
 - Identical requests that are already running are shared.
@@ -101,7 +117,7 @@ File → Reset Site Permissions clears stored answers.
 
 ## Site rules
 
-`rules.js` holds the defaults and the logic; `main.js` loads `rules.json` at startup, watches it, and reloads 300 ms after a save. A file that does not parse keeps the previous rules and is reported in the sidebar; invalid fields are dropped with a message.
+`core/rules.js` holds the defaults and the logic; `main.js` loads `rules.json` at startup, watches it, and reloads 300 ms after a save. A file that does not parse keeps the previous rules and is reported in the sidebar; invalid fields are dropped with a message.
 
 Each tab stores its resolved rule (`tab.rule`), recomputed on every navigation:
 
@@ -116,7 +132,7 @@ Each tab stores its resolved rule (`tab.rule`), recomputed on every navigation:
 
 ## Research sessions
 
-`research.js` keeps one current session and saves each as `sessions/<id>.json` (plus `current.txt`). The renderer records a page in the trail each time Scout actually searches for it (not on every 5-second check), with its top 5 keywords. Start pages and search-results pages are skipped. Pins are saved with the session after it has loaded at startup. "Recurring keywords" are keywords that appear on more than one page in the session. Export writes Markdown to `library/saves/` and adds it to the Library index.
+`core/research.js` keeps one current session and saves each as `<id>.json` (plus `current.txt`) through a storage object; on desktop that is the `sessions/` folder. The renderer records a page in the trail each time Scout actually searches for it (not on every 5-second check), with its top 5 keywords. Start pages and search-results pages are skipped. Pins are saved with the session after it has loaded at startup. "Recurring keywords" are keywords that appear on more than one page in the session. Export writes Markdown to `library/saves/` and adds it to the Library index.
 
 ## Find, zoom and history
 

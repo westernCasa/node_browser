@@ -41,33 +41,21 @@ Requires Node 18+.
 | Cmd/Ctrl+Shift+U | Mute or unmute the tab |
 | Cmd/Ctrl+Shift+S, or S | Screenshot the tab |
 
-## Tauri (desktop + iOS / Android)
+## Repository layout
 
-Same UI. Tabs open as extra system webviews (required on mobile). Crawl and previews run in Rust.
+| Folder | What it is |
+| --- | --- |
+| `core/` | Logic shared by desktop and mobile (keywords, search sources, AI, rules, sessions, history, page scripts). See `core/README.md` |
+| `renderer/`, `main.js`, `preload.js`, `view-preload.js`, `fs-storage.js` | Desktop app (Electron) |
+| `mobile/` | Mobile app (React Native, Expo) walking skeleton. See `mobile/README.md` |
+| `test/` | Unit demos and desktop end-to-end tests |
+| `docs/` | Overview, roadmap, architecture, review findings, change log, mobile plan |
 
-Install Rust: https://rustup.rs
+## Mobile
 
-```bash
-cd scout   # the folder that holds package.json
-npm install
-npx tauri dev
-```
+The mobile app is planned with React Native (Expo) and reuses `core/`. A first version is in `mobile/`: try it on your phone with the Expo Go app (`cd mobile && npm install && npx expo start`, then scan the QR code). The plan is in `docs/06-mobile-plan.md`.
 
-iPhone (Xcode + Apple ID):
-
-```bash
-npx tauri ios init
-npx tauri ios dev
-```
-
-Android (Android Studio + SDK):
-
-```bash
-npx tauri android init
-npx tauri android dev
-```
-
-First `ios init` / `android init` generates native projects under `src-tauri/gen`. Mosaic on a phone is one tab focused; extra tabs are separate webviews you switch from the chrome window.
+The old Tauri setup (`src-tauri/`, `renderer/tauri-bridge.js`) does not compile and will be removed.
 
 ## How it works
 
