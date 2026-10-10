@@ -117,8 +117,22 @@ function renderRuleLine() {
   el.textContent = names.length ? "Site rule: " + names.join(" · ") : "";
 }
 
+function renderZoom() {
+  const badge = document.getElementById("zoom-badge");
+  const t = tabs.find((x) => x.id === activeId);
+  const z = t?.zoom || 100;
+  badge.hidden = z === 100;
+  badge.textContent = z + "%";
+}
+
 function renderTabs() {
   renderRuleLine();
+  renderZoom();
+  // Find bar open while switching tabs: clear the old tab, search the new one.
+  if (typeof findbar !== "undefined" && !findbar.hidden && findTabId && findTabId !== activeId) {
+    api.findStop(findTabId);
+    runFind(true, false);
+  }
   tabsEl.innerHTML = "";
   for (const t of tabs) {
     const el = document.createElement("div");
@@ -563,9 +577,74 @@ const libraryEl = document.getElementById("shelf");
 const libraryList = document.getElementById("library-list");
 let shelfFolder = "all";
 
+function whenText(ms) {
+  const d = new Date(ms);
+  const today = new Date().toDateString() === d.toDateString();
+  return today ? d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : d.toLocaleDateString();
+}
+
+async function renderHistoryShelf(filter = "") {
+  libraryList.innerHTML = "";
+  const tools = document.createElement("div");
+  tools.className = "history-tools";
+  const input = document.createElement("input");
+  input.placeholder = "Search history";
+  input.value = filter;
+  const clear = document.createElement("button");
+  clear.className = "chip";
+  clear.textContent = "Clear all history";
+  clear.addEventListener("click", async () => {
+    await api.historyClear();
+    renderHistoryShelf();
+  });
+  tools.append(input, clear);
+  libraryList.appendChild(tools);
+  const list = document.createElement("div");
+  list.className = "history-list";
+  libraryList.appendChild(list);
+  const fill = async () => {
+    const rows = await api.historySearch(input.value, 300);
+    list.innerHTML = rows.length ? "" : `<p class="help">No history yet.</p>`;
+    for (const r of rows) {
+      const row = document.createElement("div");
+      row.className = "history-row";
+      const text = document.createElement("div");
+      text.innerHTML = `<div class="t">${escapeHtml(r.title || r.url)}</div><div class="u">${escapeHtml(r.url)}</div>`;
+      const when = document.createElement("span");
+      when.className = "when";
+      when.textContent = `${whenText(r.lastVisit)} · ${r.visits}×`;
+      const open = document.createElement("button");
+      open.textContent = "Open";
+      open.addEventListener("click", async () => {
+        await closeLibrary();
+        api.createTab(r.url);
+      });
+      const del = document.createElement("button");
+      del.textContent = "Remove";
+      del.addEventListener("click", async () => {
+        await api.historyRemove(r.url);
+        row.remove();
+      });
+      row.append(text, when, open, del);
+      list.appendChild(row);
+    }
+  };
+  let t = null;
+  input.addEventListener("input", () => {
+    clearTimeout(t);
+    t = setTimeout(fill, 150);
+  });
+  await fill();
+  input.focus();
+}
+
 async function openLibrary() {
   libraryEl.hidden = false;
   if (api?.setLibraryOpen) await api.setLibraryOpen(true);
+  if (shelfFolder === "history") {
+    if (api?.historySearch) await renderHistoryShelf();
+    return;
+  }
   const rows = api?.libraryList ? await api.libraryList() : [];
   const shown = shelfFolder === "all" ? rows : rows.filter((row) => row.folder === shelfFolder);
   libraryList.innerHTML = "";
@@ -827,6 +906,79 @@ document.getElementById("sources-save").addEventListener("click", async () => {
   crawl();
 });
 
+// ---- Find in page (B19) ----
+const findbar = document.getElementById("findbar");
+const findInput = document.getElementById("find-input");
+const findCount = document.getElementById("find-count");
+let findTabId = null;
+
+function openFind() {
+  if (!api?.findStart || !activeId) return;
+  findbar.hidden = false;
+  findInput.focus();
+  findInput.select();
+  if (findInput.value) runFind(true, false);
+}
+
+function runFind(forward = true, findNext = false) {
+  const text = findInput.value;
+  if (!text) {
+    findCount.textContent = "";
+    if (findTabId) api.findStop(findTabId);
+    return;
+  }
+  findTabId = activeId;
+  api.findStart(activeId, text, { forward, findNext });
+}
+
+function stepFind(forward) {
+  if (findbar.hidden) return openFind();
+  runFind(forward, true);
+}
+
+function closeFind() {
+  findbar.hidden = true;
+  findCount.textContent = "";
+  if (findTabId) api.findStop(findTabId);
+  findTabId = null;
+}
+
+let findTimer = null;
+findInput.addEventListener("input", () => {
+  clearTimeout(findTimer);
+  findTimer = setTimeout(() => runFind(true, false), 120);
+});
+findInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    runFind(!e.shiftKey, true);
+  } else if (e.key === "Escape") {
+    closeFind();
+  }
+});
+document.getElementById("find-next").addEventListener("click", () => runFind(true, true));
+document.getElementById("find-prev").addEventListener("click", () => runFind(false, true));
+document.getElementById("find-close").addEventListener("click", closeFind);
+document.getElementById("zoom-badge").addEventListener("click", () => activeId && api?.zoom?.(activeId, 0));
+
+// ---- Address-bar suggestions from history (B19) ----
+const historyList = document.getElementById("history-list");
+let omniTimer = null;
+omni.addEventListener("input", () => {
+  if (!api?.historySearch) return;
+  clearTimeout(omniTimer);
+  omniTimer = setTimeout(async () => {
+    const rows = await api.historySearch(omni.value, 8);
+    historyList.innerHTML = "";
+    for (const r of rows) {
+      const o = document.createElement("option");
+      o.value = r.url;
+      o.label = r.title || r.url;
+      historyList.appendChild(o);
+    }
+  }, 120);
+});
+
 startCrawlClock();
 
 if (api) {
@@ -837,6 +989,10 @@ if (api) {
       tabs = tabs.map((t) => (t.id === payload.tab.id ? payload.tab : t));
     }
     renderTabs();
+    if (payload.type === "find") {
+      if (payload.tabId === activeId) findCount.textContent = payload.total ? `${payload.active}/${payload.total}` : "0/0";
+      return;
+    }
     if (payload.type === "popup-blocked") {
       showNotice(`Blocked a popup: ${payload.url}`, [
         { label: "Open in new tab", run: () => api.createTab(payload.url) },
@@ -856,6 +1012,14 @@ if (api) {
       layoutBtn.click();
     } else if (msg.cmd === "shot-done") {
       statusEl.textContent = "Saved screenshot · " + (msg.item?.sourceUrl || "");
+      openLibrary();
+    } else if (msg.cmd === "find-open") {
+      openFind();
+    } else if (msg.cmd === "find-step") {
+      stepFind(msg.forward);
+    } else if (msg.cmd === "open-history") {
+      shelfFolder = "history";
+      document.querySelectorAll("#shelf-filters .chip").forEach((c) => c.classList.toggle("active", c.dataset.folder === "history"));
       openLibrary();
     } else if (msg.cmd === "rules-reloaded") {
       const text = `Site rules: ${msg.count} rules in use.` + (msg.errors?.length ? " Problems: " + msg.errors.join(" ") : "");

@@ -27,8 +27,17 @@
         <button class="icon" id="forward" title="Forward">→</button>
         <button class="icon" id="reload" title="Reload">↻</button>
         <form id="omni-form" class="omni">
-          <input id="omni" type="text" spellcheck="false" placeholder="Search or enter address" />
+          <input id="omni" type="text" spellcheck="false" placeholder="Search or enter address" list="history-list" autocomplete="off" />
+          <datalist id="history-list"></datalist>
         </form>
+        <button class="chip" id="zoom-badge" title="Zoom. Click to reset to 100%" hidden>100%</button>
+        <div class="findbar" id="findbar" hidden>
+          <input id="find-input" type="text" spellcheck="false" placeholder="Find in page" />
+          <span id="find-count"></span>
+          <button class="icon" id="find-prev" title="Previous (Shift+Enter)">↑</button>
+          <button class="icon" id="find-next" title="Next (Enter)">↓</button>
+          <button class="icon" id="find-close" title="Close (Esc)">×</button>
+        </div>
         <button class="chip" id="layout-btn" title="Tile every tab so media can play together">Mosaic</button>
         <button class="chip" id="shot-btn" title="Shortcut: S">Shot <kbd>S</kbd></button>
         <button class="chip" id="save-btn">Save</button>
@@ -100,6 +109,7 @@
         <button class="chip" data-folder="screenshots">Shots</button>
         <button class="chip" data-folder="media">Media</button>
         <button class="chip" data-folder="saves">Saves</button>
+        <button class="chip" data-folder="history">History</button>
       </div>
       <button class="chip" id="library-folder">Show folder</button>
       <button class="chip" id="library-close">Close</button>

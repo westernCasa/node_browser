@@ -61,6 +61,78 @@ function watchRules() {
   } catch (_) {}
 }
 
+// ---- History (B19) ----
+// userData/history.json: one entry per URL with title, visit count and last visit.
+const HISTORY_MAX = 3000;
+let historyRows = null;
+let historyTimer = null;
+
+function historyFile() {
+  return path.join(app.getPath("userData"), "history.json");
+}
+
+function history() {
+  if (!historyRows) {
+    try {
+      historyRows = JSON.parse(fs.readFileSync(historyFile(), "utf8"));
+    } catch {
+      historyRows = [];
+    }
+  }
+  return historyRows;
+}
+
+function saveHistorySoon() {
+  clearTimeout(historyTimer);
+  historyTimer = setTimeout(() => {
+    try {
+      fs.writeFileSync(historyFile(), JSON.stringify(history()));
+    } catch (_) {}
+  }, 1500);
+}
+
+function recordVisit(url, title) {
+  if (!/^https?:/i.test(url || "")) return;
+  const rows = history();
+  const i = rows.findIndex((r) => r.url === url);
+  const row = i >= 0 ? rows.splice(i, 1)[0] : { url, title: "", visits: 0 };
+  row.visits += 1;
+  row.lastVisit = Date.now();
+  if (title) row.title = title;
+  rows.unshift(row);
+  if (rows.length > HISTORY_MAX) rows.length = HISTORY_MAX;
+  saveHistorySoon();
+}
+
+function updateHistoryTitle(url, title) {
+  const row = history().find((r) => r.url === url);
+  if (row && title && row.title !== title) {
+    row.title = title;
+    saveHistorySoon();
+  }
+}
+
+// Address-bar suggestions: host/URL prefix matches first, then title matches,
+// ranked by visit count and recency.
+function searchHistory(q, limit = 8) {
+  const query = String(q || "").trim().toLowerCase();
+  if (!query) return history().slice(0, limit);
+  const bare = (u) => u.replace(/^https?:\/\/(www\.)?/i, "").toLowerCase();
+  const scored = [];
+  for (const r of history()) {
+    const u = bare(r.url);
+    const t = (r.title || "").toLowerCase();
+    let score = 0;
+    if (u.startsWith(query)) score = 100;
+    else if (u.includes(query)) score = 40;
+    else if (t.includes(query)) score = 30;
+    else continue;
+    score += Math.min(30, r.visits * 3) + Math.max(0, 20 - (Date.now() - r.lastVisit) / 86400000);
+    scored.push({ r, score });
+  }
+  return scored.sort((a, b) => b.score - a.score).slice(0, limit).map((x) => x.r);
+}
+
 function ruleFor(url) {
   return Rules.resolve(siteRules, url);
 }
@@ -146,6 +218,7 @@ function tabState(tab) {
     muted: wc.isAudioMuted(),
     audible: wc.isCurrentlyAudible(),
     audio: tab.audio,
+    zoom: Math.round(wc.getZoomFactor() * 100),
     rule: tab.rule ? { matched: tab.rule.matched, suggest: tab.rule.suggest, autoplay: tab.rule.autoplay } : null,
   };
 }
@@ -228,8 +301,17 @@ function attachListeners(tab) {
   wc.on("focus", () => {
     if (activeId !== tab.id) activateTab(tab.id);
   });
-  wc.on("page-title-updated", ping);
+  wc.on("page-title-updated", (_e, title) => {
+    updateHistoryTitle(wc.getURL(), title);
+    ping();
+  });
+  wc.on("found-in-page", (_e, r) => {
+    if (r.finalUpdate) emit({ type: "find", tabId: tab.id, active: r.activeMatchOrdinal, total: r.matches });
+  });
+  // Ctrl/Cmd + mouse wheel or trackpad pinch.
+  wc.on("zoom-changed", (_e, direction) => zoomTab(tab, direction === "in" ? 0.5 : -0.5));
   wc.on("did-navigate", (_e, url) => {
+    recordVisit(url, wc.getTitle());
     refreshRule(tab, url);
     applyLayout();
     ping();
@@ -1033,6 +1115,14 @@ function sendUi(cmd, extra = {}) {
   win?.webContents.send("ui:command", { cmd, ...extra });
 }
 
+function zoomTab(tab, step) {
+  if (!tab) return;
+  const wc = tab.view.webContents;
+  const level = step === 0 ? 0 : Math.max(-5, Math.min(5, wc.getZoomLevel() + step));
+  wc.setZoomLevel(level);
+  emitList();
+}
+
 function activeWc() {
   return tabs.get(activeId)?.view.webContents || null;
 }
@@ -1080,6 +1170,17 @@ function buildMenu() {
           click: () => activeWc()?.canGoForward() && activeWc().goForward(),
         },
         { label: "Toggle Mosaic", accelerator: "CmdOrCtrl+Shift+M", click: () => sendUi("toggle-layout") },
+        { type: "separator" },
+        { label: "Find in Page", accelerator: "CmdOrCtrl+F", click: () => sendUi("find-open") },
+        { label: "Find Next", accelerator: "CmdOrCtrl+G", click: () => sendUi("find-step", { forward: true }) },
+        { label: "Find Previous", accelerator: "CmdOrCtrl+Shift+G", click: () => sendUi("find-step", { forward: false }) },
+        { type: "separator" },
+        { label: "Zoom In", accelerator: "CmdOrCtrl+=", click: () => zoomTab(tabs.get(activeId), 0.5) },
+        { label: "Zoom In ", accelerator: "CmdOrCtrl+Plus", visible: false, click: () => zoomTab(tabs.get(activeId), 0.5) },
+        { label: "Zoom Out", accelerator: "CmdOrCtrl+-", click: () => zoomTab(tabs.get(activeId), -0.5) },
+        { label: "Actual Size", accelerator: "CmdOrCtrl+0", click: () => zoomTab(tabs.get(activeId), 0) },
+        { type: "separator" },
+        { label: "History", accelerator: "CmdOrCtrl+Y", click: () => sendUi("open-history") },
         {
           label: "Mute or Unmute Tab",
           accelerator: "CmdOrCtrl+Shift+U",
@@ -1236,6 +1337,26 @@ ipcMain.handle("page:extract", (_e, id) => extractPage(id));
 ipcMain.handle("suggest:search", (_e, keywords, excludeUrl) => suggest(keywords, excludeUrl));
 ipcMain.handle("suggest:for", (_e, payload) => suggestFor(payload));
 ipcMain.handle("settings:get", () => publicSettings());
+ipcMain.handle("find:start", (_e, id, text, opts = {}) => {
+  const wc = tabs.get(id)?.view.webContents;
+  if (!wc || !text) return null;
+  // Electron's findNext means "start a new search session", so it is the
+  // opposite of our "step to the next match" flag.
+  return wc.findInPage(String(text), { forward: opts.forward !== false, findNext: !opts.findNext });
+});
+ipcMain.handle("find:stop", (_e, id) => tabs.get(id)?.view.webContents.stopFindInPage("keepSelection"));
+ipcMain.handle("tab:zoom", (_e, id, step) => zoomTab(tabs.get(id), Number(step) || 0));
+ipcMain.handle("history:search", (_e, q, limit) => searchHistory(q, limit));
+ipcMain.handle("history:clear", () => {
+  historyRows = [];
+  saveHistorySoon();
+  return true;
+});
+ipcMain.handle("history:remove", (_e, url) => {
+  historyRows = history().filter((r) => r.url !== url);
+  saveHistorySoon();
+  return true;
+});
 ipcMain.handle("rules:edit", () => shell.openPath(rulesFile()));
 ipcMain.handle("rules:reload", () => {
   loadRules(true);

@@ -9,6 +9,7 @@
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
+[hidden] { display: none !important; }
 
 html, body {
   height: 100%;
@@ -401,3 +402,49 @@ html, body {
 .rule-line { color: var(--mute); font-size: 11px; margin: -6px 0 10px; }
 .rules-head { margin-top: 18px; }
 .actions-row { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* Find bar, zoom, history (B19) */
+.findbar { display: flex; align-items: center; gap: 4px; -webkit-app-region: no-drag; }
+.findbar input {
+  width: 180px;
+  height: 28px;
+  border: 1px solid var(--accent);
+  background: var(--bg);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 0 8px;
+  font: 12px/1 inherit;
+}
+.findbar #find-count { color: var(--mute); font-size: 11px; min-width: 44px; text-align: center; }
+.findbar .icon { width: 28px; padding: 0; }
+.history-list { display: flex; flex-direction: column; gap: 2px; grid-column: 1 / -1; }
+.history-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+}
+.history-row .t { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.history-row .u { color: var(--mute); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.history-row .when { color: var(--mute); font-size: 11px; white-space: nowrap; }
+.history-row button {
+  border: 1px solid var(--line);
+  background: var(--bg-3);
+  color: var(--text);
+  border-radius: 4px;
+  padding: 3px 8px;
+  font: 11px/1 inherit;
+  cursor: pointer;
+}
+.history-tools { display: flex; gap: 8px; align-items: center; grid-column: 1 / -1; margin-bottom: 8px; }
+.history-tools input {
+  flex: 1;
+  height: 28px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 0 10px;
+}
