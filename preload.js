@@ -21,7 +21,12 @@ contextBridge.exposeInMainWorld("scout", {
   removeLibraryItem: (id) => ipcRenderer.invoke("library:remove", id),
   openLibraryFolder: () => ipcRenderer.invoke("library:open-folder"),
   revealFile: (file) => ipcRenderer.invoke("library:reveal", file),
+  toggleTabAudio: (id) => ipcRenderer.invoke("tab:audio", id),
+  resetTabAudio: (id) => ipcRenderer.invoke("tab:audio-reset", id),
   onTabEvent: (fn) => {
     ipcRenderer.on("tab:event", (_e, payload) => fn(payload));
+  },
+  onCommand: (fn) => {
+    ipcRenderer.on("ui:command", (_e, payload) => fn(payload));
   },
 });

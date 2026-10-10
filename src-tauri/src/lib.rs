@@ -66,7 +66,7 @@ struct ExtractOut {
 
 fn client() -> reqwest::blocking::Client {
   reqwest::blocking::Client::builder()
-    .user_agent("Mozilla/5.0 Scout/0.2")
+    .user_agent("Mozilla/5.0 Scout/0.3")
     .redirect(reqwest::redirect::Policy::limited(8))
     .timeout(std::time::Duration::from_secs(12))
     .build()

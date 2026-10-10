@@ -1,8 +1,9 @@
-const { app, BrowserWindow, BrowserView, ipcMain, session, shell, protocol, net } = require("electron");
+const { app, BrowserWindow, BrowserView, ipcMain, session, shell, protocol, net, Menu, dialog } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const { URL } = require("url");
 
+const HOME_URL = "https://en.wikipedia.org/wiki/Main_Page";
 const CHROME_TOP = 112;
 const SIDEBAR_DEFAULT = 225;
 const USER_AGENT =
@@ -35,6 +36,7 @@ function contentRect() {
 
 function applyLayout() {
   if (!win) return;
+  applyAudio();
   if (libraryOpen) {
     for (const tab of tabs.values()) tab.view.setBounds({ x: 0, y: 0, width: 0, height: 0 });
     return;
@@ -86,7 +88,23 @@ function tabState(tab) {
     canBack: wc.canGoBack(),
     canForward: wc.canGoForward(),
     loading: wc.isLoading(),
+    muted: wc.isAudioMuted(),
+    audible: wc.isCurrentlyAudible(),
+    audio: tab.audio,
   };
+}
+
+function emitList() {
+  emit({ type: "list", tabs: [...tabs.values()].map(tabState), activeId });
+}
+
+// Sound policy (B03). "auto": only the active tab is audible; background and
+// non-focused Mosaic tiles keep playing but muted. "on"/"off" are user overrides.
+function applyAudio() {
+  for (const tab of tabs.values()) {
+    const muted = tab.audio === "off" ? true : tab.audio === "on" ? false : tab.id !== activeId;
+    if (tab.view.webContents.isAudioMuted() !== muted) tab.view.webContents.setAudioMuted(muted);
+  }
 }
 
 function normalizeUrl(input) {
@@ -142,13 +160,25 @@ function attachListeners(tab) {
     tryAutoplay(wc);
     emit({ type: "settled", tab: tabState(tab) });
   });
-  wc.setWindowOpenHandler(({ url }) => {
-    createTab(url);
+  wc.on("audio-state-changed", ping);
+  // Popups (B04): only open a new tab if the user clicked or typed in this
+  // page in the last 2 s. Everything else is blocked and reported to the UI.
+  wc.setWindowOpenHandler(({ url, disposition }) => {
+    if (Date.now() - tab.lastGesture < 2000) {
+      createTab(url, { background: disposition === "background-tab" });
+    } else {
+      emit({ type: "popup-blocked", tabId: tab.id, url });
+    }
     return { action: "deny" };
+  });
+  // Shortcuts typed while a web page has focus (B02). Menu accelerators cover
+  // Cmd/Ctrl combos; this only records user activity for the popup check.
+  wc.on("before-input-event", (_e, input) => {
+    if (input.type === "keyDown" || input.type === "mouseDown") tab.lastGesture = Date.now();
   });
 }
 
-function createTab(url) {
+function createTab(url, opts = {}) {
   const id = String(idSeq++);
   const view = new BrowserView({
     webPreferences: {
@@ -161,14 +191,14 @@ function createTab(url) {
     },
   });
   view.webContents.setUserAgent(USER_AGENT);
-  const tab = { id, view };
+  const tab = { id, view, audio: "auto", lastGesture: 0 };
   tabs.set(id, tab);
   win.addBrowserView(view);
   attachListeners(tab);
-  activeId = id;
+  if (!opts.background || !activeId) activeId = id;
   view.webContents.loadURL(normalizeUrl(url));
   applyLayout();
-  emit({ type: "list", tabs: [...tabs.values()].map(tabState), activeId });
+  emitList();
   return id;
 }
 
@@ -183,16 +213,16 @@ function closeTab(id) {
   if (activeId === id) {
     activeId = [...tabs.keys()].at(-1) || null;
   }
-  if (!activeId) createTab("https://en.wikipedia.org/wiki/Main_Page");
+  if (!activeId) createTab(HOME_URL);
   applyLayout();
-  emit({ type: "list", tabs: [...tabs.values()].map(tabState), activeId });
+  emitList();
 }
 
 function activateTab(id) {
   if (!tabs.has(id)) return;
   activeId = id;
   applyLayout();
-  emit({ type: "list", tabs: [...tabs.values()].map(tabState), activeId });
+  emitList();
 }
 
 async function extractPage(id) {
@@ -651,6 +681,190 @@ async function preview(url, keywords = []) {
   }
 }
 
+// ---- Site permissions (B01) ----
+// Camera, microphone, location, notifications and screen capture always ask.
+// Decisions marked "remember" are stored per origin in userData/permissions.json.
+const ALWAYS_ALLOW = new Set(["fullscreen", "clipboard-sanitized-write", "pointerLock"]);
+const ASK = {
+  media: "use your camera or microphone",
+  geolocation: "know your location",
+  notifications: "show notifications",
+  "display-capture": "record your screen",
+  "clipboard-read": "read your clipboard",
+  midiSysex: "control MIDI devices",
+};
+let permissionStore = null;
+
+function permissionsFile() {
+  return path.join(app.getPath("userData"), "permissions.json");
+}
+
+function permissions() {
+  if (!permissionStore) {
+    try {
+      permissionStore = JSON.parse(fs.readFileSync(permissionsFile(), "utf8"));
+    } catch {
+      permissionStore = {};
+    }
+  }
+  return permissionStore;
+}
+
+function savePermissions() {
+  try {
+    fs.writeFileSync(permissionsFile(), JSON.stringify(permissionStore || {}, null, 2));
+  } catch (_) {}
+}
+
+function originOf(url) {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return "";
+  }
+}
+
+function resetPermissions() {
+  permissionStore = {};
+  savePermissions();
+}
+
+function installPermissionHandlers(ses) {
+  const pending = new Map();
+  ses.setPermissionRequestHandler((wc, permission, cb, details) => {
+    if (ALWAYS_ALLOW.has(permission)) return cb(true);
+    if (!ASK[permission]) return cb(false);
+    const origin = originOf(details?.requestingUrl || wc.getURL());
+    if (!origin || !win) return cb(false);
+    const key = `${origin}|${permission}`;
+    const stored = permissions()[key];
+    if (stored === "allow") return cb(true);
+    if (stored === "block") return cb(false);
+    // One dialog per origin+permission at a time; later requests wait for it.
+    if (pending.has(key)) return pending.get(key).push(cb);
+    pending.set(key, [cb]);
+    dialog
+      .showMessageBox(win, {
+        type: "question",
+        buttons: ["Block", "Allow"],
+        defaultId: 0,
+        cancelId: 0,
+        message: `${new URL(origin).host} wants to ${ASK[permission]}.`,
+        detail: origin,
+        checkboxLabel: "Remember for this site",
+        checkboxChecked: true,
+      })
+      .then(({ response, checkboxChecked }) => {
+        const allow = response === 1;
+        if (checkboxChecked) {
+          permissions()[key] = allow ? "allow" : "block";
+          savePermissions();
+        }
+        for (const fn of pending.get(key) || []) fn(allow);
+        pending.delete(key);
+      })
+      .catch(() => {
+        for (const fn of pending.get(key) || []) fn(false);
+        pending.delete(key);
+      });
+  });
+  ses.setPermissionCheckHandler((_wc, permission, requestingOrigin) => {
+    if (ALWAYS_ALLOW.has(permission)) return true;
+    if (ASK[permission]) return permissions()[`${requestingOrigin}|${permission}`] === "allow";
+    return true;
+  });
+}
+
+// ---- Menu and shortcuts (B02) ----
+// Menu accelerators fire no matter which tab or panel has focus.
+function sendUi(cmd, extra = {}) {
+  win?.webContents.send("ui:command", { cmd, ...extra });
+}
+
+function activeWc() {
+  return tabs.get(activeId)?.view.webContents || null;
+}
+
+function buildMenu() {
+  const isMac = process.platform === "darwin";
+  const template = [
+    ...(isMac ? [{ role: "appMenu" }] : []),
+    {
+      label: "File",
+      submenu: [
+        {
+          label: "New Tab",
+          accelerator: "CmdOrCtrl+T",
+          click: () => {
+            createTab(HOME_URL);
+            sendUi("focus-omni");
+          },
+        },
+        { label: "Close Tab", accelerator: "CmdOrCtrl+W", click: () => activeId && closeTab(activeId) },
+        { label: "Open Location", accelerator: "CmdOrCtrl+L", click: () => sendUi("focus-omni") },
+        { type: "separator" },
+        { label: "Screenshot Tab", accelerator: "CmdOrCtrl+Shift+S", click: () => runShotFromMain(activeId) },
+        { label: "Reset Site Permissions", click: resetPermissions },
+        { type: "separator" },
+        isMac ? { role: "close" } : { role: "quit" },
+      ],
+    },
+    { role: "editMenu" },
+    {
+      label: "View",
+      submenu: [
+        { label: "Reload", accelerator: "CmdOrCtrl+R", click: () => activeWc()?.reload() },
+        {
+          label: "Back",
+          accelerator: "CmdOrCtrl+[",
+          click: () => activeWc()?.canGoBack() && activeWc().goBack(),
+        },
+        {
+          label: "Forward",
+          accelerator: "CmdOrCtrl+]",
+          click: () => activeWc()?.canGoForward() && activeWc().goForward(),
+        },
+        { label: "Toggle Mosaic", accelerator: "CmdOrCtrl+Shift+M", click: () => sendUi("toggle-layout") },
+        {
+          label: "Mute or Unmute Tab",
+          accelerator: "CmdOrCtrl+Shift+U",
+          click: () => {
+            const tab = tabs.get(activeId);
+            if (!tab) return;
+            tab.audio = tab.view.webContents.isAudioMuted() ? "on" : "off";
+            applyAudio();
+            emitList();
+          },
+        },
+        { type: "separator" },
+        { label: "Developer Tools for Page", accelerator: "CmdOrCtrl+Alt+I", click: () => activeWc()?.toggleDevTools() },
+        { role: "togglefullscreen" },
+      ],
+    },
+    { role: "windowMenu" },
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
+async function shotTab(id) {
+  const tab = tabs.get(id) || tabs.get(activeId);
+  if (!tab) throw new Error("No tab");
+  const image = await tab.view.webContents.capturePage();
+  const name = stamp("shot", "png");
+  const file = path.join(libraryRoot(), "screenshots", name);
+  fs.writeFileSync(file, image.toPNG());
+  return addRecord("screenshots", name, tab.view.webContents.getURL(), tab.view.webContents.getTitle());
+}
+
+async function runShotFromMain(id) {
+  try {
+    const item = await shotTab(id);
+    sendUi("shot-done", { item });
+  } catch (err) {
+    sendUi("error", { message: String(err.message || err) });
+  }
+}
+
 function createWindow() {
   win = new BrowserWindow({
     width: 1440,
@@ -658,7 +872,8 @@ function createWindow() {
     minWidth: 1100,
     minHeight: 700,
     backgroundColor: "#121212",
-    title: "Scout 3",
+    title: "Scout",
+    autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -670,7 +885,7 @@ function createWindow() {
   win.loadFile(path.join(__dirname, "renderer", "index.html"));
   win.on("resize", applyLayout);
   win.webContents.on("did-finish-load", () => {
-    if (!tabs.size) createTab("https://en.wikipedia.org/wiki/Main_Page");
+    if (!tabs.size) createTab(HOME_URL);
   });
 }
 
@@ -692,9 +907,8 @@ app.whenReady().then(() => {
       return new Response(String(err), { status: 400 });
     }
   });
-  session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => {
-    cb(permission === "media" || permission === "fullscreen");
-  });
+  installPermissionHandlers(session.defaultSession);
+  buildMenu();
   createWindow();
 });
 
@@ -732,7 +946,31 @@ ipcMain.handle("layout:library", (_e, open) => {
   return libraryOpen;
 });
 ipcMain.on("tab:clicked", (_e, id) => {
-  if (id && tabs.has(String(id))) activateTab(String(id));
+  const tab = tabs.get(String(id));
+  if (!tab) return;
+  tab.lastGesture = Date.now();
+  if (activeId !== tab.id) activateTab(tab.id);
+});
+// Plain-key shortcuts pressed inside a web page (sent by view-preload.js only
+// when focus is not in a text field).
+ipcMain.on("tab:hotkey", (_e, id, key) => {
+  if (key === "shot" && tabs.has(String(id))) runShotFromMain(String(id));
+});
+ipcMain.handle("tab:audio", (_e, id) => {
+  const tab = tabs.get(id);
+  if (!tab) return null;
+  tab.audio = tab.view.webContents.isAudioMuted() ? "on" : "off";
+  applyAudio();
+  emitList();
+  return tab.audio;
+});
+ipcMain.handle("tab:audio-reset", (_e, id) => {
+  const tab = tabs.get(id);
+  if (!tab) return null;
+  tab.audio = "auto";
+  applyAudio();
+  emitList();
+  return tab.audio;
 });
 ipcMain.handle("page:extract", (_e, id) => extractPage(id));
 ipcMain.handle("suggest:search", (_e, keywords, excludeUrl) => suggest(keywords, excludeUrl));
@@ -784,16 +1022,42 @@ function addRecord(folder, name, sourceUrl, note) {
   return item;
 }
 
+// File extension from the server's content-type first, then the URL (B05).
+const MIME_EXT = {
+  "video/mp4": "mp4",
+  "video/webm": "webm",
+  "video/ogg": "ogv",
+  "video/quicktime": "mov",
+  "audio/mpeg": "mp3",
+  "audio/mp4": "m4a",
+  "audio/ogg": "ogg",
+  "audio/wav": "wav",
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/gif": "gif",
+  "image/webp": "webp",
+  "image/avif": "avif",
+  "image/svg+xml": "svg",
+};
+
+function extensionFor(contentType, url, kind) {
+  const mime = contentType.split(";")[0].trim().toLowerCase();
+  if (MIME_EXT[mime]) return MIME_EXT[mime];
+  const fromUrl = (String(url).split(/[?#]/)[0].match(/\.([a-z0-9]{2,4})$/i) || [])[1];
+  if (fromUrl) return fromUrl.toLowerCase();
+  return kind === "video" ? "mp4" : "jpg";
+}
+
 ipcMain.handle("library:root", () => libraryRoot());
 ipcMain.handle("library:list", () =>
   readIndex().map((item) => ({
     ...item,
     mediaUrl: `scoutlib://${item.id}/file`,
-    kind: /\.(mp4|webm|mov|m4v)$/i.test(item.name)
+    kind: /\.(mp4|webm|ogv|mov|m4v)$/i.test(item.name)
       ? "video"
-      : /\.(mp3|m4a|wav)$/i.test(item.name)
+      : /\.(mp3|m4a|wav|ogg)$/i.test(item.name)
         ? "audio"
-        : /\.(png|jpe?g|gif|webp|svg)$/i.test(item.name)
+        : /\.(png|jpe?g|gif|webp|avif|svg)$/i.test(item.name)
           ? "image"
           : "file",
   }))
@@ -810,17 +1074,7 @@ ipcMain.handle("library:reveal", (_e, file) => {
   if (file && fs.existsSync(file)) shell.showItemInFolder(file);
 });
 
-ipcMain.handle("library:shot", async (_e, id) => {
-  const tab = tabs.get(id) || tabs.get(activeId);
-  if (!tab) throw new Error("No tab");
-  const image = await tab.view.webContents.capturePage();
-  const name = stamp("shot", "png");
-  const file = path.join(libraryRoot(), "screenshots", name);
-  fs.writeFileSync(file, image.toPNG());
-  const url = tab.view.webContents.getURL();
-  const title = tab.view.webContents.getTitle();
-  return addRecord("screenshots", name, url, title);
-});
+ipcMain.handle("library:shot", (_e, id) => shotTab(id));
 
 ipcMain.handle("library:save", async (_e, id) => {
   const tab = tabs.get(id) || tabs.get(activeId);
@@ -862,15 +1116,18 @@ ipcMain.handle("library:grab", async (_e, id, explicitUrl) => {
         if (file && /\\.(svg|png|jpe?g|gif|webp|mp4|webm)(\\?|$)/i.test(file)) return { url: file, kind: "image" };
         return null;
       })()`, true);
-  if (!found?.url || found.url.startsWith("blob:") || found.url.startsWith("data:")) {
-    throw new Error("No downloadable media on this page");
+  if (!found?.url) throw new Error("No downloadable media on this page");
+  if (found.url.startsWith("blob:")) {
+    throw new Error("This site streams its video in pieces (blob URL), so it can't be saved as one file. Use Shot instead.");
+  }
+  if (found.url.startsWith("data:")) throw new Error("This media is embedded inline and has no file to download.");
+  if (/\.(m3u8|mpd)(\?|$)/i.test(found.url)) {
+    throw new Error("This is a streaming playlist (HLS/DASH), not a single file, so it can't be saved.");
   }
   const res = await fetch(found.url, { headers: { "User-Agent": USER_AGENT, Referer: tab.view.webContents.getURL() } });
-  if (!res.ok) throw new Error("Download failed");
+  if (!res.ok) throw new Error(`Download failed (HTTP ${res.status})`);
   const buf = Buffer.from(await res.arrayBuffer());
-  const type = res.headers.get("content-type") || "";
-  const fromUrl = (found.url.split("?")[0].match(/\.([a-z0-9]{2,4})$/i) || [])[1];
-  const ext = found.kind === "video" ? "mp4" : fromUrl || (type.includes("png") ? "png" : type.includes("svg") ? "svg" : type.includes("webp") ? "webp" : "jpg");
+  const ext = extensionFor(res.headers.get("content-type") || "", found.url, found.kind);
   const name = stamp("media", ext.toLowerCase());
   const file = path.join(libraryRoot(), "media", name);
   fs.writeFileSync(file, buf);

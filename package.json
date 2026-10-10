@@ -1,5 +1,5 @@
 {
-  "name": "scout2",
+  "name": "scout",
   "version": "0.3.0",
   "description": "Research browser with multi-tab mosaic playback and keyword-based next-page suggestions.",
   "main": "main.js",

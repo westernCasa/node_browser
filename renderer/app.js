@@ -71,6 +71,24 @@ function renderTabs() {
     const el = document.createElement("div");
     el.className = "tab" + (t.id === activeId ? " active" : "");
     el.innerHTML = `<span title="${escapeHtml(t.url || "")}">${escapeHtml(t.title || "New tab")}</span>`;
+    if (api?.toggleTabAudio && (t.audible || t.audio !== "auto")) {
+      const snd = document.createElement("button");
+      snd.className = "snd" + (t.muted ? "" : " on");
+      snd.textContent = t.muted ? "🔇" : "🔊";
+      snd.title = t.muted
+        ? "Muted. Click to unmute this tab. Right-click: back to automatic."
+        : "Playing sound. Click to mute this tab. Right-click: back to automatic.";
+      snd.addEventListener("click", (e) => {
+        e.stopPropagation();
+        api.toggleTabAudio(t.id);
+      });
+      snd.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        api.resetTabAudio(t.id);
+      });
+      el.appendChild(snd);
+    }
     const x = document.createElement("button");
     x.className = "x";
     x.textContent = "×";
@@ -388,14 +406,42 @@ async function runShot() {
   openLibrary();
 }
 
-document.getElementById("shot-btn").addEventListener("click", () => runShot().catch((e) => alert(e.message || e)));
+const noticeEl = document.getElementById("notice");
+
+// Short message in the sidebar, with optional action buttons. Replaces alert().
+function showNotice(text, actions = []) {
+  noticeEl.hidden = false;
+  noticeEl.innerHTML = "";
+  const p = document.createElement("div");
+  p.textContent = text;
+  noticeEl.appendChild(p);
+  const row = document.createElement("div");
+  row.className = "row";
+  for (const a of [...actions, { label: "Dismiss", run: () => {} }]) {
+    const b = document.createElement("button");
+    b.textContent = a.label;
+    b.addEventListener("click", () => {
+      noticeEl.hidden = true;
+      a.run();
+    });
+    row.appendChild(b);
+  }
+  noticeEl.appendChild(row);
+}
+
+function errText(e) {
+  // Electron prefixes IPC errors with "Error invoking remote method ...: Error: "
+  return String(e?.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, "");
+}
+
+document.getElementById("shot-btn").addEventListener("click", () => runShot().catch((e) => showNotice(errText(e))));
 document.getElementById("save-btn").addEventListener("click", () => {
   if (!api?.savePage || !activeId) return;
-  api.savePage(activeId).then(openLibrary).catch((e) => alert(e.message || e));
+  api.savePage(activeId).then(openLibrary).catch((e) => showNotice(errText(e)));
 });
 document.getElementById("media-btn").addEventListener("click", () => {
   if (!api?.grabMedia || !activeId) return;
-  api.grabMedia(activeId).then(openLibrary).catch((e) => alert(e.message || e));
+  api.grabMedia(activeId).then(openLibrary).catch((e) => showNotice(errText(e)));
 });
 document.getElementById("library-btn").addEventListener("click", () => openLibrary());
 document.getElementById("library-close").addEventListener("click", () => closeLibrary());
@@ -413,7 +459,7 @@ window.addEventListener("keydown", (e) => {
   if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
   if (e.key.toLowerCase() === "s" && !e.metaKey && !e.ctrlKey && !e.altKey) {
     e.preventDefault();
-    runShot().catch((err) => alert(err.message || err));
+    runShot().catch((err) => showNotice(errText(err)));
   }
 });
 
@@ -427,9 +473,28 @@ if (api) {
       tabs = tabs.map((t) => (t.id === payload.tab.id ? payload.tab : t));
     }
     renderTabs();
+    if (payload.type === "popup-blocked") {
+      showNotice(`Blocked a popup: ${payload.url}`, [
+        { label: "Open in new tab", run: () => api.createTab(payload.url) },
+      ]);
+      return;
+    }
     if (payload.type === "settled") {
       clearTimeout(suggestTimer);
       suggestTimer = setTimeout(() => afterSettle(payload.tab), 400);
+    }
+  });
+  api.onCommand?.((msg) => {
+    if (msg.cmd === "focus-omni") {
+      omni.focus();
+      omni.select();
+    } else if (msg.cmd === "toggle-layout") {
+      layoutBtn.click();
+    } else if (msg.cmd === "shot-done") {
+      statusEl.textContent = "Saved screenshot · " + (msg.item?.sourceUrl || "");
+      openLibrary();
+    } else if (msg.cmd === "error") {
+      showNotice(msg.message);
     }
   });
 } else {

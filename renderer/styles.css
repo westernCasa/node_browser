@@ -303,3 +303,42 @@ html, body {
   white-space: nowrap;
 }
 .lib-item { border-top: 1px solid var(--line); padding: 10px 0; }
+
+/* Tab sound button (B03) */
+.tab .snd {
+  border: 0;
+  background: transparent;
+  color: var(--mute);
+  cursor: pointer;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 18px;
+  padding: 0;
+  -webkit-app-region: no-drag;
+}
+.tab .snd:hover { background: var(--bg-3); color: var(--text); }
+.tab .snd.on { color: var(--accent); }
+
+/* Blocked popup / error notice (B04) */
+.notice {
+  margin: 10px 0 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg-3);
+  font-size: 11px;
+  color: var(--text);
+  word-break: break-all;
+}
+.notice .row { display: flex; gap: 6px; margin-top: 6px; }
+.notice button {
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--text);
+  border-radius: 4px;
+  padding: 3px 8px;
+  font: 11px/1 inherit;
+  cursor: pointer;
+}

@@ -3,8 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Scout 3</title>
-  <link rel="stylesheet" href="styles.css" />
+  <title>Scout</title>
   <style>
     html, body { margin: 0; height: 100%; background: #121212; color: #ececec; }
     .shell { height: 100vh; width: 100vw; display: grid; grid-template-columns: 1fr 225px; grid-template-rows: 112px 1fr; }
@@ -52,6 +51,7 @@
         <form id="key-form" class="key-form">
           <input id="key-input" type="text" placeholder="Add keyword" />
         </form>
+        <div class="notice" id="notice" hidden></div>
         <div class="status" id="suggest-status">Waiting for a page to settle.</div>
         <div class="results" id="results"></div>
       </div>

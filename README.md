@@ -7,7 +7,7 @@ A research browser. No product branding. Multi-tab, mosaic playback so more than
 This is a desktop browser (Electron), not a website.
 
 ```bash
-cd ~/Downloads/scout-browser
+cd scout   # the folder that holds package.json
 npm install
 npx electron .
 ```
@@ -32,7 +32,7 @@ Same UI. Tabs open as extra system webviews (required on mobile). Crawl and prev
 Install Rust: https://rustup.rs
 
 ```bash
-cd ~/Downloads/scout-browser
+cd scout   # the folder that holds package.json
 npm install
 npx tauri dev
 ```
