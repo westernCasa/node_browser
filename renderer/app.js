@@ -109,7 +109,16 @@ function hostOf(url) {
   }
 }
 
+function renderRuleLine() {
+  const el = document.getElementById("rule-line");
+  const t = tabs.find((x) => x.id === activeId);
+  const names = t?.rule?.matched || [];
+  el.hidden = !names.length;
+  el.textContent = names.length ? "Site rule: " + names.join(" · ") : "";
+}
+
 function renderTabs() {
+  renderRuleLine();
   tabsEl.innerHTML = "";
   for (const t of tabs) {
     const el = document.createElement("div");
@@ -251,43 +260,56 @@ function pumpPreviews() {
   }
 }
 
+let decorateCard = null; // set by the research session (B17)
+
+function buildCard(item) {
+  const card = document.createElement("article");
+  card.className = "card";
+  card.dataset.url = item.url;
+  card.innerHTML = `
+    <div class="media-slot">${
+      item.image
+        ? `<img class="media" src="${escapeHtml(item.image)}" alt="" />`
+        : `<div class="media-fallback">Preview loads when visible</div>`
+    }</div>
+    <div class="src">${escapeHtml(item.source || "web")}${item.query ? ` <span class="q">· ${escapeHtml(item.query)}</span>` : ""}</div>
+    <h3>${escapeHtml(item.title)}</h3>
+    <p>${escapeHtml(item.snippet || item.description || "")}</p>
+    <div class="host">${escapeHtml(hostOf(item.url))}</div>
+    <div class="card-actions">
+      <button data-act="open">Open tab</button>
+      <button data-act="here">Open here</button>
+    </div>
+  `;
+  card.__item = item;
+  card.querySelector('[data-act="open"]').addEventListener("click", (e) => {
+    e.stopPropagation();
+    openUrl(item.url, true);
+  });
+  card.querySelector('[data-act="here"]').addEventListener("click", (e) => {
+    e.stopPropagation();
+    openUrl(item.url, false);
+  });
+  return card;
+}
+
+// Cards already on screen for the same URL are kept (with their loaded
+// preview), so the second, fuller result list does not flicker (B25).
 function renderResults(items) {
   previewGen++;
   previewQueue.length = 0;
   previewObserver?.disconnect();
+  const existing = new Map([...resultsEl.querySelectorAll(".card")].map((c) => [c.dataset.url, c]));
   resultsEl.innerHTML = "";
   if (!items?.length) {
     resultsEl.innerHTML = `<p class="empty">No suggestions yet. Load a page, or add keywords and press Crawl.</p>`;
     return;
   }
   for (const item of items) {
-    const card = document.createElement("article");
-    card.className = "card";
-    card.dataset.url = item.url;
-    card.innerHTML = `
-      <div class="media-slot">${
-        item.image
-          ? `<img class="media" src="${escapeHtml(item.image)}" alt="" />`
-          : `<div class="media-fallback">Preview loads when visible</div>`
-      }</div>
-      <div class="src">${escapeHtml(item.source || "web")}${item.query ? ` <span class="q">· ${escapeHtml(item.query)}</span>` : ""}</div>
-      <h3>${escapeHtml(item.title)}</h3>
-      <p>${escapeHtml(item.snippet || item.description || "")}</p>
-      <div class="host">${escapeHtml(hostOf(item.url))}</div>
-      <div class="card-actions">
-        <button data-act="open">Open tab</button>
-        <button data-act="here">Open here</button>
-      </div>
-    `;
-    queuePreview(card, item);
-    card.querySelector('[data-act="open"]').addEventListener("click", (e) => {
-      e.stopPropagation();
-      openUrl(item.url, true);
-    });
-    card.querySelector('[data-act="here"]').addEventListener("click", (e) => {
-      e.stopPropagation();
-      openUrl(item.url, false);
-    });
+    let card = existing.get(item.url);
+    if (!card) card = buildCard(item);
+    if (!card.__hydrated) queuePreview(card, item);
+    decorateCard?.(card, item);
     resultsEl.appendChild(card);
   }
 }
@@ -302,6 +324,7 @@ function escapeHtml(s) {
 function setCardMedia(card, preview) {
   const slot = card.querySelector(".media-slot");
   if (!slot) return;
+  card.__hydrated = true;
   if (preview?.video && /\.(mp4|webm|ogg|mov|m4v)(\?|$)/i.test(preview.video)) {
     slot.innerHTML = `<video class="media" src="${escapeHtml(preview.video)}" muted loop playsinline preload="metadata"></video>`;
     const v = slot.querySelector("video");
@@ -375,20 +398,30 @@ async function crawl() {
   }
   crawlBusy = true;
   statusEl.textContent = "Searching…";
+  // Results for a page the user has already left are dropped.
+  const startedFor = { id: activeId, url: current?.url };
+  const stale = () => {
+    const now = tabs.find((t) => t.id === activeId);
+    return activeId !== startedFor.id || now?.url !== startedFor.url;
+  };
   try {
     let data;
     if (api?.suggestFor) {
-      data = await api.suggestFor({
-        pinned,
-        ranked: autoTerms(),
-        title: current?.title || "",
-        excludeUrl: current?.url || "",
-      });
+      const payload = { pinned, ranked: autoTerms(), title: current?.title || "", excludeUrl: current?.url || "" };
+      // Wikipedia first (fast), then the full list once web results arrive (B25).
+      const first = await api.suggestFor({ ...payload, part: "reference" });
+      if (stale()) return;
+      if (first.results.length) {
+        renderResults(first.results);
+        statusEl.textContent = `${first.results.length} Wikipedia results · loading web results…`;
+      }
+      data = await api.suggestFor({ ...payload, part: "all" });
     } else if (api) {
       data = await api.suggest(shownKeywords(), current?.url);
     } else {
       data = { results: await wikiFallback(shownKeywords().join(" ")), queries: [] };
     }
+    if (stale()) return;
     const qs = (data.queries || []).map((q) => `"${q}"`).join(" · ");
     statusEl.textContent = `${data.results.length} results` + (qs ? ` for ${qs}` : "");
     if (data.notes?.length) statusEl.textContent += " — " + data.notes.join(" ");
@@ -421,6 +454,17 @@ async function crawlViewport(reason) {
     let selection = "";
     if (api.keywords) {
       const res = await api.keywords(tab.id, banned);
+      if (res.disabled) {
+        // Site rule "suggest": false. Do not read the page or search with its words.
+        if (reason !== "tick" || lastCrawl.url !== tab.url) {
+          auto = [];
+          lastCrawl = { at: Date.now(), url: tab.url, terms: [], selection: "" };
+          renderKeys();
+          renderResults([]);
+          statusEl.textContent = "Suggestions are off for this site (site rule). Pinned keywords still work with Crawl.";
+        }
+        return;
+      }
       ranked = res.ranked || [];
       selection = res.page?.selection || "";
     } else {
@@ -770,6 +814,11 @@ function closeSources() {
 }
 
 document.getElementById("sources-btn").addEventListener("click", openSources);
+document.getElementById("rules-edit").addEventListener("click", () => api?.editRules?.());
+document.getElementById("rules-reload").addEventListener("click", async () => {
+  const r = await api?.reloadRules?.();
+  if (r) document.getElementById("rules-msg").textContent = `${r.count} rules loaded.` + (r.errors.length ? " Problems: " + r.errors.join(" ") : "");
+});
 document.getElementById("sources-back").addEventListener("click", closeSources);
 document.getElementById("sources-save").addEventListener("click", async () => {
   await saveSources(true);
@@ -808,6 +857,11 @@ if (api) {
     } else if (msg.cmd === "shot-done") {
       statusEl.textContent = "Saved screenshot · " + (msg.item?.sourceUrl || "");
       openLibrary();
+    } else if (msg.cmd === "rules-reloaded") {
+      const text = `Site rules: ${msg.count} rules in use.` + (msg.errors?.length ? " Problems: " + msg.errors.join(" ") : "");
+      if (msg.errors?.length) showNotice(text);
+      const m = document.getElementById("rules-msg");
+      if (m) m.textContent = text;
     } else if (msg.cmd === "error") {
       showNotice(msg.message);
     }

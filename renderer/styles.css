@@ -396,3 +396,8 @@ html, body {
   cursor: pointer;
 }
 .chip.wide { width: 100%; height: 28px; }
+
+/* Site rules (B16) */
+.rule-line { color: var(--mute); font-size: 11px; margin: -6px 0 10px; }
+.rules-head { margin-top: 18px; }
+.actions-row { display: flex; gap: 6px; flex-wrap: wrap; }

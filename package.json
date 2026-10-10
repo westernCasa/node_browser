@@ -14,7 +14,8 @@
     "tauri:ios": "tauri ios dev",
     "tauri:android": "tauri android dev",
     "test:keywords": "node test/keywords-demo.js",
-    "test:providers": "node test/providers-demo.js"
+    "test:providers": "node test/providers-demo.js",
+    "test:rules": "node test/rules-demo.js"
   },
   "devDependencies": {
     "electron": "^32.0.0",

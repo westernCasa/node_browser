@@ -153,6 +153,7 @@ class SessionDF {
 
 const FIELD_WEIGHT = {
   selection: 6,
+  focus: 3, // text from a site rule's extract.include selectors
   title: 4,
   headings: 3,
   description: 2,
@@ -172,6 +173,7 @@ function rankTerms(page, opts = {}) {
   const extraStop = siteStopwords(page);
   const fields = {
     selection: clean(page?.selection),
+    focus: clean(page?.focus),
     title: coreTitle(page?.title),
     headings: (page?.headings || []).join(" . "),
     description: clean(page?.description),
@@ -223,6 +225,7 @@ function rankTerms(page, opts = {}) {
     }
   };
   addPhrases(fields.selection, 6);
+  addPhrases(fields.focus, 3);
   addPhrases(page?.title, 4);
   addPhrases(fields.headings, 3);
   addPhrases(fields.names, 2);

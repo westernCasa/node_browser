@@ -4,6 +4,7 @@ const fs = require("fs");
 const { URL } = require("url");
 const { rankTerms, buildQueries, SessionDF } = require("./keywords");
 const { PROVIDERS, Registry, defaultSettings } = require("./providers");
+const Rules = require("./rules");
 
 const HOME_URL = "https://en.wikipedia.org/wiki/Main_Page";
 const CHROME_TOP = 112;
@@ -19,6 +20,57 @@ let layout = "focus"; // focus | mosaic
 const tabs = new Map();
 let activeId = null;
 let idSeq = 1;
+
+// ---- Site rules (B16) ----
+// userData/rules.json, created with examples on first run and reloaded on save.
+let siteRules = [];
+let rulesErrors = [];
+let rulesWatcher = null;
+
+function rulesFile() {
+  return path.join(app.getPath("userData"), "rules.json");
+}
+
+function loadRules(announce = false) {
+  const file = rulesFile();
+  if (!fs.existsSync(file)) fs.writeFileSync(file, JSON.stringify(Rules.DEFAULT_FILE, null, 2));
+  try {
+    const { rules, errors } = Rules.validate(JSON.parse(fs.readFileSync(file, "utf8")));
+    siteRules = rules;
+    rulesErrors = errors;
+  } catch (err) {
+    // Keep the last good rules if the file cannot be parsed (for example mid-edit).
+    rulesErrors = [`rules.json could not be read: ${err.message}. The previous rules are still in use.`];
+  }
+  for (const tab of tabs.values()) refreshRule(tab);
+  if (win) {
+    applyLayout();
+    emitList();
+  }
+  if (announce) sendUi("rules-reloaded", { count: siteRules.length, errors: rulesErrors });
+}
+
+function watchRules() {
+  if (rulesWatcher) return;
+  let timer = null;
+  try {
+    rulesWatcher = fs.watch(rulesFile(), () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => loadRules(true), 300);
+    });
+  } catch (_) {}
+}
+
+function ruleFor(url) {
+  return Rules.resolve(siteRules, url);
+}
+
+// Recompute a tab's rule after navigation. Sound follows the rule unless the
+// user set this tab's sound with the speaker button.
+function refreshRule(tab, url) {
+  tab.rule = ruleFor(url || tab.view.webContents.getURL());
+  if (!tab.audioByUser) tab.audio = tab.rule.sound;
+}
 
 function chromeBounds() {
   const [width, height] = win.getContentSize();
@@ -94,6 +146,7 @@ function tabState(tab) {
     muted: wc.isAudioMuted(),
     audible: wc.isCurrentlyAudible(),
     audio: tab.audio,
+    rule: tab.rule ? { matched: tab.rule.matched, suggest: tab.rule.suggest, autoplay: tab.rule.autoplay } : null,
   };
 }
 
@@ -120,11 +173,18 @@ function normalizeUrl(input) {
   return "https://" + raw;
 }
 
-function tryAutoplay(wc) {
+// Autoplay per site rule: "on" starts media (falls back to muted if the page
+// refuses sound), "muted" starts it muted, "off" pauses media the page starts
+// on its own before the user has interacted with it.
+function tryAutoplay(wc, mode = "on") {
+  if (mode === "off") return blockAutoplay(wc);
+  const muted = mode === "muted";
   const script = `(() => {
+    const MUTED = ${muted};
     const kick = (el) => {
       if (!el || !el.play) return;
       el.autoplay = true;
+      if (MUTED) el.muted = true;
       const run = () => el.play().catch(() => {
         el.muted = true;
         el.play().catch(() => {});
@@ -140,12 +200,26 @@ function tryAutoplay(wc) {
         const u = new URL(raw, location.href);
         if (u.searchParams.get("autoplay") === "1") return;
         u.searchParams.set("autoplay", "1");
+        if (MUTED) u.searchParams.set("mute", "1");
         f.allow = ((f.allow || "") + "; autoplay; fullscreen").trim();
         f.src = u.toString();
       } catch (_) {}
     });
   })()`;
   wc.executeJavaScript(script, true).catch(() => {});
+}
+
+function blockAutoplay(wc) {
+  const script = `(() => {
+    const active = () => navigator.userActivation && navigator.userActivation.hasBeenActive;
+    const stop = (el) => { if (el && el.pause && !active()) el.pause(); };
+    if (!window.__scoutNoAutoplay) {
+      window.__scoutNoAutoplay = true;
+      document.addEventListener("play", (e) => stop(e.target), true);
+    }
+    document.querySelectorAll("video, audio").forEach((el) => { if (!el.paused) stop(el); });
+  })()`;
+  wc.executeJavaScript(script).catch(() => {});
 }
 
 function attachListeners(tab) {
@@ -155,19 +229,32 @@ function attachListeners(tab) {
     if (activeId !== tab.id) activateTab(tab.id);
   });
   wc.on("page-title-updated", ping);
-  wc.on("did-navigate", ping);
-  wc.on("did-navigate-in-page", ping);
+  wc.on("did-navigate", (_e, url) => {
+    refreshRule(tab, url);
+    applyLayout();
+    ping();
+  });
+  wc.on("did-navigate-in-page", (_e, url, isMainFrame) => {
+    if (isMainFrame) refreshRule(tab, url);
+    applyLayout();
+    ping();
+  });
+  wc.on("dom-ready", () => {
+    if (tab.rule?.autoplay === "off") blockAutoplay(wc);
+  });
   wc.on("did-start-loading", ping);
   wc.on("did-stop-loading", () => {
     ping();
-    tryAutoplay(wc);
+    tryAutoplay(wc, tab.rule?.autoplay);
     emit({ type: "settled", tab: tabState(tab) });
   });
   wc.on("audio-state-changed", ping);
   // Popups (B04): only open a new tab if the user clicked or typed in this
   // page in the last 2 s. Everything else is blocked and reported to the UI.
   wc.setWindowOpenHandler(({ url, disposition }) => {
-    if (Date.now() - tab.lastGesture < 2000) {
+    const policy = tab.rule?.popups || "gesture";
+    const allowed = policy === "allow" || (policy === "gesture" && Date.now() - tab.lastGesture < 2000);
+    if (allowed) {
       createTab(url, { background: disposition === "background-tab" });
     } else {
       emit({ type: "popup-blocked", tabId: tab.id, url });
@@ -195,7 +282,8 @@ function createTab(url, opts = {}) {
   });
   view.setBackgroundColor("#ffffff"); // pages without their own background expect white
   view.webContents.setUserAgent(USER_AGENT);
-  const tab = { id, view, audio: "auto", lastGesture: 0 };
+  const tab = { id, view, audio: "auto", audioByUser: false, lastGesture: 0 };
+  refreshRule(tab, normalizeUrl(url));
   tabs.set(id, tab);
   win.contentView.addChildView(view);
   attachListeners(tab);
@@ -345,7 +433,19 @@ async function extractPage(id) {
 
     // Page text (B07): title, description, headings, selection, and the
     // readable text currently in the viewport (navigation and footers skipped).
-    const SKIP = "nav, footer, aside, header nav, [role=navigation], [role=contentinfo], [role=banner] nav, [aria-hidden=true], .navbox, .sidebar, .menu, .cookie, #cookie, .ad, .ads";
+    // Site rule selectors (B16); invalid selectors are dropped.
+    const RULE = ${JSON.stringify(tab.rule?.extract || {})};
+    const validSel = (sel) => { try { document.querySelector(sel); return true; } catch (_) { return false; } };
+    const extraSkip = (RULE.skip || []).filter(validSel);
+    const SKIP = ["nav, footer, aside, header nav, [role=navigation], [role=contentinfo], [role=banner] nav, [aria-hidden=true], .navbox, .sidebar, .menu, .cookie, #cookie, .ad, .ads", ...extraSkip].join(", ");
+    let focus = "";
+    for (const sel of (RULE.include || []).filter(validSel)) {
+      for (const el of document.querySelectorAll(sel)) {
+        if (focus.length > 3000) break;
+        const t = clean(el.innerText);
+        if (t) focus += t + " . ";
+      }
+    }
     const meta = (sel) => document.querySelector(sel)?.content || "";
     const description = clean(meta('meta[name="description"]') || meta('meta[property="og:description"]'));
     const headings = [];
@@ -370,6 +470,7 @@ async function extractPage(id) {
       headings: headings.slice(0, 20).map((h) => h.t),
       selection,
       text: text.slice(0, 6000),
+      focus: focus.slice(0, 3000),
       lang: document.documentElement.lang || "",
       names: uniq(names),
       mediaMeta: uniq(mediaMeta),
@@ -565,11 +666,17 @@ function sameUrl(a, b) {
 // Run several queries and merge the lists round-robin, so each query and each
 // source gets a share of the top results. Web search runs for the first two
 // queries; Wikipedia for all of them.
-async function runQueries(queries, excludeUrl) {
+// part: "all" (Wikipedia + web) or "reference" (Wikipedia only, B25). A
+// "reference" call also starts the web requests without waiting, so the
+// follow-up "all" call picks them up from the cache or the in-flight request.
+async function runQueries(queries, excludeUrl, part = "all") {
   const jobs = [];
   queries.forEach((q, i) => {
     jobs.push(search.reference(q).then((r) => r.map((x) => ({ ...x, query: q }))));
-    if (i < 2) jobs.push(search.web(q).then((r) => r.map((x) => ({ ...x, query: q }))));
+    if (i >= 2) return;
+    const web = search.web(q).then((r) => r.map((x) => ({ ...x, query: q })));
+    if (part === "all") jobs.push(web);
+    else web.catch(() => {});
   });
   const lists = (await Promise.allSettled(jobs)).map((r) => (r.status === "fulfilled" ? r.value : []));
   const merged = [];
@@ -599,17 +706,23 @@ async function suggest(keywords, excludeUrl) {
 }
 
 // Main entry point (B09): pinned keywords + ranked terms -> short queries -> results.
-async function suggestFor({ pinned = [], ranked = [], title = "", excludeUrl = "" } = {}) {
+async function suggestFor({ pinned = [], ranked = [], title = "", excludeUrl = "", part = "all" } = {}) {
   const queries = buildQueries({ pinned, ranked, title });
   if (!queries.length) return { results: [], queries: [], notes: [] };
-  const { results, notes } = await runQueries(queries, excludeUrl);
-  return { results, queries, notes };
+  const { results, notes } = await runQueries(queries, excludeUrl, part);
+  return { results, queries, notes: part === "all" ? notes : [], part };
 }
 
 // Session-wide document frequency, so words that appear on every page lose weight.
 const sessionDF = new SessionDF();
 
 async function pageKeywords(id, banned = []) {
+  const tab = tabs.get(id);
+  if (tab?.rule && tab.rule.suggest === false) {
+    // Site rule: never read this page or send its words to a search engine.
+    const wc = tab.view.webContents;
+    return { disabled: true, matched: tab.rule.matched, page: { url: wc.getURL(), title: wc.getTitle() }, ranked: [] };
+  }
   const page = await extractPage(id);
   if (!page || page.error) return { page, ranked: [] };
   const ranked = rankTerms(page, { df: sessionDF, banned, limit: 12 });
@@ -945,6 +1058,9 @@ function buildMenu() {
         { label: "Screenshot Tab", accelerator: "CmdOrCtrl+Shift+S", click: () => runShotFromMain(activeId) },
         { label: "Reset Site Permissions", click: resetPermissions },
         { type: "separator" },
+        { label: "Edit Site Rules…", click: () => shell.openPath(rulesFile()) },
+        { label: "Reload Site Rules", click: () => loadRules(true) },
+        { type: "separator" },
         isMac ? { role: "close" } : { role: "quit" },
       ],
     },
@@ -971,6 +1087,7 @@ function buildMenu() {
             const tab = tabs.get(activeId);
             if (!tab) return;
             tab.audio = tab.view.webContents.isAudioMuted() ? "on" : "off";
+            tab.audioByUser = true;
             applyAudio();
             emitList();
           },
@@ -1047,6 +1164,8 @@ app.whenReady().then(() => {
     }
   });
   installPermissionHandlers(session.defaultSession);
+  loadRules();
+  watchRules();
   buildMenu();
   createWindow();
 });
@@ -1099,6 +1218,7 @@ ipcMain.handle("tab:audio", (_e, id) => {
   const tab = tabs.get(id);
   if (!tab) return null;
   tab.audio = tab.view.webContents.isAudioMuted() ? "on" : "off";
+  tab.audioByUser = true;
   applyAudio();
   emitList();
   return tab.audio;
@@ -1106,7 +1226,8 @@ ipcMain.handle("tab:audio", (_e, id) => {
 ipcMain.handle("tab:audio-reset", (_e, id) => {
   const tab = tabs.get(id);
   if (!tab) return null;
-  tab.audio = "auto";
+  tab.audioByUser = false;
+  tab.audio = tab.rule?.sound || "auto";
   applyAudio();
   emitList();
   return tab.audio;
@@ -1115,6 +1236,11 @@ ipcMain.handle("page:extract", (_e, id) => extractPage(id));
 ipcMain.handle("suggest:search", (_e, keywords, excludeUrl) => suggest(keywords, excludeUrl));
 ipcMain.handle("suggest:for", (_e, payload) => suggestFor(payload));
 ipcMain.handle("settings:get", () => publicSettings());
+ipcMain.handle("rules:edit", () => shell.openPath(rulesFile()));
+ipcMain.handle("rules:reload", () => {
+  loadRules(true);
+  return { count: siteRules.length, errors: rulesErrors };
+});
 ipcMain.handle("settings:set", (_e, next) => saveSettings(next));
 ipcMain.handle("search:status", () => search.status());
 ipcMain.handle("search:test", (_e, id) => (PROVIDERS[id] ? search.test(id) : { ok: false, error: "Unknown source" }));
