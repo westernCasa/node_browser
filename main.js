@@ -1,8 +1,9 @@
-const { app, BrowserWindow, BrowserView, ipcMain, session, shell, protocol, net, Menu, dialog } = require("electron");
+const { app, BrowserWindow, BrowserView, ipcMain, session, shell, protocol, net, Menu, dialog, safeStorage } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const { URL } = require("url");
 const { rankTerms, buildQueries, SessionDF } = require("./keywords");
+const { PROVIDERS, Registry, defaultSettings } = require("./providers");
 
 const HOME_URL = "https://en.wikipedia.org/wiki/Main_Page";
 const CHROME_TOP = 112;
@@ -386,12 +387,11 @@ async function extractPage(id) {
 // requests, at most 4 requests run at once, and every request times out.
 const CACHE_TTL = 30 * 60 * 1000;
 const CACHE_MAX = 500;
-const HOST_GAP_MS = { "html.duckduckgo.com": 2500, default: 400 };
+const HOST_GAP_MS = { "html.duckduckgo.com": 2500, "api.search.brave.com": 1100, default: 400 };
 const MAX_PARALLEL = 4;
 const cache = new Map();
 const inflight = new Map();
 const hostNext = new Map();
-const providerCooldown = new Map(); // provider -> time it may be used again
 let running = 0;
 const waiting = [];
 
@@ -436,8 +436,8 @@ async function hostTurn(host) {
   if (at > now) await sleep(at - now);
 }
 
-async function getText(url, { headers = {}, maxBytes = 300000, timeout = 10000 } = {}) {
-  const key = "GET " + url;
+async function getText(url, { headers = {}, maxBytes = 300000, timeout = 10000, cacheKey } = {}) {
+  const key = "GET " + (cacheKey || url);
   const hit = cacheGet(key);
   if (hit) return hit;
   if (inflight.has(key)) return inflight.get(key);
@@ -466,80 +466,107 @@ async function getText(url, { headers = {}, maxBytes = 300000, timeout = 10000 }
   }
 }
 
-function decodeEntities(s) {
-  return String(s || "")
-    .replace(/&amp;/g, "&")
-    .replace(/&quot;/g, '"')
-    .replace(/&#x27;|&#39;/g, "'")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/<[^>]+>/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
+const { decodeEntities } = require("./providers");
+
+// ---- Settings (B15) ----
+// userData/settings.json. Secret fields (API keys) are encrypted with the OS
+// keychain through safeStorage when it is available.
+let settingsCache = null;
+
+function settingsFile() {
+  return path.join(app.getPath("userData"), "settings.json");
 }
 
-// ---- Search providers ----
-// Each provider: async (query) => [{url, title, snippet, source, image?}]
-// Phase 2 (B15) turns this into a pluggable list with Brave / SearXNG options.
-async function ddgSearch(query) {
-  if ((providerCooldown.get("ddg") || 0) > Date.now()) return [];
-  const res = await getText("https://html.duckduckgo.com/html/?q=" + encodeURIComponent(query), {
-    headers: { Accept: "text/html" },
-  });
-  const html = res.text;
-  // DuckDuckGo answers rate-limited clients with HTTP 202 or a challenge page.
-  if (res.status === 202 || res.status === 403 || /anomaly-modal|challenge-form/i.test(html)) {
-    providerCooldown.set("ddg", Date.now() + 10 * 60 * 1000);
-    cache.delete("GET https://html.duckduckgo.com/html/?q=" + encodeURIComponent(query));
-    return [];
-  }
-  const results = [];
-  const re =
-    /<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?(?:class="result__snippet"[^>]*>([\s\S]*?)<\/)/gi;
-  let m;
-  while ((m = re.exec(html)) && results.length < 8) {
-    let href = decodeEntities(m[1]);
-    try {
-      const u = new URL(href, "https://duckduckgo.com/");
-      href = u.pathname === "/l/" && u.searchParams.get("uddg") ? u.searchParams.get("uddg") : u.href;
-    } catch (_) {}
-    if (/duckduckgo\.com\/y\.js/.test(href)) continue; // ads
-    results.push({ url: href, title: decodeEntities(m[2]), snippet: decodeEntities(m[3] || ""), source: "search" });
-  }
-  return results;
+function secretFields(id) {
+  return (PROVIDERS[id]?.fields || []).filter((f) => f.secret).map((f) => f.key);
 }
 
-async function wikiSearch(query) {
-  const url =
-    "https://en.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch=" +
-    encodeURIComponent(query) +
-    "&gsrlimit=5&prop=pageimages|extracts|info&inprop=url&exintro=1&explaintext=1&exchars=300&pithumbsize=640&format=json";
-  const res = await getText(url);
-  const data = JSON.parse(res.text || "{}");
-  const pages = Object.values(data.query?.pages || {});
-  pages.sort((a, b) => (a.index || 0) - (b.index || 0));
-  return pages.map((p) => ({
-    url: p.fullurl || `https://en.wikipedia.org/wiki/${encodeURIComponent(p.title)}`,
-    title: p.title,
-    snippet: (p.extract || "").slice(0, 220),
-    source: "wiki",
-    image: p.thumbnail?.source || "",
-    kind: p.thumbnail?.source ? "image" : "page",
-  }));
+function loadSettings() {
+  if (settingsCache) return settingsCache;
+  const base = defaultSettings();
+  let raw = {};
+  try {
+    raw = JSON.parse(fs.readFileSync(settingsFile(), "utf8"));
+  } catch (_) {}
+  for (const id of Object.keys(base.providers)) {
+    const saved = raw.providers?.[id] || {};
+    const merged = { ...base.providers[id], ...saved };
+    for (const key of secretFields(id)) {
+      const enc = saved[key + "Enc"];
+      if (enc && safeStorage.isEncryptionAvailable()) {
+        try {
+          merged[key] = safeStorage.decryptString(Buffer.from(enc, "base64"));
+        } catch (_) {
+          merged[key] = "";
+        }
+      }
+      delete merged[key + "Enc"];
+    }
+    base.providers[id] = merged;
+  }
+  settingsCache = base;
+  return settingsCache;
 }
+
+function saveSettings(next) {
+  const current = loadSettings();
+  for (const id of Object.keys(PROVIDERS)) {
+    const incoming = next?.providers?.[id];
+    if (!incoming) continue;
+    const allowed = ["enabled", ...PROVIDERS[id].fields.map((f) => f.key)];
+    const before = JSON.stringify(current.providers[id]);
+    for (const k of allowed) if (k in incoming) current.providers[id][k] = k === "enabled" ? Boolean(incoming[k]) : String(incoming[k] || "").trim();
+    if (JSON.stringify(current.providers[id]) !== before) search.reset(id);
+  }
+  const disk = { providers: {} };
+  for (const [id, conf] of Object.entries(current.providers)) {
+    const copy = { ...conf };
+    for (const key of secretFields(id)) {
+      if (copy[key] && safeStorage.isEncryptionAvailable()) {
+        copy[key + "Enc"] = safeStorage.encryptString(copy[key]).toString("base64");
+        delete copy[key];
+      }
+    }
+    disk.providers[id] = copy;
+  }
+  fs.writeFileSync(settingsFile(), JSON.stringify(disk, null, 2));
+  return publicSettings();
+}
+
+// What the UI sees: secrets are never sent back, only whether one is set.
+function publicSettings() {
+  const s = loadSettings();
+  const providers = {};
+  for (const [id, conf] of Object.entries(s.providers)) {
+    const copy = { ...conf };
+    for (const key of secretFields(id)) {
+      copy[key + "Set"] = Boolean(copy[key]);
+      delete copy[key];
+    }
+    providers[id] = copy;
+  }
+  return {
+    providers,
+    meta: Object.values(PROVIDERS).map((p) => ({ id: p.id, label: p.label, role: p.role, fields: p.fields })),
+    encrypted: safeStorage.isEncryptionAvailable(),
+  };
+}
+
+const search = new Registry({ getText, getConfig: (id) => loadSettings().providers[id] || {} });
 
 function sameUrl(a, b) {
   const norm = (u) => String(u || "").replace(/#.*$/, "").replace(/\/$/, "").replace(/^http:/, "https:");
   return norm(a) === norm(b);
 }
 
-// Run several queries against the providers and merge the lists round-robin,
-// so each query and each provider gets a share of the top results.
+// Run several queries and merge the lists round-robin, so each query and each
+// source gets a share of the top results. Web search runs for the first two
+// queries; Wikipedia for all of them.
 async function runQueries(queries, excludeUrl) {
   const jobs = [];
   queries.forEach((q, i) => {
-    jobs.push(wikiSearch(q).then((r) => r.map((x) => ({ ...x, query: q }))));
-    if (i < 2) jobs.push(ddgSearch(q).then((r) => r.map((x) => ({ ...x, query: q }))));
+    jobs.push(search.reference(q).then((r) => r.map((x) => ({ ...x, query: q }))));
+    if (i < 2) jobs.push(search.web(q).then((r) => r.map((x) => ({ ...x, query: q }))));
   });
   const lists = (await Promise.allSettled(jobs)).map((r) => (r.status === "fulfilled" ? r.value : []));
   const merged = [];
@@ -556,9 +583,7 @@ async function runQueries(queries, excludeUrl) {
       if (merged.length >= 12) break;
     }
   }
-  const notes = [];
-  if ((providerCooldown.get("ddg") || 0) > Date.now()) notes.push("Web search is rate-limited for a few minutes; showing Wikipedia only.");
-  return { results: merged, notes };
+  return { results: merged, notes: search.notes() };
 }
 
 // Legacy entry point (Tauri bridge and manual keyword list): one query from the list.
@@ -1086,6 +1111,10 @@ ipcMain.handle("tab:audio-reset", (_e, id) => {
 ipcMain.handle("page:extract", (_e, id) => extractPage(id));
 ipcMain.handle("suggest:search", (_e, keywords, excludeUrl) => suggest(keywords, excludeUrl));
 ipcMain.handle("suggest:for", (_e, payload) => suggestFor(payload));
+ipcMain.handle("settings:get", () => publicSettings());
+ipcMain.handle("settings:set", (_e, next) => saveSettings(next));
+ipcMain.handle("search:status", () => search.status());
+ipcMain.handle("search:test", (_e, id) => (PROVIDERS[id] ? search.test(id) : { ok: false, error: "Unknown source" }));
 ipcMain.handle("page:keywords", (_e, id, banned) => pageKeywords(id, banned));
 ipcMain.handle("suggest:preview", (_e, url, keywords) => preview(url, keywords));
 

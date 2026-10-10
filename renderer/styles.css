@@ -358,3 +358,41 @@ html, body {
   padding: 0 0 0 4px;
 }
 .card .src .q { color: var(--mute); text-transform: none; letter-spacing: 0; }
+
+/* Sources panel (B15) */
+.source {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  padding: 8px;
+  margin-bottom: 8px;
+}
+.source .top { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.source label.toggle { display: flex; align-items: center; gap: 6px; font-weight: 600; cursor: pointer; }
+.source .role { color: var(--mute); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; }
+.source .field { margin-top: 6px; }
+.source .field span { display: block; color: var(--mute); font-size: 11px; margin-bottom: 2px; }
+.source .field input {
+  width: 100%;
+  height: 26px;
+  border: 1px solid var(--line);
+  background: var(--bg-2);
+  color: var(--text);
+  border-radius: 4px;
+  padding: 0 6px;
+  font: 12px/1 inherit;
+}
+.source .state { margin-top: 6px; font-size: 11px; color: var(--mute); }
+.source .state.ok { color: #7bd88f; }
+.source .state.bad { color: #ff8a80; }
+.source .actions { display: flex; gap: 6px; margin-top: 6px; }
+.source .actions button, .chip.wide {
+  border: 1px solid var(--line);
+  background: var(--bg-3);
+  color: var(--text);
+  border-radius: 4px;
+  padding: 3px 8px;
+  font: 11px/1 inherit;
+  cursor: pointer;
+}
+.chip.wide { width: 100%; height: 28px; }

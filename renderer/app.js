@@ -198,7 +198,63 @@ function renderKeys() {
   }
 }
 
+// ---- Lazy previews (B14) ----
+// A card's preview is fetched only when the card scrolls into view, and at
+// most 3 previews load at once. A new result list cancels pending ones.
+const PREVIEW_PARALLEL = 3;
+let previewGen = 0;
+let previewRunning = 0;
+const previewQueue = [];
+const previewObserver =
+  "IntersectionObserver" in window
+    ? new IntersectionObserver(
+        (entries) => {
+          for (const e of entries) {
+            if (!e.isIntersecting) continue;
+            previewObserver.unobserve(e.target);
+            const job = e.target.__preview;
+            if (job && job.gen === previewGen) {
+              previewQueue.push(job);
+              pumpPreviews();
+            }
+          }
+        },
+        { root: document.getElementById("rail"), rootMargin: "120px 0px" }
+      )
+    : null;
+
+function queuePreview(card, item) {
+  // Wikipedia and Brave results often arrive with an image already: no fetch needed.
+  if (item.image) {
+    setCardMedia(card, item);
+    return;
+  }
+  const job = { card, item, gen: previewGen };
+  if (!previewObserver) {
+    previewQueue.push(job);
+    pumpPreviews();
+    return;
+  }
+  card.__preview = job;
+  previewObserver.observe(card);
+}
+
+function pumpPreviews() {
+  while (previewRunning < PREVIEW_PARALLEL && previewQueue.length) {
+    const job = previewQueue.shift();
+    if (job.gen !== previewGen || !job.card.isConnected) continue;
+    previewRunning++;
+    hydratePreview(job.card, job.item.url, job.item).finally(() => {
+      previewRunning--;
+      pumpPreviews();
+    });
+  }
+}
+
 function renderResults(items) {
+  previewGen++;
+  previewQueue.length = 0;
+  previewObserver?.disconnect();
   resultsEl.innerHTML = "";
   if (!items?.length) {
     resultsEl.innerHTML = `<p class="empty">No suggestions yet. Load a page, or add keywords and press Crawl.</p>`;
@@ -212,7 +268,7 @@ function renderResults(items) {
       <div class="media-slot">${
         item.image
           ? `<img class="media" src="${escapeHtml(item.image)}" alt="" />`
-          : `<div class="media-fallback">Fetching preview</div>`
+          : `<div class="media-fallback">Preview loads when visible</div>`
       }</div>
       <div class="src">${escapeHtml(item.source || "web")}${item.query ? ` <span class="q">· ${escapeHtml(item.query)}</span>` : ""}</div>
       <h3>${escapeHtml(item.title)}</h3>
@@ -223,7 +279,7 @@ function renderResults(items) {
         <button data-act="here">Open here</button>
       </div>
     `;
-    hydratePreview(card, item.url, item);
+    queuePreview(card, item);
     card.querySelector('[data-act="open"]').addEventListener("click", (e) => {
       e.stopPropagation();
       openUrl(item.url, true);
@@ -267,6 +323,8 @@ function setCardMedia(card, preview) {
 async function hydratePreview(card, url, seed) {
   try {
     if (seed?.image || seed?.video) setCardMedia(card, seed);
+    const slot = card.querySelector(".media-slot .media-fallback");
+    if (slot) slot.textContent = "Fetching preview";
     if (api?.preview) {
       setCardMedia(card, await api.preview(url, shownKeywords()));
       return;
@@ -303,8 +361,13 @@ function openUrl(url, newTab) {
 }
 
 // Run a search with the current pins and page keywords.
+let crawlAgain = false; // a search was requested while one was running
+
 async function crawl() {
-  if (crawlBusy) return;
+  if (crawlBusy) {
+    crawlAgain = true; // run once more with the latest keywords when this one ends
+    return;
+  }
   const current = tabs.find((t) => t.id === activeId);
   if (!shownKeywords().length) {
     statusEl.textContent = "No keywords yet. Add one, or load a page.";
@@ -334,6 +397,10 @@ async function crawl() {
     statusEl.textContent = "Search failed: " + errText(err);
   } finally {
     crawlBusy = false;
+    if (crawlAgain) {
+      crawlAgain = false;
+      crawl();
+    }
   }
 }
 
@@ -572,6 +639,143 @@ window.addEventListener("keydown", (e) => {
     e.preventDefault();
     runShot().catch((err) => showNotice(errText(err)));
   }
+});
+
+// ---- Sources panel (B15) ----
+const suggestPane = document.getElementById("suggest-pane");
+const sourcesPane = document.getElementById("sources-pane");
+const sourcesList = document.getElementById("sources-list");
+const sourcesMsg = document.getElementById("sources-msg");
+let sourcesDraft = null; // { providers: { id: {...} } } edits not yet saved
+
+function minutesAgo(ms) {
+  if (!ms) return "";
+  const m = Math.round((Date.now() - ms) / 60000);
+  return m < 1 ? "just now" : `${m} min ago`;
+}
+
+function stateLine(st) {
+  if (!st.enabled) return { text: "Off", cls: "" };
+  if (!st.ready) return { text: "Needs setup (see the field above).", cls: "bad" };
+  if (st.paused) return { text: `Paused ${st.pausedFor} min: ${st.lastError}`, cls: "bad" };
+  if (st.lastError) return { text: st.lastError, cls: "bad" };
+  if (st.lastOk) return { text: `Working · ${st.lastCount} results ${minutesAgo(st.lastOk)}`, cls: "ok" };
+  return { text: "Not used yet", cls: "" };
+}
+
+async function renderSources() {
+  const [settings, status] = await Promise.all([api.getSettings(), api.searchStatus()]);
+  sourcesDraft = { providers: {} };
+  sourcesList.innerHTML = "";
+  for (const meta of settings.meta) {
+    const conf = settings.providers[meta.id] || {};
+    const st = status.find((x) => x.id === meta.id) || {};
+    const draft = (sourcesDraft.providers[meta.id] = { enabled: Boolean(conf.enabled) });
+
+    const box = document.createElement("div");
+    box.className = "source";
+    const top = document.createElement("div");
+    top.className = "top";
+    const toggle = document.createElement("label");
+    toggle.className = "toggle";
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = draft.enabled;
+    cb.addEventListener("change", () => (draft.enabled = cb.checked));
+    toggle.append(cb, document.createTextNode(meta.label));
+    const role = document.createElement("span");
+    role.className = "role";
+    role.textContent = meta.role === "reference" ? "reference" : "web";
+    top.append(toggle, role);
+    box.appendChild(top);
+
+    for (const f of meta.fields) {
+      const wrap = document.createElement("label");
+      wrap.className = "field";
+      const lab = document.createElement("span");
+      lab.textContent = f.label;
+      const input = document.createElement("input");
+      input.type = f.secret ? "password" : "text";
+      input.spellcheck = false;
+      if (f.secret) {
+        input.placeholder = conf[f.key + "Set"] ? "Saved. Type to replace." : f.placeholder || "";
+        // Blank means "keep the saved key"; only typed values are sent.
+        input.addEventListener("input", () => (draft[f.key] = input.value));
+      } else {
+        input.value = conf[f.key] || "";
+        input.placeholder = f.placeholder || "";
+        input.addEventListener("input", () => (draft[f.key] = input.value));
+      }
+      wrap.append(lab, input);
+      box.appendChild(wrap);
+    }
+
+    const state = document.createElement("div");
+    const line = stateLine(st);
+    state.className = "state " + line.cls;
+    state.textContent = line.text;
+    box.appendChild(state);
+
+    const actions = document.createElement("div");
+    actions.className = "actions";
+    const test = document.createElement("button");
+    test.textContent = "Test";
+    test.title = "Save, then run one search with this source";
+    test.addEventListener("click", async () => {
+      await saveSources(false);
+      state.className = "state";
+      state.textContent = "Testing…";
+      const r = await api.testSource(meta.id);
+      state.className = "state " + (r.ok ? "ok" : "bad");
+      state.textContent = r.ok ? `Working · ${r.count} results in ${r.ms} ms` : r.error;
+    });
+    actions.appendChild(test);
+    for (const f of meta.fields.filter((x) => x.secret && conf[x.key + "Set"])) {
+      const clear = document.createElement("button");
+      clear.textContent = "Remove key";
+      clear.addEventListener("click", async () => {
+        draft[f.key] = "";
+        draft.enabled = false;
+        await saveSources(true);
+      });
+      actions.appendChild(clear);
+    }
+    box.appendChild(actions);
+    sourcesList.appendChild(box);
+  }
+  sourcesMsg.textContent = settings.encrypted
+    ? "API keys are stored encrypted with your system keychain."
+    : "Your system keychain is not available, so API keys are stored as plain text in Scout's settings file.";
+}
+
+async function saveSources(rerender = true) {
+  if (!sourcesDraft) return;
+  await api.setSettings(sourcesDraft);
+  if (rerender) await renderSources();
+}
+
+async function openSources() {
+  if (!api?.getSettings) {
+    showNotice("Search sources can only be changed in the desktop app.");
+    return;
+  }
+  suggestPane.hidden = true;
+  sourcesPane.hidden = false;
+  await renderSources();
+}
+
+function closeSources() {
+  sourcesPane.hidden = true;
+  suggestPane.hidden = false;
+}
+
+document.getElementById("sources-btn").addEventListener("click", openSources);
+document.getElementById("sources-back").addEventListener("click", closeSources);
+document.getElementById("sources-save").addEventListener("click", async () => {
+  await saveSources(true);
+  sourcesMsg.textContent = "Saved. " + sourcesMsg.textContent.replace(/^Saved\. /, "");
+  closeSources();
+  crawl();
 });
 
 startCrawlClock();

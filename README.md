@@ -76,8 +76,22 @@ First `ios init` / `android init` generates native projects under `src-tauri/gen
 6. **Permissions:** camera, microphone, location, notifications, clipboard reading and screen capture always ask first. Answers can be remembered per site (File → Reset Site Permissions clears them).
 7. **Keywords** (`keywords.js`): Scout reads the page title, description, headings, selected text and the text currently on screen (navigation and footers skipped). Words are scored by where they appear, how specific they are, and how rare they are across the pages you have visited this session. Multi-word names ("Marie Curie") are kept together.
 8. **Pin and hide:** click a keyword to pin it; pinned keywords go into every search and are never replaced. × hides a keyword for good (Show all brings them back).
-9. **Search:** pins and the top keywords become 2 or 3 short queries (at most 4 words each), sent to Wikipedia and DuckDuckGo. Results are cached for 30 minutes, requests are spaced out per site, and DuckDuckGo is paused for 10 minutes if it starts blocking.
-10. **Auto** re-searches when you open a new page, select text, or scroll to content with different keywords (at most every 20 seconds). Turn Auto off to search only when you press **Crawl**.
+9. **Search:** pins and the top keywords become 2 or 3 short queries (at most 4 words each). Wikipedia runs for every query. Web results come from the first working source in this order: Brave Search API, SearXNG, DuckDuckGo. A source that rejects a key, hits a rate limit or starts blocking is paused for a while and the next one is used. Results are cached for 30 minutes and requests are spaced out per site.
+10. **Previews** on result cards load only when a card scrolls into view, 3 at a time. Wikipedia and Brave results that already include an image skip the fetch.
+11. **Auto** re-searches when you open a new page, select text, or scroll to content with different keywords (at most every 20 seconds). Turn Auto off to search only when you press **Crawl**.
+
+## Search sources
+
+Open **Sources** in the sidebar to turn sources on or off. **Test** runs one search with that source and shows the result or the error.
+
+| Source | Setup | Notes |
+| --- | --- | --- |
+| Wikipedia | Nothing. Optional language code (en, es, fr…) | Always runs; gives the reference results |
+| Brave Search API | API key from the Brave Search API dashboard | Best web results; has a free tier with a monthly limit |
+| SearXNG | URL of an instance you run or trust, with the `json` format enabled in its `settings.yml` | No key; you control the engines |
+| DuckDuckGo | Nothing | Fallback only. Reads the HTML results page, so it can break or be rate-limited |
+
+API keys are stored in Scout's `settings.json`, encrypted with the system keychain when one is available.
 
 ## What this is not
 

@@ -47,6 +47,7 @@
           <div class="rail-actions">
             <button class="chip active" id="auto-btn" title="Re-search when the visible page changes">Auto</button>
             <button class="chip" id="refresh-suggest" title="Search now">Crawl</button>
+            <button class="chip" id="sources-btn" title="Choose search sources">Sources</button>
           </div>
         </div>
         <p class="help">Keywords come from the visible page. Click a keyword to pin it. × hides it. Select text on a page to search for it.</p>
@@ -58,6 +59,19 @@
         <div class="notice" id="notice" hidden></div>
         <div class="status" id="suggest-status">Waiting for a page to settle.</div>
         <div class="results" id="results"></div>
+      </div>
+      <div id="sources-pane" hidden>
+        <div class="rail-head">
+          <div>
+            <p class="kicker">Search</p>
+            <h1>Sources</h1>
+          </div>
+          <button class="chip" id="sources-back">Back</button>
+        </div>
+        <p class="help">Wikipedia runs for every search. For web results Scout uses the first working source in this order: Brave, SearXNG, DuckDuckGo.</p>
+        <div id="sources-list"></div>
+        <button class="chip wide" id="sources-save">Save</button>
+        <p class="help" id="sources-msg"></p>
       </div>
       <div id="library" hidden></div>
     </aside>
