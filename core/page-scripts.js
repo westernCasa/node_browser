@@ -1,0 +1,214 @@
+// Scripts injected into web pages. Shared by the desktop app (executeJavaScript)
+// and the mobile app (WebView injectJavaScript). Each returns a JavaScript
+// source string that evaluates to its result.
+
+/**
+ * Reads the visible page: title, description, headings, selected text, visible
+ * readable text, media names, plus extra text from site-rule selectors.
+ * Evaluates to a plain object (see keywords.js rankTerms for the fields used).
+ */
+function extractionScript(ruleExtract) {
+  return `(() => {
+    const MEDIA_EXT = /\\.(mp4|webm|ogv|ogg|mov|m4v|mp3|wav|m4a|aac|flac|jpg|jpeg|png|webp|gif|avif|m3u8)([?#].*)?$/i;
+    const inView = (el) => {
+      if (!el || !el.getBoundingClientRect) return false;
+      const r = el.getBoundingClientRect();
+      const vh = window.innerHeight || 0;
+      const vw = window.innerWidth || 0;
+      return r.bottom > 0 && r.right > 0 && r.top < vh && r.left < vw && r.width > 8 && r.height > 8;
+    };
+    const clean = (s) => (s || "").replace(/\\s+/g, " ").trim();
+    const fileStem = (href) => {
+      try {
+        const path = new URL(href, location.href).pathname.split("/").pop() || "";
+        return decodeURIComponent(path.replace(MEDIA_EXT, "").replace(/[-_]+/g, " "));
+      } catch (_) { return ""; }
+    };
+    const namesFrom = (text) => {
+      const out = [];
+      const t = clean(text);
+      if (!t) return out;
+      const hits = t.match(/\\b[A-Z][a-z]+(?:\\s+[A-Z][a-z]+){0,3}\\b/g) || [];
+      for (const h of hits) {
+        if (h.length < 3) continue;
+        if (/^(The|A|An|And|For|With|From|This|That|You|Your|Home|Page|Video|Image|Photo)$/.test(h)) continue;
+        out.push(h);
+      }
+      return out;
+    };
+
+    const mediaEls = [...document.querySelectorAll("img,video,audio,source,picture,figure,figcaption,track,iframe")];
+    const mediaMeta = [];
+    const names = [];
+    const mediaLinks = [];
+
+    const takeMeta = (el) => {
+      const bits = [
+        el.getAttribute && el.getAttribute("alt"),
+        el.getAttribute && el.getAttribute("title"),
+        el.getAttribute && el.getAttribute("aria-label"),
+        el.getAttribute && el.getAttribute("data-title"),
+        el.getAttribute && el.getAttribute("data-caption"),
+        el.getAttribute && el.getAttribute("data-name"),
+        el.getAttribute && el.getAttribute("itemprop") === "name" ? el.textContent : "",
+      ];
+      if (el.tagName === "VIDEO" || el.tagName === "AUDIO") bits.push(el.getAttribute("media-title"));
+      const fig = el.closest && el.closest("figure");
+      if (fig) {
+        const cap = fig.querySelector("figcaption");
+        if (cap) bits.push(cap.innerText);
+      }
+      const labeled = el.getAttribute && el.getAttribute("aria-labelledby");
+      if (labeled) {
+        const lab = document.getElementById(labeled);
+        if (lab) bits.push(lab.innerText);
+      }
+      const joined = bits.map(clean).filter(Boolean).join(" | ");
+      if (joined) mediaMeta.push(joined.slice(0, 240));
+      names.push(...namesFrom(joined));
+      const srcs = [
+        el.currentSrc, el.src, el.getAttribute && el.getAttribute("src"),
+        el.getAttribute && el.getAttribute("data-src"),
+        el.getAttribute && el.getAttribute("poster"),
+      ].filter(Boolean);
+      for (const s of srcs) {
+        const stem = fileStem(s);
+        if (stem && stem.length > 2) {
+          mediaMeta.push(stem);
+          names.push(...namesFrom(stem.replace(/\\b\\w/g, c => c.toUpperCase())));
+        }
+      }
+    };
+
+    for (const el of mediaEls) {
+      if (!inView(el.tagName === "SOURCE" ? el.parentElement : el) && el.tagName !== "META") continue;
+      takeMeta(el);
+    }
+
+    for (const a of document.querySelectorAll("a[href]")) {
+      if (!inView(a)) continue;
+      const href = a.href || "";
+      const looksMedia = MEDIA_EXT.test(href) || /\\/(watch|video|videos|media|photo|photos|image|gallery|embed)\\b/i.test(href);
+      if (!looksMedia) continue;
+      const label = clean(a.getAttribute("title") || a.getAttribute("aria-label") || a.innerText);
+      mediaLinks.push(label || fileStem(href));
+      names.push(...namesFrom(label));
+      const stem = fileStem(href);
+      if (stem) mediaMeta.push(stem);
+    }
+
+    const pageMeta = [
+      document.querySelector('meta[property="og:video"]')?.content,
+      document.querySelector('meta[property="og:audio"]')?.content,
+      document.querySelector('meta[property="og:image"]')?.content,
+      document.querySelector('meta[property="og:video:title"]')?.content,
+      document.querySelector('meta[name="twitter:player"]')?.content,
+      document.querySelector('meta[itemprop="name"]')?.content,
+      document.querySelector('meta[name="author"]')?.content,
+      document.querySelector('meta[property="og:title"]')?.content,
+    ].filter(Boolean);
+    for (const m of pageMeta) {
+      if (MEDIA_EXT.test(m)) mediaLinks.push(fileStem(m));
+      names.push(...namesFrom(m));
+      if (/og:title|author|name|video:title/i.test(m) || namesFrom(m).length) mediaMeta.push(String(m).slice(0, 160));
+    }
+    names.push(...namesFrom(document.querySelector('meta[property="og:title"]')?.content || ""));
+    names.push(...namesFrom(document.querySelector('meta[name="author"]')?.content || ""));
+    names.push(...namesFrom(document.querySelector('[itemprop="author"],[rel="author"],.author,.byline')?.innerText || ""));
+
+    const uniq = (arr) => [...new Set(arr.map(clean).filter((x) => x && x.length > 1))].slice(0, 16);
+
+    // Page text (B07): title, description, headings, selection, and the
+    // readable text currently in the viewport (navigation and footers skipped).
+    // Site rule selectors (B16); invalid selectors are dropped.
+    const RULE = ${JSON.stringify(ruleExtract || {})};
+    const validSel = (sel) => { try { document.querySelector(sel); return true; } catch (_) { return false; } };
+    const extraSkip = (RULE.skip || []).filter(validSel);
+    const SKIP = ["nav, footer, aside, header nav, [role=navigation], [role=contentinfo], [role=banner] nav, [aria-hidden=true], .navbox, .sidebar, .menu, .cookie, #cookie, .ad, .ads", ...extraSkip].join(", ");
+    let focus = "";
+    for (const sel of (RULE.include || []).filter(validSel)) {
+      for (const el of document.querySelectorAll(sel)) {
+        if (focus.length > 3000) break;
+        const t = clean(el.innerText);
+        if (t) focus += t + " . ";
+      }
+    }
+    const meta = (sel) => document.querySelector(sel)?.content || "";
+    const description = clean(meta('meta[name="description"]') || meta('meta[property="og:description"]'));
+    const headings = [];
+    for (const h of document.querySelectorAll("h1, h2, h3")) {
+      if (h.closest(SKIP)) continue;
+      const t = clean(h.innerText);
+      if (t && t.length < 160) headings.push({ t, inView: inView(h), top: h.tagName === "H1" });
+    }
+    headings.sort((a, b) => (b.top - a.top) || (b.inView - a.inView));
+    let text = "";
+    for (const el of document.querySelectorAll("p, li, dd, blockquote, td, figcaption, h1, h2, h3, h4, article div:not(:has(*))")) {
+      if (text.length > 6000) break;
+      if (!inView(el) || el.closest(SKIP)) continue;
+      const t = clean(el.innerText);
+      if (t.length > 20) text += t + " . ";
+    }
+    const selection = clean(String(window.getSelection ? window.getSelection() : "")).slice(0, 600);
+    return {
+      url: location.href,
+      title: document.title || "",
+      description,
+      headings: headings.slice(0, 20).map((h) => h.t),
+      selection,
+      text: text.slice(0, 6000),
+      focus: focus.slice(0, 3000),
+      lang: document.documentElement.lang || "",
+      names: uniq(names),
+      mediaMeta: uniq(mediaMeta),
+      mediaLinks: uniq(mediaLinks),
+      viewport: true
+    };
+  })()`;
+}
+
+/** Starts media on the page. mode "on" falls back to muted if sound is refused; "muted" starts muted. */
+function autoplayScript(mode = "on") {
+  return `(() => {
+    const MUTED = ${mode === "muted"};
+    const kick = (el) => {
+      if (!el || !el.play) return;
+      el.autoplay = true;
+      if (MUTED) el.muted = true;
+      const run = () => el.play().catch(() => {
+        el.muted = true;
+        el.play().catch(() => {});
+      });
+      if (el.readyState >= 2) run();
+      else el.addEventListener("canplay", run, { once: true });
+    };
+    document.querySelectorAll("video, audio").forEach(kick);
+    document.querySelectorAll("iframe").forEach((f) => {
+      try {
+        const raw = f.getAttribute("src") || "";
+        if (!/youtube|youtu\\.be|vimeo|dailymotion/.test(raw)) return;
+        const u = new URL(raw, location.href);
+        if (u.searchParams.get("autoplay") === "1") return;
+        u.searchParams.set("autoplay", "1");
+        if (MUTED) u.searchParams.set("mute", "1");
+        f.allow = ((f.allow || "") + "; autoplay; fullscreen").trim();
+        f.src = u.toString();
+      } catch (_) {}
+    });
+  })()`;
+}
+
+/** Pauses media the page starts on its own before the user has interacted with it. */
+function blockAutoplayScript() {
+  return `(() => {
+    const active = () => navigator.userActivation && navigator.userActivation.hasBeenActive;
+    const stop = (el) => { if (el && el.pause && !active()) el.pause(); };
+    if (!window.__scoutNoAutoplay) {
+      window.__scoutNoAutoplay = true;
+      document.addEventListener("play", (e) => stop(e.target), true);
+    }
+    document.querySelectorAll("video, audio").forEach((el) => { if (!el.paused) stop(el); });
+  })()`;
+}
+
+module.exports = { extractionScript, autoplayScript, blockAutoplayScript };

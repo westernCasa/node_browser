@@ -1,5 +1,5 @@
 // Checks the web-source fallback order with fake responses (no network).
-const { Registry } = require("../providers.js");
+const { Registry } = require("../core/providers.js");
 
 const config = {
   wikipedia: { enabled: true, lang: "en" },

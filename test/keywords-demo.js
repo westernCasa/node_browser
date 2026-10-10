@@ -1,4 +1,4 @@
-const k = require("../keywords.js");
+const k = require("../core/keywords.js");
 const page = {
   url: "https://en.wikipedia.org/wiki/Marie_Curie",
   title: "Marie Curie - Wikipedia",

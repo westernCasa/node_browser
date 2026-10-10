@@ -1,5 +1,5 @@
 // Checks the AI query client with fake servers (no network, no model needed).
-const ai = require("../ai.js");
+const ai = require("../core/ai.js");
 
 const answers = [
   '{"queries": ["sourdough starter temperature", "lactobacillus sourdough microbiology", "Tartine Bakery levain method"]}',

@@ -8,6 +8,8 @@
 // What is sent: pinned keywords, up to 8 page keywords, and the page title.
 // Never the page text or the URL.
 
+const { timeoutSignal } = require("./compat");
+
 const GROK_URL = "https://api.x.ai/v1";
 
 const AI_DEFAULTS = {
@@ -135,7 +137,7 @@ async function expand(input, settings, { fetch: doFetch = fetch, timeout } = {})
         ],
       }),
       // Local models can be slow to load the first time.
-      signal: AbortSignal.timeout(timeout || (settings.provider === "grok" ? 12000 : 25000)),
+      signal: timeoutSignal(timeout || (settings.provider === "grok" ? 12000 : 25000)),
     });
   } catch (err) {
     if (err?.name === "TimeoutError") throw new AIError("The AI server took too long to answer.");
@@ -161,7 +163,7 @@ async function listModels(settings, { fetch: doFetch = fetch } = {}) {
   if (e.key) headers.Authorization = `Bearer ${e.key}`;
   let res;
   try {
-    res = await doFetch(`${e.base}/models`, { headers, signal: AbortSignal.timeout(8000) });
+    res = await doFetch(`${e.base}/models`, { headers, signal: timeoutSignal(8000) });
   } catch (_) {
     throw new AIError(settings.provider === "grok" ? "Could not reach Grok." : `Could not reach the local model at ${e.base}. Is Ollama or LM Studio running?`);
   }

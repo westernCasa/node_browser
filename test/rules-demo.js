@@ -1,5 +1,5 @@
 // Shows which site rules apply to sample URLs (no browser needed).
-const { DEFAULT_FILE, validate, resolve } = require("../rules.js");
+const { DEFAULT_FILE, validate, resolve } = require("../core/rules.js");
 const { rules, errors } = validate(DEFAULT_FILE);
 console.log("default file errors:", errors);
 for (const url of [

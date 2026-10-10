@@ -1,11 +1,8 @@
 // Research sessions (B17).
 // A session holds what one line of research has touched: pinned keywords, the
 // trail of pages read (with their top keywords), suggestions opened and
-// suggestions dismissed. Sessions are saved as JSON files in a folder.
-// No Electron code here; main.js passes the folder in.
-
-const fs = require("fs");
-const path = require("path");
+// suggestions dismissed. Each session is saved as "<id>.json" through a
+// storage object (see storage.js): files on desktop, app storage on mobile.
 
 const TRAIL_MAX = 500;
 // Start pages and search-result pages are not research reading.
@@ -30,21 +27,21 @@ function blank(name) {
 }
 
 class ResearchStore {
-  constructor(dir) {
-    this.dir = dir;
-    fs.mkdirSync(dir, { recursive: true });
-    this.current = this.loadCurrent() || this.create();
+  /** @param storage {{ read(name): string|null, write(name, text), list(): string[] }} */
+  constructor(storage) {
+    this.storage = storage;
     this.timer = null;
+    this.current = this.loadCurrent() || this.create();
   }
 
   file(id) {
-    return path.join(this.dir, `${id}.json`);
+    return `${id}.json`;
   }
 
   loadCurrent() {
     try {
-      const id = fs.readFileSync(path.join(this.dir, "current.txt"), "utf8").trim();
-      return JSON.parse(fs.readFileSync(this.file(id), "utf8"));
+      const id = (this.storage.read("current.txt") || "").trim();
+      return id ? JSON.parse(this.storage.read(this.file(id))) : null;
     } catch {
       return null;
     }
@@ -53,8 +50,8 @@ class ResearchStore {
   saveNow() {
     clearTimeout(this.timer);
     this.current.updated = Date.now();
-    fs.writeFileSync(this.file(this.current.id), JSON.stringify(this.current, null, 2));
-    fs.writeFileSync(path.join(this.dir, "current.txt"), this.current.id);
+    this.storage.write(this.file(this.current.id), JSON.stringify(this.current, null, 2));
+    this.storage.write("current.txt", this.current.id);
   }
 
   saveSoon() {
@@ -75,10 +72,10 @@ class ResearchStore {
 
   list() {
     const out = [];
-    for (const f of fs.readdirSync(this.dir)) {
+    for (const f of this.storage.list()) {
       if (!f.endsWith(".json")) continue;
       try {
-        const s = JSON.parse(fs.readFileSync(path.join(this.dir, f), "utf8"));
+        const s = JSON.parse(this.storage.read(f));
         out.push({ id: s.id, name: s.name, started: s.started, updated: s.updated, pages: s.trail.length, current: s.id === this.current.id });
       } catch (_) {}
     }
@@ -86,7 +83,7 @@ class ResearchStore {
   }
 
   switchTo(id) {
-    const s = JSON.parse(fs.readFileSync(this.file(id), "utf8"));
+    const s = JSON.parse(this.storage.read(this.file(id)));
     this.saveNow();
     this.current = s;
     this.saveNow();

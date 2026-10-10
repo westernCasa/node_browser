@@ -2,11 +2,18 @@ const { app, BrowserWindow, WebContentsView, ipcMain, session, shell, protocol, 
 const path = require("path");
 const fs = require("fs");
 const { URL } = require("url");
-const { rankTerms, buildQueries, SessionDF } = require("./keywords");
-const { PROVIDERS, Registry, defaultSettings } = require("./providers");
-const Rules = require("./rules");
-const AI = require("./ai");
-const { ResearchStore } = require("./research");
+// Platform-neutral logic lives in core/ (shared with the mobile app).
+const { rankTerms, SessionDF } = require("./core/keywords");
+const { PROVIDERS, Registry, defaultSettings } = require("./core/providers");
+const Rules = require("./core/rules");
+const AI = require("./core/ai");
+const { ResearchStore } = require("./core/research");
+const { HistoryStore } = require("./core/history");
+const { createNet } = require("./core/net");
+const { createSuggest } = require("./core/suggest");
+const { createPreview } = require("./core/preview");
+const { extractionScript, autoplayScript, blockAutoplayScript } = require("./core/page-scripts");
+const { fsStorage } = require("./fs-storage");
 let research = null; // current research session store (B17), created when the app is ready
 
 const HOME_URL = "https://en.wikipedia.org/wiki/Main_Page";
@@ -65,76 +72,8 @@ function watchRules() {
 }
 
 // ---- History (B19) ----
-// userData/history.json: one entry per URL with title, visit count and last visit.
-const HISTORY_MAX = 3000;
-let historyRows = null;
-let historyTimer = null;
-
-function historyFile() {
-  return path.join(app.getPath("userData"), "history.json");
-}
-
-function history() {
-  if (!historyRows) {
-    try {
-      historyRows = JSON.parse(fs.readFileSync(historyFile(), "utf8"));
-    } catch {
-      historyRows = [];
-    }
-  }
-  return historyRows;
-}
-
-function saveHistorySoon() {
-  clearTimeout(historyTimer);
-  historyTimer = setTimeout(() => {
-    try {
-      fs.writeFileSync(historyFile(), JSON.stringify(history()));
-    } catch (_) {}
-  }, 1500);
-}
-
-function recordVisit(url, title) {
-  if (!/^https?:/i.test(url || "")) return;
-  const rows = history();
-  const i = rows.findIndex((r) => r.url === url);
-  const row = i >= 0 ? rows.splice(i, 1)[0] : { url, title: "", visits: 0 };
-  row.visits += 1;
-  row.lastVisit = Date.now();
-  if (title) row.title = title;
-  rows.unshift(row);
-  if (rows.length > HISTORY_MAX) rows.length = HISTORY_MAX;
-  saveHistorySoon();
-}
-
-function updateHistoryTitle(url, title) {
-  const row = history().find((r) => r.url === url);
-  if (row && title && row.title !== title) {
-    row.title = title;
-    saveHistorySoon();
-  }
-}
-
-// Address-bar suggestions: host/URL prefix matches first, then title matches,
-// ranked by visit count and recency.
-function searchHistory(q, limit = 8) {
-  const query = String(q || "").trim().toLowerCase();
-  if (!query) return history().slice(0, limit);
-  const bare = (u) => u.replace(/^https?:\/\/(www\.)?/i, "").toLowerCase();
-  const scored = [];
-  for (const r of history()) {
-    const u = bare(r.url);
-    const t = (r.title || "").toLowerCase();
-    let score = 0;
-    if (u.startsWith(query)) score = 100;
-    else if (u.includes(query)) score = 40;
-    else if (t.includes(query)) score = 30;
-    else continue;
-    score += Math.min(30, r.visits * 3) + Math.max(0, 20 - (Date.now() - r.lastVisit) / 86400000);
-    scored.push({ r, score });
-  }
-  return scored.sort((a, b) => b.score - a.score).slice(0, limit).map((x) => x.r);
-}
+// core/history.js, stored in userData/history.json. Created when the app is ready.
+let historyStore = null;
 
 function ruleFor(url) {
   return Rules.resolve(siteRules, url);
@@ -252,50 +191,14 @@ function normalizeUrl(input) {
 // Autoplay per site rule: "on" starts media (falls back to muted if the page
 // refuses sound), "muted" starts it muted, "off" pauses media the page starts
 // on its own before the user has interacted with it.
+// Autoplay per site rule (scripts in core/page-scripts.js).
 function tryAutoplay(wc, mode = "on") {
   if (mode === "off") return blockAutoplay(wc);
-  const muted = mode === "muted";
-  const script = `(() => {
-    const MUTED = ${muted};
-    const kick = (el) => {
-      if (!el || !el.play) return;
-      el.autoplay = true;
-      if (MUTED) el.muted = true;
-      const run = () => el.play().catch(() => {
-        el.muted = true;
-        el.play().catch(() => {});
-      });
-      if (el.readyState >= 2) run();
-      else el.addEventListener("canplay", run, { once: true });
-    };
-    document.querySelectorAll("video, audio").forEach(kick);
-    document.querySelectorAll("iframe").forEach((f) => {
-      try {
-        const raw = f.getAttribute("src") || "";
-        if (!/youtube|youtu\\.be|vimeo|dailymotion/.test(raw)) return;
-        const u = new URL(raw, location.href);
-        if (u.searchParams.get("autoplay") === "1") return;
-        u.searchParams.set("autoplay", "1");
-        if (MUTED) u.searchParams.set("mute", "1");
-        f.allow = ((f.allow || "") + "; autoplay; fullscreen").trim();
-        f.src = u.toString();
-      } catch (_) {}
-    });
-  })()`;
-  wc.executeJavaScript(script, true).catch(() => {});
+  wc.executeJavaScript(autoplayScript(mode), true).catch(() => {});
 }
 
 function blockAutoplay(wc) {
-  const script = `(() => {
-    const active = () => navigator.userActivation && navigator.userActivation.hasBeenActive;
-    const stop = (el) => { if (el && el.pause && !active()) el.pause(); };
-    if (!window.__scoutNoAutoplay) {
-      window.__scoutNoAutoplay = true;
-      document.addEventListener("play", (e) => stop(e.target), true);
-    }
-    document.querySelectorAll("video, audio").forEach((el) => { if (!el.paused) stop(el); });
-  })()`;
-  wc.executeJavaScript(script).catch(() => {});
+  wc.executeJavaScript(blockAutoplayScript()).catch(() => {});
 }
 
 function attachListeners(tab) {
@@ -305,7 +208,7 @@ function attachListeners(tab) {
     if (activeId !== tab.id) activateTab(tab.id);
   });
   wc.on("page-title-updated", (_e, title) => {
-    updateHistoryTitle(wc.getURL(), title);
+    historyStore.updateTitle(wc.getURL(), title);
     ping();
   });
   wc.on("found-in-page", (_e, r) => {
@@ -314,7 +217,7 @@ function attachListeners(tab) {
   // Ctrl/Cmd + mouse wheel or trackpad pinch.
   wc.on("zoom-changed", (_e, direction) => zoomTab(tab, direction === "in" ? 0.5 : -0.5));
   wc.on("did-navigate", (_e, url) => {
-    recordVisit(url, wc.getTitle());
+    historyStore.record(url, wc.getTitle());
     refreshRule(tab, url);
     applyLayout();
     ping();
@@ -406,256 +309,20 @@ function activateTab(id) {
 async function extractPage(id) {
   const tab = tabs.get(id);
   if (!tab) return null;
-  const script = `(() => {
-    const MEDIA_EXT = /\\.(mp4|webm|ogv|ogg|mov|m4v|mp3|wav|m4a|aac|flac|jpg|jpeg|png|webp|gif|avif|m3u8)([?#].*)?$/i;
-    const inView = (el) => {
-      if (!el || !el.getBoundingClientRect) return false;
-      const r = el.getBoundingClientRect();
-      const vh = window.innerHeight || 0;
-      const vw = window.innerWidth || 0;
-      return r.bottom > 0 && r.right > 0 && r.top < vh && r.left < vw && r.width > 8 && r.height > 8;
-    };
-    const clean = (s) => (s || "").replace(/\\s+/g, " ").trim();
-    const fileStem = (href) => {
-      try {
-        const path = new URL(href, location.href).pathname.split("/").pop() || "";
-        return decodeURIComponent(path.replace(MEDIA_EXT, "").replace(/[-_]+/g, " "));
-      } catch (_) { return ""; }
-    };
-    const namesFrom = (text) => {
-      const out = [];
-      const t = clean(text);
-      if (!t) return out;
-      const hits = t.match(/\\b[A-Z][a-z]+(?:\\s+[A-Z][a-z]+){0,3}\\b/g) || [];
-      for (const h of hits) {
-        if (h.length < 3) continue;
-        if (/^(The|A|An|And|For|With|From|This|That|You|Your|Home|Page|Video|Image|Photo)$/.test(h)) continue;
-        out.push(h);
-      }
-      return out;
-    };
-
-    const mediaEls = [...document.querySelectorAll("img,video,audio,source,picture,figure,figcaption,track,iframe")];
-    const mediaMeta = [];
-    const names = [];
-    const mediaLinks = [];
-
-    const takeMeta = (el) => {
-      const bits = [
-        el.getAttribute && el.getAttribute("alt"),
-        el.getAttribute && el.getAttribute("title"),
-        el.getAttribute && el.getAttribute("aria-label"),
-        el.getAttribute && el.getAttribute("data-title"),
-        el.getAttribute && el.getAttribute("data-caption"),
-        el.getAttribute && el.getAttribute("data-name"),
-        el.getAttribute && el.getAttribute("itemprop") === "name" ? el.textContent : "",
-      ];
-      if (el.tagName === "VIDEO" || el.tagName === "AUDIO") bits.push(el.getAttribute("media-title"));
-      const fig = el.closest && el.closest("figure");
-      if (fig) {
-        const cap = fig.querySelector("figcaption");
-        if (cap) bits.push(cap.innerText);
-      }
-      const labeled = el.getAttribute && el.getAttribute("aria-labelledby");
-      if (labeled) {
-        const lab = document.getElementById(labeled);
-        if (lab) bits.push(lab.innerText);
-      }
-      const joined = bits.map(clean).filter(Boolean).join(" | ");
-      if (joined) mediaMeta.push(joined.slice(0, 240));
-      names.push(...namesFrom(joined));
-      const srcs = [
-        el.currentSrc, el.src, el.getAttribute && el.getAttribute("src"),
-        el.getAttribute && el.getAttribute("data-src"),
-        el.getAttribute && el.getAttribute("poster"),
-      ].filter(Boolean);
-      for (const s of srcs) {
-        const stem = fileStem(s);
-        if (stem && stem.length > 2) {
-          mediaMeta.push(stem);
-          names.push(...namesFrom(stem.replace(/\\b\\w/g, c => c.toUpperCase())));
-        }
-      }
-    };
-
-    for (const el of mediaEls) {
-      if (!inView(el.tagName === "SOURCE" ? el.parentElement : el) && el.tagName !== "META") continue;
-      takeMeta(el);
-    }
-
-    for (const a of document.querySelectorAll("a[href]")) {
-      if (!inView(a)) continue;
-      const href = a.href || "";
-      const looksMedia = MEDIA_EXT.test(href) || /\\/(watch|video|videos|media|photo|photos|image|gallery|embed)\\b/i.test(href);
-      if (!looksMedia) continue;
-      const label = clean(a.getAttribute("title") || a.getAttribute("aria-label") || a.innerText);
-      mediaLinks.push(label || fileStem(href));
-      names.push(...namesFrom(label));
-      const stem = fileStem(href);
-      if (stem) mediaMeta.push(stem);
-    }
-
-    const pageMeta = [
-      document.querySelector('meta[property="og:video"]')?.content,
-      document.querySelector('meta[property="og:audio"]')?.content,
-      document.querySelector('meta[property="og:image"]')?.content,
-      document.querySelector('meta[property="og:video:title"]')?.content,
-      document.querySelector('meta[name="twitter:player"]')?.content,
-      document.querySelector('meta[itemprop="name"]')?.content,
-      document.querySelector('meta[name="author"]')?.content,
-      document.querySelector('meta[property="og:title"]')?.content,
-    ].filter(Boolean);
-    for (const m of pageMeta) {
-      if (MEDIA_EXT.test(m)) mediaLinks.push(fileStem(m));
-      names.push(...namesFrom(m));
-      if (/og:title|author|name|video:title/i.test(m) || namesFrom(m).length) mediaMeta.push(String(m).slice(0, 160));
-    }
-    names.push(...namesFrom(document.querySelector('meta[property="og:title"]')?.content || ""));
-    names.push(...namesFrom(document.querySelector('meta[name="author"]')?.content || ""));
-    names.push(...namesFrom(document.querySelector('[itemprop="author"],[rel="author"],.author,.byline')?.innerText || ""));
-
-    const uniq = (arr) => [...new Set(arr.map(clean).filter((x) => x && x.length > 1))].slice(0, 16);
-
-    // Page text (B07): title, description, headings, selection, and the
-    // readable text currently in the viewport (navigation and footers skipped).
-    // Site rule selectors (B16); invalid selectors are dropped.
-    const RULE = ${JSON.stringify(tab.rule?.extract || {})};
-    const validSel = (sel) => { try { document.querySelector(sel); return true; } catch (_) { return false; } };
-    const extraSkip = (RULE.skip || []).filter(validSel);
-    const SKIP = ["nav, footer, aside, header nav, [role=navigation], [role=contentinfo], [role=banner] nav, [aria-hidden=true], .navbox, .sidebar, .menu, .cookie, #cookie, .ad, .ads", ...extraSkip].join(", ");
-    let focus = "";
-    for (const sel of (RULE.include || []).filter(validSel)) {
-      for (const el of document.querySelectorAll(sel)) {
-        if (focus.length > 3000) break;
-        const t = clean(el.innerText);
-        if (t) focus += t + " . ";
-      }
-    }
-    const meta = (sel) => document.querySelector(sel)?.content || "";
-    const description = clean(meta('meta[name="description"]') || meta('meta[property="og:description"]'));
-    const headings = [];
-    for (const h of document.querySelectorAll("h1, h2, h3")) {
-      if (h.closest(SKIP)) continue;
-      const t = clean(h.innerText);
-      if (t && t.length < 160) headings.push({ t, inView: inView(h), top: h.tagName === "H1" });
-    }
-    headings.sort((a, b) => (b.top - a.top) || (b.inView - a.inView));
-    let text = "";
-    for (const el of document.querySelectorAll("p, li, dd, blockquote, td, figcaption, h1, h2, h3, h4, article div:not(:has(*))")) {
-      if (text.length > 6000) break;
-      if (!inView(el) || el.closest(SKIP)) continue;
-      const t = clean(el.innerText);
-      if (t.length > 20) text += t + " . ";
-    }
-    const selection = clean(String(window.getSelection ? window.getSelection() : "")).slice(0, 600);
-    return {
-      url: location.href,
-      title: document.title || "",
-      description,
-      headings: headings.slice(0, 20).map((h) => h.t),
-      selection,
-      text: text.slice(0, 6000),
-      focus: focus.slice(0, 3000),
-      lang: document.documentElement.lang || "",
-      names: uniq(names),
-      mediaMeta: uniq(mediaMeta),
-      mediaLinks: uniq(mediaLinks),
-      viewport: true
-    };
-  })()`;
   try {
-    return await tab.view.webContents.executeJavaScript(script, true);
+    return await tab.view.webContents.executeJavaScript(extractionScript(tab.rule?.extract), true);
   } catch (err) {
     return { url: tab.view.webContents.getURL(), title: tab.view.webContents.getTitle(), error: String(err) };
   }
 }
 
-// ---- Network layer (B12, B13) ----
-// Every outbound request goes through getText(): results are cached for 30 min,
-// identical requests in flight are shared, each host has a minimum gap between
-// requests, at most 4 requests run at once, and every request times out.
-const CACHE_TTL = 30 * 60 * 1000;
-const CACHE_MAX = 500;
-const HOST_GAP_MS = { "html.duckduckgo.com": 2500, "api.search.brave.com": 1100, default: 400 };
-const MAX_PARALLEL = 4;
-const cache = new Map();
-const inflight = new Map();
-const hostNext = new Map();
-let running = 0;
-const waiting = [];
+// ---- Network layer (B12, B13): core/net.js ----
+// fetch is looked up on each call so tests can replace globalThis.fetch.
+const netLayer = createNet({ fetch: (...args) => globalThis.fetch(...args), userAgent: USER_AGENT });
+const getText = netLayer.getText;
+const CACHE_TTL = netLayer.ttl;
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-function cacheGet(key) {
-  const hit = cache.get(key);
-  if (!hit) return undefined;
-  if (Date.now() - hit.at > CACHE_TTL) {
-    cache.delete(key);
-    return undefined;
-  }
-  return hit.value;
-}
-
-function cacheSet(key, value) {
-  cache.delete(key);
-  cache.set(key, { at: Date.now(), value });
-  if (cache.size > CACHE_MAX) cache.delete(cache.keys().next().value);
-}
-
-async function slot() {
-  if (running < MAX_PARALLEL) {
-    running++;
-    return;
-  }
-  await new Promise((r) => waiting.push(r));
-  running++;
-}
-
-function release() {
-  running--;
-  const next = waiting.shift();
-  if (next) next();
-}
-
-async function hostTurn(host) {
-  const gap = HOST_GAP_MS[host] ?? HOST_GAP_MS.default;
-  const now = Date.now();
-  const at = Math.max(now, hostNext.get(host) || 0);
-  hostNext.set(host, at + gap);
-  if (at > now) await sleep(at - now);
-}
-
-async function getText(url, { headers = {}, maxBytes = 300000, timeout = 10000, cacheKey } = {}) {
-  const key = "GET " + (cacheKey || url);
-  const hit = cacheGet(key);
-  if (hit) return hit;
-  if (inflight.has(key)) return inflight.get(key);
-  const job = (async () => {
-    await slot();
-    try {
-      await hostTurn(new URL(url).hostname);
-      const res = await fetch(url, {
-        headers: { "User-Agent": USER_AGENT, ...headers },
-        redirect: "follow",
-        signal: AbortSignal.timeout(timeout),
-      });
-      const text = (await res.text()).slice(0, maxBytes);
-      const out = { ok: res.ok, status: res.status, url: res.url || url, text };
-      if (res.ok) cacheSet(key, out);
-      return out;
-    } finally {
-      release();
-    }
-  })();
-  inflight.set(key, job);
-  try {
-    return await job;
-  } finally {
-    inflight.delete(key);
-  }
-}
-
-const { decodeEntities } = require("./providers");
 
 // ---- Settings (B15) ----
 // userData/settings.json. Secret fields (API keys) are encrypted with the OS
@@ -783,135 +450,9 @@ function publicSettings() {
 
 const search = new Registry({ getText, getConfig: (id) => loadSettings().providers[id] || {} });
 
-// ---- AI query ideas (B20) ----
-// One call per distinct set of inputs, cached 30 min. Requests for the same
-// inputs share one in-flight call (the "reference" search pass starts it,
-// the "all" pass waits for it).
-const aiCache = new Map();
-const aiInflight = new Map();
-const aiState = { lastOk: 0, lastError: "", lastQueries: [] };
-
-function aiReset() {
-  aiCache.clear();
-  aiInflight.clear();
-  aiState.lastError = "";
-}
-
-function aiQueries(input) {
-  const conf = loadSettings().ai;
-  if (!AI.ready(conf)) return Promise.resolve([]);
-  const e = AI.endpoint(conf);
-  const key = JSON.stringify([conf.provider, e.base, e.model, input.pinned, input.keywords.slice(0, 8), input.title]);
-  const hit = aiCache.get(key);
-  if (hit && Date.now() - hit.at < CACHE_TTL) return Promise.resolve(hit.queries);
-  if (aiInflight.has(key)) return aiInflight.get(key);
-  const job = AI.expand(input, conf)
-    .then((queries) => {
-      aiCache.set(key, { at: Date.now(), queries });
-      if (aiCache.size > 200) aiCache.delete(aiCache.keys().next().value);
-      Object.assign(aiState, { lastOk: Date.now(), lastError: "", lastQueries: queries });
-      return queries;
-    })
-    .catch((err) => {
-      aiState.lastError = String(err.message || err);
-      return [];
-    })
-    .finally(() => aiInflight.delete(key));
-  aiInflight.set(key, job);
-  return job;
-}
-
-// Settings panel Test button: list models, then try one expansion with sample input.
-async function aiTest(draft) {
-  const conf = { ...loadSettings().ai, ...(draft || {}), enabled: true };
-  const out = { ok: false, models: [], queries: [], error: "" };
-  try {
-    out.models = await AI.listModels(conf);
-  } catch (err) {
-    out.error = String(err.message || err);
-    return out;
-  }
-  const model = AI.endpoint(conf).model;
-  if (out.models.length && !out.models.includes(model)) {
-    out.error = `Model "${model}" is not on this server. Available: ${out.models.slice(0, 12).join(", ")}`;
-    return out;
-  }
-  try {
-    out.queries = await AI.expand({ pinned: [], keywords: ["sourdough", "starter", "hydration", "rye"], title: "Why sourdough starters fail" }, conf);
-    out.ok = true;
-  } catch (err) {
-    out.error = String(err.message || err);
-  }
-  return out;
-}
-
-function sameUrl(a, b) {
-  const norm = (u) => String(u || "").replace(/#.*$/, "").replace(/\/$/, "").replace(/^http:/, "https:");
-  return norm(a) === norm(b);
-}
-
-// Run several queries and merge the lists round-robin, so each query and each
-// source gets a share of the top results. Web search runs for the first two
-// queries; Wikipedia for all of them.
-// part: "all" (Wikipedia + web) or "reference" (Wikipedia only, B25). A
-// "reference" call also starts the web requests without waiting, so the
-// follow-up "all" call picks them up from the cache or the in-flight request.
-async function runQueries(queries, excludeUrl, part = "all") {
-  const jobs = [];
-  queries.forEach((q, i) => {
-    jobs.push(search.reference(q).then((r) => r.map((x) => ({ ...x, query: q }))));
-    if (i >= 2) return;
-    const web = search.web(q).then((r) => r.map((x) => ({ ...x, query: q })));
-    if (part === "all") jobs.push(web);
-    else web.catch(() => {});
-  });
-  const lists = (await Promise.allSettled(jobs)).map((r) => (r.status === "fulfilled" ? r.value : []));
-  const merged = [];
-  const seen = new Set();
-  for (let i = 0; merged.length < 12 && lists.some((l) => l.length > i); i++) {
-    for (const list of lists) {
-      const item = list[i];
-      if (!item?.url || !item.title) continue;
-      const key = item.url.replace(/#.*$/, "").replace(/\/$/, "");
-      if (seen.has(key) || sameUrl(item.url, excludeUrl)) continue;
-      if (/wikipedia\.org\/wiki\/(Main_Page|Special:)/.test(item.url)) continue;
-      seen.add(key);
-      merged.push(item);
-      if (merged.length >= 12) break;
-    }
-  }
-  return { results: merged, notes: search.notes() };
-}
-
-// Legacy entry point (Tauri bridge and manual keyword list): one query from the list.
-async function suggest(keywords, excludeUrl) {
-  const words = Array.isArray(keywords) ? keywords : String(keywords || "").split(/\s+/);
-  const queries = buildQueries({ pinned: [], ranked: words.filter(Boolean) });
-  if (!queries.length) return { keywords: [], results: [], queries: [] };
-  const { results, notes } = await runQueries(queries, excludeUrl);
-  return { keywords: words.slice(0, 8), results, queries, notes };
-}
-
-// Main entry point (B09): pinned keywords + ranked terms -> short queries -> results.
-async function suggestFor({ pinned = [], ranked = [], title = "", excludeUrl = "", part = "all" } = {}) {
-  const base = buildQueries({ pinned, ranked, title });
-  if (!base.length) return { results: [], queries: [], notes: [] };
-  const terms = ranked.map((r) => (typeof r === "string" ? r : r.term));
-  const aiJob = aiQueries({ pinned, keywords: terms, title });
-  if (part === "reference") {
-    // Fast pass: keyword queries only. The AI call keeps running in the background.
-    const { results } = await runQueries(base, excludeUrl, part);
-    return { results, queries: base, aiQueries: [], notes: [], part };
-  }
-  // Full pass: the first keyword query plus up to 2 AI queries (B20). If the
-  // AI is off or fails, the keyword queries are used as before.
-  const extra = (await aiJob).filter((q) => !base.some((b) => b.toLowerCase() === q.toLowerCase()));
-  const queries = extra.length ? [base[0], ...extra.slice(0, 2)] : base;
-  const { results, notes } = await runQueries(queries, excludeUrl, part);
-  const conf = loadSettings().ai;
-  if (conf.enabled && !extra.length && aiState.lastError) notes.push(`AI query ideas unavailable: ${aiState.lastError}`);
-  return { results, queries, aiQueries: extra.slice(0, 2), notes, part };
-}
+// ---- Search flow and AI query ideas (B09, B20, B25): core/suggest.js ----
+const searchFlow = createSuggest({ registry: search, getAISettings: () => loadSettings().ai, ttl: CACHE_TTL });
+const { suggest, suggestFor, aiTest, aiReset, aiState } = searchFlow;
 
 // Session-wide document frequency, so words that appear on every page lose weight.
 const sessionDF = new SessionDF();
@@ -929,209 +470,8 @@ async function pageKeywords(id, banned = []) {
   return { page: { url: page.url, title: page.title, selection: page.selection }, ranked };
 }
 
-function youtubeId(url) {
-  try {
-    const u = new URL(url);
-    if (u.hostname.includes("youtu.be")) return u.pathname.slice(1).split("/")[0];
-    if (u.hostname.includes("youtube.com")) return u.searchParams.get("v") || "";
-  } catch (_) {}
-  return "";
-}
-
-function youtubeThumb(url) {
-  const id = youtubeId(url);
-  return id ? `https://i.ytimg.com/vi/${id}/hqdefault.jpg` : "";
-}
-
-function isMediaUrl(url) {
-  return /\.(mp4|webm|ogg|ogv|mov|m4v|mp3|wav)(\?|$)/i.test(url || "");
-}
-
-function isJunkMedia(url) {
-  const u = (url || "").toLowerCase();
-  return (
-    !u ||
-    u.startsWith("data:image/svg") ||
-    u.startsWith("data:image/gif") ||
-    /sprite|pixel|tracking|1x1|spacer|blank|placeholder|icon[-_]?|favicon|logo[-_.]|avatar|emoji|badge|spinner|loading\.gif/.test(u)
-  );
-}
-
-function absUrl(href, base) {
-  try {
-    return new URL(href, base).href;
-  } catch (_) {
-    return "";
-  }
-}
-
-function scoreMedia(item, keywords) {
-  let score = item.base || 0;
-  const hay = `${item.src} ${item.alt || ""} ${item.poster || ""}`.toLowerCase();
-  for (const k of keywords || []) {
-    if (k && hay.includes(String(k).toLowerCase())) score += 28;
-  }
-  if (item.w && item.h) {
-    score += Math.min(40, Math.log((item.w * item.h) / 1000 + 1) * 8);
-    if (item.w < 64 || item.h < 64) score -= 40;
-  }
-  if (item.kind === "video") score += 18;
-  return score;
-}
-
-function collectMedia(html, pageUrl, keywords) {
-  const found = [];
-  const push = (src, extra = {}) => {
-    if (!src) return;
-    const abs = absUrl(decodeEntities(src), pageUrl);
-    if (!abs || isJunkMedia(abs)) return;
-    found.push({ src: abs, ...extra });
-  };
-
-  const meta = (re, base = 80) => {
-    const reG = new RegExp(re.source, re.flags.includes("g") ? re.flags : re.flags + "g");
-    let m;
-    while ((m = reG.exec(html))) push(m[1], { base, kind: extraKind(m[1]) });
-  };
-  const extraKind = (s) => (isMediaUrl(s) ? "video" : "image");
-
-  meta(/<meta[^>]+property=["']og:image(?::url|:secure_url)?["'][^>]+content=["']([^"']+)/gi, 90);
-  meta(/<meta[^>]+name=["']twitter:image(?::src)?["'][^>]+content=["']([^"']+)/gi, 85);
-  meta(/<meta[^>]+property=["']og:video(?::url|:secure_url)?["'][^>]+content=["']([^"']+)/gi, 88);
-  meta(/<link[^>]+rel=["']image_src["'][^>]+href=["']([^"']+)/gi, 70);
-
-  const jsonBlocks = html.match(/<script[^>]+type=["']application\/ld\+json["'][^>]*>[\s\S]*?<\/script>/gi) || [];
-  for (const block of jsonBlocks) {
-    const raw = block.replace(/<script[^>]*>/i, "").replace(/<\/script>/i, "");
-    try {
-      const data = JSON.parse(raw);
-      const walk = (node) => {
-        if (!node) return;
-        if (Array.isArray(node)) return node.forEach(walk);
-        if (typeof node === "string") {
-          if (/\.(jpe?g|png|webp|gif|avif|mp4|webm)(\?|$)/i.test(node)) push(node, { base: 72, kind: extraKind(node) });
-          return;
-        }
-        if (typeof node !== "object") return;
-        for (const key of ["image", "thumbnail", "thumbnailUrl", "contentUrl", "poster"]) {
-          if (node[key]) walk(node[key]);
-        }
-        if (node["@graph"]) walk(node["@graph"]);
-      };
-      walk(data);
-    } catch (_) {}
-  }
-
-  const imgRe = /<img\b([^>]*)>/gi;
-  let im;
-  while ((im = imgRe.exec(html))) {
-    const attrs = im[1];
-    const get = (n) => {
-      const m = attrs.match(new RegExp(n + "=[\"']([^\"']+)", "i"));
-      return m ? m[1] : "";
-    };
-    const srcset = get("srcset") || get("data-srcset");
-    const src = get("src") || get("data-src") || get("data-lazy-src") || get("data-original");
-    let best = src;
-    if (srcset) {
-      const parts = srcset.split(",").map((p) => p.trim().split(/\s+/));
-      parts.sort((a, b) => parseInt(b[1] || "0", 10) - parseInt(a[1] || "0", 10));
-      if (parts[0]?.[0]) best = parts[0][0];
-    }
-    push(best, {
-      base: 40,
-      kind: "image",
-      alt: decodeEntities(get("alt") || get("title")),
-      w: parseInt(get("width"), 10) || 0,
-      h: parseInt(get("height"), 10) || 0,
-    });
-  }
-
-  const vidRe = /<(?:video|source)\b([^>]*)>/gi;
-  let vm;
-  while ((vm = vidRe.exec(html))) {
-    const attrs = vm[1];
-    const get = (n) => {
-      const m = attrs.match(new RegExp(n + "=[\"']([^\"']+)", "i"));
-      return m ? m[1] : "";
-    };
-    const src = get("src") || get("data-src");
-    const poster = get("poster");
-    if (poster) push(poster, { base: 60, kind: "image", alt: "poster" });
-    if (src && isMediaUrl(src)) push(src, { base: 75, kind: "video" });
-  }
-
-  const iframeRe = /<iframe\b([^>]*)>/gi;
-  let ifr;
-  while ((ifr = iframeRe.exec(html))) {
-    const attrs = ifr[1];
-    const sm = attrs.match(/src=["']([^"']+)/i);
-    const src = sm ? sm[1] : "";
-    const yt = youtubeThumb(absUrl(src, pageUrl));
-    if (yt) push(yt, { base: 82, kind: "video" });
-  }
-
-  const ytPage = youtubeThumb(pageUrl);
-  if (ytPage) push(ytPage, { base: 95, kind: "video" });
-
-  const ranked = found
-    .map((item) => ({ ...item, score: scoreMedia(item, keywords) }))
-    .sort((a, b) => b.score - a.score);
-
-  const seen = new Set();
-  const unique = [];
-  for (const item of ranked) {
-    if (seen.has(item.src)) continue;
-    seen.add(item.src);
-    unique.push(item);
-  }
-  return unique;
-}
-
-async function preview(url, keywords = []) {
-  const keys = Array.isArray(keywords) ? keywords : String(keywords || "").split(/\s+/).filter(Boolean);
-  const quickImage = youtubeThumb(url);
-  if (isMediaUrl(url)) {
-    return { url, title: url, description: "", image: "", video: url, kind: "video" };
-  }
-  try {
-    const res = await getText(url, { headers: { Accept: "text/html" }, maxBytes: 280000, timeout: 8000 });
-    const html = res.text;
-    const pick = (re) => {
-      const m = html.match(re);
-      return m ? decodeEntities(m[1]) : "";
-    };
-    const pageUrl = res.url || url;
-    const media = collectMedia(html, pageUrl, keys);
-    const topVideo = media.find((m) => m.kind === "video" && isMediaUrl(m.src));
-    const topImage = media.find((m) => m.kind !== "video" || !isMediaUrl(m.src)) || media[0];
-    const image = topImage?.src || quickImage;
-    const video = topVideo?.src || "";
-    return {
-      url: pageUrl,
-      title:
-        pick(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)/i) ||
-        pick(/<title[^>]*>([\s\S]*?)<\/title>/i) ||
-        url,
-      description:
-        pick(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)/i) ||
-        pick(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)/i),
-      image,
-      video,
-      kind: video ? "video" : image ? "image" : "page",
-    };
-  } catch (err) {
-    return {
-      url,
-      title: url,
-      description: "",
-      image: quickImage,
-      video: "",
-      kind: quickImage ? "video" : "page",
-      error: String(err.message || err),
-    };
-  }
-}
+// ---- Previews: core/preview.js ----
+const { preview } = createPreview({ getText });
 
 // ---- Site permissions (B01) ----
 // Camera, microphone, location, notifications and screen capture always ask.
@@ -1385,7 +725,8 @@ app.whenReady().then(() => {
   installPermissionHandlers(session.defaultSession);
   loadRules();
   watchRules();
-  research = new ResearchStore(path.join(app.getPath("userData"), "sessions"));
+  research = new ResearchStore(fsStorage(path.join(app.getPath("userData"), "sessions")));
+  historyStore = new HistoryStore(fsStorage(app.getPath("userData")));
   buildMenu();
   createWindow();
 });
@@ -1466,15 +807,13 @@ ipcMain.handle("find:start", (_e, id, text, opts = {}) => {
 });
 ipcMain.handle("find:stop", (_e, id) => tabs.get(id)?.view.webContents.stopFindInPage("keepSelection"));
 ipcMain.handle("tab:zoom", (_e, id, step) => zoomTab(tabs.get(id), Number(step) || 0));
-ipcMain.handle("history:search", (_e, q, limit) => searchHistory(q, limit));
+ipcMain.handle("history:search", (_e, q, limit) => historyStore.search(q, limit));
 ipcMain.handle("history:clear", () => {
-  historyRows = [];
-  saveHistorySoon();
+  historyStore.clear();
   return true;
 });
 ipcMain.handle("history:remove", (_e, url) => {
-  historyRows = history().filter((r) => r.url !== url);
-  saveHistorySoon();
+  historyStore.remove(url);
   return true;
 });
 ipcMain.handle("rules:edit", () => shell.openPath(rulesFile()));
@@ -1588,6 +927,7 @@ ipcMain.handle("research:export", () => {
 app.on("before-quit", () => {
   try {
     research?.saveNow();
+    historyStore?.saveNow();
   } catch (_) {}
 });
 
