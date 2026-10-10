@@ -31,9 +31,12 @@ Requires Node 18+.
 | --- | --- |
 | Cmd/Ctrl+T | New tab |
 | Cmd/Ctrl+W | Close tab |
-| Cmd/Ctrl+L | Focus the address bar |
+| Cmd/Ctrl+L | Focus the address bar (suggests pages from history as you type) |
 | Cmd/Ctrl+R | Reload |
 | Cmd/Ctrl+[ and ] | Back, forward |
+| Cmd/Ctrl+F, Cmd/Ctrl+G, Shift+Cmd/Ctrl+G | Find in page, next match, previous match |
+| Cmd/Ctrl+= , Cmd/Ctrl+-, Cmd/Ctrl+0 | Zoom in, out, reset (pinch and Ctrl+scroll also work) |
+| Cmd/Ctrl+Y | History |
 | Cmd/Ctrl+Shift+M | Mosaic on or off |
 | Cmd/Ctrl+Shift+U | Mute or unmute the tab |
 | Cmd/Ctrl+Shift+S, or S | Screenshot the tab |
@@ -77,12 +80,34 @@ First `ios init` / `android init` generates native projects under `src-tauri/gen
 7. **Keywords** (`keywords.js`): Scout reads the page title, description, headings, selected text and the text currently on screen (navigation and footers skipped). Words are scored by where they appear, how specific they are, and how rare they are across the pages you have visited this session. Multi-word names ("Marie Curie") are kept together.
 8. **Pin and hide:** click a keyword to pin it; pinned keywords go into every search and are never replaced. × hides a keyword for good (Show all brings them back).
 9. **Search:** pins and the top keywords become 2 or 3 short queries (at most 4 words each). Wikipedia runs for every query. Web results come from the first working source in this order: Brave Search API, SearXNG, DuckDuckGo. A source that rejects a key, hits a rate limit or starts blocking is paused for a while and the next one is used. Results are cached for 30 minutes and requests are spaced out per site.
-10. **Previews** on result cards load only when a card scrolls into view, 3 at a time. Wikipedia and Brave results that already include an image skip the fetch.
-11. **Auto** re-searches when you open a new page, select text, or scroll to content with different keywords (at most every 20 seconds). Turn Auto off to search only when you press **Crawl**.
+10. **Results** show Wikipedia first, within about a second; web results are merged in when they arrive.
+11. **Previews** on result cards load only when a card scrolls into view, 3 at a time. Wikipedia and Brave results that already include an image skip the fetch.
+12. **Auto** re-searches when you open a new page, select text, or scroll to content with different keywords (at most every 20 seconds). Turn Auto off to search only when you press **Crawl**.
+
+## Research sessions
+
+**Trail** in the sidebar shows the current research session: every page you read (with its top keywords), keywords that recur across pages, and how many suggestions you opened or hid. Click a keyword to pin it. Pinned keywords are saved with the session.
+
+On result cards, **×** hides a result for the rest of the session, and results you have already opened or read are dimmed and marked "read". **New** starts a fresh session; the dropdown switches back to an older one. **Export** saves the session as Markdown notes in the Library (Saves).
+
+## Site rules
+
+Scout reads `rules.json` (File → Edit Site Rules…, or Settings → Edit rules file) and reloads it when you save. Each rule has a `match` and any of these settings:
+
+| Setting | Values | Effect |
+| --- | --- | --- |
+| `autoplay` | `on`, `muted`, `off` | Start media on load, start it muted, or pause media the page starts before you interact |
+| `sound` | `auto`, `on`, `off` | Default sound for tabs on this site (the speaker button still overrides it) |
+| `popups` | `gesture`, `block`, `allow` | Popups only after a click, never, or always |
+| `suggest` | `true`, `false` | `false` stops Scout reading the page for keywords or sending its words to search |
+| `mosaic` | `true`, `false` | `false` keeps the site out of the Mosaic grid unless it is the active tab |
+| `extract.include`, `extract.skip` | lists of CSS selectors | Extra text to read with priority; areas to ignore |
+
+`match` can be `example.com` (with subdomains), `*.example.com` (subdomains only), `example.com/path`, a list of these, `*` for every site, or a regular expression like `/\/login/i`. Rules apply in order and later matches win. The first run creates examples for Wikipedia, YouTube, and sign-in, banking and payment pages (no suggestions, no autoplay). A broken file is reported in the sidebar and the previous rules stay in use.
 
 ## Search sources
 
-Open **Sources** in the sidebar to turn sources on or off. **Test** runs one search with that source and shows the result or the error.
+Open **Settings** in the sidebar to turn sources on or off. **Test** runs one search with that source and shows the result or the error.
 
 | Source | Setup | Notes |
 | --- | --- | --- |

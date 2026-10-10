@@ -267,7 +267,7 @@ class Registry {
     if (WEB_ORDER.some((id) => this.usable(id))) return [];
     const paused = this.status().filter((s) => s.role === "web" && s.enabled && s.ready && s.paused);
     const why = paused.map((s) => `${s.lastError} Retrying in ${s.pausedFor} min.`);
-    return ["Web search unavailable, showing Wikipedia only.", ...why, "Add another source under Sources."];
+    return ["Web search unavailable, showing Wikipedia only.", ...why, "Add another source under Settings."];
   }
 }
 

@@ -1,0 +1,5 @@
+<!doctype html><title>Perm test</title><p>perm</p><script>
+window.result=[];
+navigator.geolocation.getCurrentPosition(()=>result.push('geo-ok'),e=>result.push('geo-'+e.code));
+Notification.requestPermission().then(r=>result.push('notif-'+r));
+</script>

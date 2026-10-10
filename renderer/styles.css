@@ -497,3 +497,5 @@ html, body {
   line-height: 1;
 }
 .card .dismiss:hover { color: var(--text); }
+.rail { overflow-x: hidden; }
+.trail-row .t, .card h3 { overflow-wrap: anywhere; }
