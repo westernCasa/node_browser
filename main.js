@@ -1,4 +1,4 @@
-const { app, BrowserWindow, BrowserView, ipcMain, session, shell, protocol, net, Menu, dialog, safeStorage } = require("electron");
+const { app, BrowserWindow, WebContentsView, ipcMain, session, shell, protocol, net, Menu, dialog, safeStorage } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const { URL } = require("url");
@@ -43,8 +43,10 @@ function applyLayout() {
     for (const tab of tabs.values()) tab.view.setBounds({ x: 0, y: 0, width: 0, height: 0 });
     return;
   }
-  const ids = [...tabs.keys()];
+  // Tabs whose site rule says "mosaic": false stay out of the grid unless active.
+  const ids = [...tabs.keys()].filter((id) => id === activeId || tabs.get(id).rule?.mosaic !== false);
   const rect = contentRect();
+  for (const [id, tab] of tabs) if (!ids.includes(id)) tab.view.setBounds({ x: 0, y: 0, width: 0, height: 0 });
 
   if (layout !== "mosaic" || ids.length <= 1) {
     for (const [id, tab] of tabs) {
@@ -181,7 +183,7 @@ function attachListeners(tab) {
 
 function createTab(url, opts = {}) {
   const id = String(idSeq++);
-  const view = new BrowserView({
+  const view = new WebContentsView({
     webPreferences: {
       preload: path.join(__dirname, "view-preload.js"),
       additionalArguments: [`--scout-tab=${id}`],
@@ -195,7 +197,7 @@ function createTab(url, opts = {}) {
   view.webContents.setUserAgent(USER_AGENT);
   const tab = { id, view, audio: "auto", lastGesture: 0 };
   tabs.set(id, tab);
-  win.addBrowserView(view);
+  win.contentView.addChildView(view);
   attachListeners(tab);
   if (!opts.background || !activeId) activeId = id;
   view.webContents.loadURL(normalizeUrl(url));
@@ -207,9 +209,10 @@ function createTab(url, opts = {}) {
 function closeTab(id) {
   const tab = tabs.get(id);
   if (!tab) return;
-  win.removeBrowserView(tab.view);
+  win.contentView.removeChildView(tab.view);
   try {
-    tab.view.webContents.destroy();
+    // WebContentsView does not free its page on removal; close it explicitly.
+    tab.view.webContents.close();
   } catch (_) {}
   tabs.delete(id);
   if (activeId === id) {

@@ -68,7 +68,7 @@ First `ios init` / `android init` generates native projects under `src-tauri/gen
 
 ## How it works
 
-1. Each tab is an Electron `BrowserView`, a real Chromium page. Background tabs are not throttled, so several videos can play together.
+1. Each tab is an Electron `WebContentsView`, a real Chromium page. Background tabs are not throttled, so several videos can play together.
 2. **Mosaic** tiles every open tab. Click a tile to make it the current tab. **Focus** shows one tab at full size.
 3. **Sound:** only the active tab is audible. Other tabs keep playing muted. The speaker button on a tab overrides this; right-click it to go back to automatic.
 4. **Autoplay** is allowed without a prior click. HTML5 media is started after load; common video embeds get `autoplay=1` if it was missing.
