@@ -512,7 +512,8 @@ async function crawlViewport(reason) {
     let ranked;
     let selection = "";
     if (api.keywords) {
-      const res = await api.keywords(tab.id, banned);
+      const res = await api.keywords(tab.id, banned, { ifChanged: reason === "tick" && tab.url === lastCrawl.url });
+      if (res.unchanged) return;
       if (res.disabled) {
         // Site rule "suggest": false. Do not read the page or search with its words.
         if (reason !== "tick" || lastCrawl.url !== tab.url) {
@@ -825,7 +826,7 @@ function minutesAgo(ms) {
 
 function stateLine(st) {
   if (!st.enabled) return { text: "Off", cls: "" };
-  if (!st.ready) return { text: "Needs setup (see the field above).", cls: "bad" };
+  if (!st.ready) return { text: st.setupHint || "Needs setup (see the field above).", cls: "bad" };
   if (st.paused) return { text: `Paused ${st.pausedFor} min: ${st.lastError}`, cls: "bad" };
   if (st.lastError) return { text: st.lastError, cls: "bad" };
   if (st.lastOk) return { text: `Working · ${st.lastCount} results ${minutesAgo(st.lastOk)}`, cls: "ok" };
@@ -975,7 +976,6 @@ async function renderSources() {
       clear.textContent = "Remove key";
       clear.addEventListener("click", async () => {
         draft[f.key] = "";
-        draft.enabled = false;
         await saveSources(true);
       });
       actions.appendChild(clear);
@@ -1214,6 +1214,19 @@ if (api?.researchGet) {
   api.researchGet().then((s) => {
     adoptSession(s);
     if (pinned.length) statusEl.textContent = `Session "${s.name}" · pinned: ${pinned.join(", ")}`;
+  });
+}
+
+// Brave Search is the default web source but needs the user's own API key.
+// Say so once, the first time Scout starts without one.
+if (api?.getSettings && !store.get("scout.braveHint", false)) {
+  api.getSettings().then((s) => {
+    const brave = s.providers?.brave;
+    if (!brave?.enabled || brave.keySet) return;
+    store.set("scout.braveHint", true);
+    showNotice("Brave Search is the default web source. Add your Brave Search API key in Settings. Until then, web results come from DuckDuckGo.", [
+      { label: "Open Settings", run: () => openSources() },
+    ]);
   });
 }
 

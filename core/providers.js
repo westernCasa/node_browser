@@ -78,10 +78,11 @@ const PROVIDERS = {
 
   brave: {
     id: "brave",
-    label: "Brave Search API",
+    label: "Brave Search API (default)",
     role: "web",
     fields: [{ key: "key", label: "API key", secret: true, placeholder: "From api-dashboard.search.brave.com" }],
-    defaults: { enabled: false, key: "" },
+    setupHint: "Add a Brave Search API key (free plan at api-dashboard.search.brave.com). Until then, web results come from DuckDuckGo.",
+    defaults: { enabled: true, key: "" },
     ready: (c) => Boolean(c.key),
     async search(query, { getText, config }) {
       const url = "https://api.search.brave.com/res/v1/web/search?count=8&q=" + encodeURIComponent(query);
@@ -165,6 +166,9 @@ const PROVIDERS = {
   },
 };
 
+// Version 2: Brave Search is on by default (settings saved before had it off).
+const SETTINGS_VERSION = 2;
+
 function defaultSettings() {
   const providers = {};
   for (const p of Object.values(PROVIDERS)) providers[p.id] = { ...p.defaults };
@@ -193,6 +197,7 @@ class Registry {
         role: p.role,
         enabled: Boolean(config.enabled),
         ready: p.ready(config),
+        setupHint: p.setupHint || "",
         paused,
         pausedFor: paused ? Math.ceil((h.cooldownUntil - Date.now()) / 60000) : 0,
         lastError: h.lastError || "",
@@ -271,4 +276,4 @@ class Registry {
   }
 }
 
-module.exports = { PROVIDERS, WEB_ORDER, Registry, ProviderError, defaultSettings, decodeEntities };
+module.exports = { PROVIDERS, WEB_ORDER, Registry, ProviderError, defaultSettings, decodeEntities, SETTINGS_VERSION };

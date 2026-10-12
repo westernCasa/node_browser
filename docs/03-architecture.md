@@ -30,10 +30,10 @@ Last updated: 2026-10-10 (commit 025fb03, shared core and mobile groundwork). De
 | `research.js` | 174 | Research sessions (takes a storage object) |
 | `history.js` | 83 | Visit history and suggestions (`HistoryStore`, takes a storage object) |
 | `preview.js` | 215 | Result-card previews (`createPreview`) |
-| `page-scripts.js` | 214 | Scripts injected into pages: extraction, autoplay, autoplay blocking |
+| `page-scripts.js` | 293 | Scripts injected into pages: extraction, autoplay, autoplay blocking |
 | `controller.js` | 194 | Suggestion controller: when to search again, pins, hides, results (used by mobile; desktop sidebar still has its own copy, M13) |
 | `storage.js` | 30 | `memoryStorage`, `prefixedStorage` |
-| `urls.js` | 19 | `normalizeUrl` (address bar), `hostOf`, `HOME_URL` |
+| `urls.js` | 22 | `normalizeUrl` (address bar; searches go to Brave Search), `hostOf`, `HOME_URL`, `SEARCH_URL` |
 | `compat.js` | 16 | `timeoutSignal` for engines without `AbortSignal.timeout` |
 | `index.js` | 19 | Re-exports everything |
 
@@ -47,8 +47,8 @@ Last updated: 2026-10-10 (commit 025fb03, shared core and mobile groundwork). De
 
 | Step | Where | What happens |
 | --- | --- | --- |
-| 1. Trigger | `app.js` `crawlViewport()` | Runs when a page finishes loading, on the Crawl button, and every 5 s. The 5 s check only searches if the page changed, new text was selected (3 s minimum gap), or the top keywords drifted (less than 50% overlap) and 20 s have passed. Auto can be turned off. |
-| 2. Extract | `main.js` `extractPage()` running `core/page-scripts.js` `extractionScript()` | Script injected into the page. Returns title, meta description, h1-h3 headings, selected text, visible readable text (up to 6,000 characters; nav, footer, aside, menus and cookie banners skipped), and media alt text and file names. |
+| 1. Trigger | `app.js` `crawlViewport()` | Runs when a page finishes loading, on the Crawl button, and every 5 s. The 5 s check reads the page only if it was scrolled, resized or had text selected since the last read (`view-preload.js` reports this at most once a second as `tab:activity`), or the active tab changed. It then searches only if the page changed, new text was selected (3 s minimum gap), or the top keywords drifted (less than 50% overlap) and 20 s have passed. Auto can be turned off. |
+| 2. Extract | `main.js` `extractPage()` running `core/page-scripts.js` `extractionScript()` | Script injected into the page. Returns title, meta description, h1-h3 headings, selected text, visible readable text (up to 6,000 characters; nav, footer, aside, menus and cookie banners skipped), and media alt text and file names. On long pages it measures only the elements near the viewport (binary search on document order), about 15 ms on a 12,000-element article instead of about 60 ms. |
 | 3. Rank | `keywords.js` `rankTerms()` | Scores each word by where it appears (selection 6, title 4, headings 3, description 2, names 2, text 1, media 0.6), with diminishing returns for repeats. Removes stop words, web boilerplate and the site's own name. Merges plurals. Lowers very common English words. Multiplies by session rarity (`SessionDF`: words seen on most of the last 60 pages lose weight). Finds multi-word names ("Marie Curie") and lets them replace their single words. Returns the top 12. |
 | 4. Pins and hides | `app.js` | Pinned keywords (user-chosen) always go into searches and are never replaced. Hidden keywords are removed and remembered in local storage. |
 | 5. Build queries | `keywords.js` `buildQueries()` | Up to 3 queries of at most 4 words: the strongest terms; the top term plus the next tier; the page's own title (dropped when something is pinned). Pins go into every query. |
@@ -100,10 +100,10 @@ Result cards that already have an image (often Wikipedia and Brave) show it dire
 
 ## Tabs, sound and popups
 
-- **Layout.** Focus shows the active tab; Mosaic tiles all tabs in a grid. Tabs have a white default background.
+- **Layout.** Focus shows the active tab; Mosaic tiles all tabs in a grid. Tabs have a white default background. Tabs not on screen are removed from the window (`removeChildView`) and added back when shown; this is what makes Chromium stop drawing them (`setVisible(false)` and 0x0 bounds did not). Background throttling is on (Electron default), so hidden tabs' timers slow down; media keeps playing.
 - **Sound.** Each tab's audio is "auto" (audible only when active), "on" or "off". The speaker button on a tab sets on/off; right-click returns it to auto.
 - **Popups.** A `window.open` opens a new tab only if the user clicked or typed in that page in the last 2 s. Otherwise it is blocked and shown in the sidebar with an "Open in new tab" button.
-- **Autoplay.** After load, media elements are started (muted if the browser refuses sound) and YouTube, Vimeo and Dailymotion embeds get `autoplay=1`.
+- **Autoplay.** At DOM ready, after load, and after in-page navigation, `autoplayScript()` plays the page's main media: the largest visible video or YouTube, Vimeo or Dailymotion embed (embeds get `autoplay=1`), or else the first audio element. It runs once per page address, so media the user pauses stays paused. If there is no player yet, a MutationObserver checks again (at most every 250 ms) for 20 s. Sound is on unless the page refuses it, then it plays muted.
 
 ## Permissions
 
@@ -123,7 +123,7 @@ Each tab stores its resolved rule (`tab.rule`), recomputed on every navigation:
 
 | Setting | Applied in |
 | --- | --- |
-| `autoplay` | `tryAutoplay()` after load ("on", "muted"); `blockAutoplay()` at DOM ready and after load ("off": pauses media until the user has interacted) |
+| `autoplay` | `tryAutoplay()` at DOM ready, after load and after in-page navigation ("on", "muted"); for "off" it calls `blockAutoplay()` instead (pauses media until the user has interacted) |
 | `sound` | Tab's default audio mode, unless the user set it with the speaker button |
 | `popups` | `setWindowOpenHandler` |
 | `suggest` | `pageKeywords()` returns `disabled`; the sidebar shows a message and does not search with page words |
@@ -159,7 +159,7 @@ The renderer stores hidden keywords and the Auto setting in local storage.
 
 | Group | Channels |
 | --- | --- |
-| Tabs | `tab:create`, `tab:close`, `tab:activate`, `tab:navigate`, `tab:back`, `tab:forward`, `tab:reload`, `tab:audio`, `tab:audio-reset`, `tab:clicked`, `tab:hotkey` |
+| Tabs | `tab:create`, `tab:close`, `tab:activate`, `tab:navigate`, `tab:back`, `tab:forward`, `tab:reload`, `tab:audio`, `tab:audio-reset`, `tab:clicked`, `tab:hotkey`, `tab:activity` |
 | Layout | `layout:set`, `layout:sidebar`, `layout:library` |
 | Find, zoom, history | `find:start`, `find:stop`, `tab:zoom`, `history:search`, `history:clear`, `history:remove` |
 | Site rules | `rules:edit`, `rules:reload` |

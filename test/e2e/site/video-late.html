@@ -1,0 +1,20 @@
+<!doctype html><html><head><title>Late player</title></head><body>
+<h1>Player built by script</h1>
+<div id="slot"></div>
+<script>
+setTimeout(() => {
+  const v = document.createElement("video");
+  v.id = "late"; v.src = "/clip.webm"; v.loop = true; v.width = 640; v.height = 360;
+  document.getElementById("slot").appendChild(v);
+}, 1500);
+function spa() {
+  history.pushState({}, "", "/video-late.html?next=1");
+  document.getElementById("slot").innerHTML = "";
+  setTimeout(() => {
+    const v = document.createElement("video");
+    v.id = "next"; v.src = "/clip.webm"; v.loop = true; v.width = 640; v.height = 360;
+    document.getElementById("slot").appendChild(v);
+  }, 800);
+}
+</script>
+</body></html>

@@ -20,3 +20,5 @@ On Linux without a display, run each script under `xvfb-run -a`.
 | 04-find-zoom-history | History search, address-bar suggestions, find in page, zoom badge, History shelf |
 | 05-research-session | Trail, recurring keywords, dismiss, read badges, export, pins after restart, new session |
 | 06-ai-query-ideas | Local model and Grok (fake servers): Test and model list, bad key, wrong model name, AI queries in search, what is sent, local model down |
+| 07-performance | Page reads while a large article sits idle, time for one read, whether a background tab is throttled and stops drawing |
+| 08-media-and-brave | Brave on by default (also for older settings), first-run notice, address-bar search goes to Brave; main video plays while the page is still loading, small video stays paused, paused video stays paused, late and single-page players, background tab keeps playing muted |

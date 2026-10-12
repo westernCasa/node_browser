@@ -17,6 +17,31 @@ function extractionScript(ruleExtract) {
       const vw = window.innerWidth || 0;
       return r.bottom > 0 && r.right > 0 && r.top < vh && r.left < vw && r.width > 8 && r.height > 8;
     };
+    // Elements near the viewport, in document order. Long lists (thousands of
+    // paragraphs or links) are mostly laid out top to bottom, so a binary search
+    // finds where the viewport starts and the scan stops a little past its end,
+    // instead of measuring every element on the page.
+    const nearView = (list) => {
+      const n = list.length;
+      if (n < 300) return Array.from(list);
+      const vh = window.innerHeight || 0;
+      let lo = 0, hi = n - 1;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (list[mid].getBoundingClientRect().bottom <= 0) lo = mid + 1;
+        else hi = mid;
+      }
+      const out = [];
+      let below = 0;
+      for (let i = Math.max(0, lo - 150); i < n && below < 150; i++) {
+        const el = list[i];
+        const r = el.getBoundingClientRect();
+        if (r.top >= vh && r.height > 0) below++;
+        else below = 0;
+        out.push(el);
+      }
+      return out;
+    };
     const clean = (s) => (s || "").replace(/\\s+/g, " ").trim();
     const fileStem = (href) => {
       try {
@@ -85,7 +110,7 @@ function extractionScript(ruleExtract) {
       takeMeta(el);
     }
 
-    for (const a of document.querySelectorAll("a[href]")) {
+    for (const a of nearView(document.querySelectorAll("a[href]"))) {
       if (!inView(a)) continue;
       const href = a.href || "";
       const looksMedia = MEDIA_EXT.test(href) || /\\/(watch|video|videos|media|photo|photos|image|gallery|embed)\\b/i.test(href);
@@ -143,7 +168,7 @@ function extractionScript(ruleExtract) {
     }
     headings.sort((a, b) => (b.top - a.top) || (b.inView - a.inView));
     let text = "";
-    for (const el of document.querySelectorAll("p, li, dd, blockquote, td, figcaption, h1, h2, h3, h4, article div:not(:has(*))")) {
+    for (const el of nearView(document.querySelectorAll("p, li, dd, blockquote, td, figcaption, h1, h2, h3, h4, article div:not(:has(*))"))) {
       if (text.length > 6000) break;
       if (!inView(el) || el.closest(SKIP)) continue;
       const t = clean(el.innerText);
@@ -167,13 +192,35 @@ function extractionScript(ruleExtract) {
   })()`;
 }
 
-/** Starts media on the page. mode "on" falls back to muted if sound is refused; "muted" starts muted. */
+/**
+ * Plays the page's main media as soon as it exists: the largest visible video
+ * or embedded player (YouTube, Vimeo, Dailymotion), or else the first audio
+ * element. Runs once per page address; players that appear later (lazy or
+ * script-built players, single-page sites changing address) are caught by a
+ * short-lived observer. Media the user pauses is left paused.
+ * mode "on" plays with sound and falls back to muted if the page refuses
+ * sound; "muted" plays muted.
+ */
 function autoplayScript(mode = "on") {
   return `(() => {
     const MUTED = ${mode === "muted"};
-    const kick = (el) => {
-      if (!el || !el.play) return;
-      el.autoplay = true;
+    const EMBED = /youtube\\.com|youtube-nocookie\\.com|youtu\\.be|player\\.vimeo\\.com|dailymotion\\.com/;
+    const st = (window.__scoutAutoplay = window.__scoutAutoplay || { url: "", started: false, obs: null, timer: 0 });
+    if (st.url !== location.href) {
+      st.url = location.href;
+      st.started = false;
+    }
+    if (st.started) return;
+
+    const box = (el) => el.getBoundingClientRect();
+    const usable = (el) => {
+      const r = box(el);
+      return r.width >= 80 && r.height >= 45 && r.bottom > 0 && r.top < (window.innerHeight || 800) * 1.5;
+    };
+    const area = (el) => { const r = box(el); return r.width * r.height; };
+
+    const playEl = (el) => {
+      if (!el.paused && !el.ended) return;
       if (MUTED) el.muted = true;
       const run = () => el.play().catch(() => {
         el.muted = true;
@@ -182,19 +229,51 @@ function autoplayScript(mode = "on") {
       if (el.readyState >= 2) run();
       else el.addEventListener("canplay", run, { once: true });
     };
-    document.querySelectorAll("video, audio").forEach(kick);
-    document.querySelectorAll("iframe").forEach((f) => {
+    const playFrame = (f) => {
       try {
-        const raw = f.getAttribute("src") || "";
-        if (!/youtube|youtu\\.be|vimeo|dailymotion/.test(raw)) return;
-        const u = new URL(raw, location.href);
+        const u = new URL(f.getAttribute("src") || f.getAttribute("data-src") || "", location.href);
         if (u.searchParams.get("autoplay") === "1") return;
         u.searchParams.set("autoplay", "1");
         if (MUTED) u.searchParams.set("mute", "1");
-        f.allow = ((f.allow || "") + "; autoplay; fullscreen").trim();
+        f.allow = ((f.allow || "") + "; autoplay; fullscreen").replace(/^; /, "");
         f.src = u.toString();
       } catch (_) {}
+    };
+
+    const attempt = () => {
+      if (st.started) return true;
+      const candidates = [
+        ...[...document.querySelectorAll("video")].filter(usable).map((el) => ({ el, kind: "video" })),
+        ...[...document.querySelectorAll("iframe")]
+          .filter((f) => EMBED.test(f.getAttribute("src") || f.getAttribute("data-src") || "") && usable(f))
+          .map((el) => ({ el, kind: "frame" })),
+      ].sort((a, b) => area(b.el) - area(a.el));
+      let main = candidates[0];
+      if (!main) {
+        const audio = document.querySelector("audio");
+        if (audio) main = { el: audio, kind: "audio" };
+      }
+      if (!main) return false;
+      st.started = true;
+      if (main.kind === "frame") playFrame(main.el);
+      else playEl(main.el);
+      return true;
+    };
+
+    if (attempt()) return;
+    // No player yet: watch for one for up to 20 s.
+    if (st.obs) st.obs.disconnect();
+    let pending = 0;
+    st.obs = new MutationObserver(() => {
+      if (pending) return;
+      pending = setTimeout(() => {
+        pending = 0;
+        if (attempt() && st.obs) { st.obs.disconnect(); st.obs = null; }
+      }, 250);
     });
+    st.obs.observe(document.documentElement, { childList: true, subtree: true });
+    clearTimeout(st.timer);
+    st.timer = setTimeout(() => { if (st.obs) { st.obs.disconnect(); st.obs = null; } }, 20000);
   })()`;
 }
 

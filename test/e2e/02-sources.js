@@ -53,7 +53,7 @@ const log = (...a) => console.log("•", ...a);
   // Sources panel: wrong key first, then the right one.
   await ui.click("#sources-btn");
   await sleep(800);
-  log("sources panel visible:", await ui.$eval("#sources-pane", (e) => !e.hidden), "| DDG state:", (await ui.$$eval("#sources-list .source", (e) => e.map((x) => x.textContent))).find((t) => t.includes("DuckDuckGo")).replace(/\s+/g, " ").slice(0, 120));
+  log("sources panel visible:", await ui.$eval("#sources-pane", (e) => !e.hidden), "| DDG state:", (await ui.$$eval("#sources-list .source", (e) => e.map((x) => x.textContent))).find((t) => t.trim().startsWith("DuckDuckGo")).replace(/\s+/g, " ").slice(0, 120));
   const brave = (await ui.$$("#sources-list .source"))[1];
   await (await brave.$("input[type=checkbox]")).check();
   await (await brave.$("input[type=password]")).fill("bad-key");

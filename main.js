@@ -4,7 +4,7 @@ const fs = require("fs");
 const { URL } = require("url");
 // Platform-neutral logic lives in core/ (shared with the mobile app).
 const { rankTerms, SessionDF } = require("./core/keywords");
-const { PROVIDERS, Registry, defaultSettings } = require("./core/providers");
+const { PROVIDERS, Registry, defaultSettings, SETTINGS_VERSION } = require("./core/providers");
 const Rules = require("./core/rules");
 const AI = require("./core/ai");
 const { ResearchStore } = require("./core/research");
@@ -103,25 +103,40 @@ function contentRect() {
   };
 }
 
+// Tabs that are not on screen are hidden (not just sized to 0x0), so Chromium
+// stops painting them and slows their timers. Media keeps playing.
+// Detaching the view is what makes Chromium treat the page as hidden;
+// setVisible(false) alone keeps it rendering at full frame rate.
+function hideView(tab) {
+  if (!tab.attached) return;
+  win.contentView.removeChildView(tab.view);
+  tab.attached = false;
+}
+
+function showView(tab, bounds) {
+  tab.view.setBounds(bounds);
+  if (!tab.attached) {
+    win.contentView.addChildView(tab.view);
+    tab.attached = true;
+  }
+}
+
 function applyLayout() {
   if (!win) return;
   applyAudio();
   if (libraryOpen) {
-    for (const tab of tabs.values()) tab.view.setBounds({ x: 0, y: 0, width: 0, height: 0 });
+    for (const tab of tabs.values()) hideView(tab);
     return;
   }
   // Tabs whose site rule says "mosaic": false stay out of the grid unless active.
   const ids = [...tabs.keys()].filter((id) => id === activeId || tabs.get(id).rule?.mosaic !== false);
   const rect = contentRect();
-  for (const [id, tab] of tabs) if (!ids.includes(id)) tab.view.setBounds({ x: 0, y: 0, width: 0, height: 0 });
+  for (const [id, tab] of tabs) if (!ids.includes(id)) hideView(tab);
 
   if (layout !== "mosaic" || ids.length <= 1) {
     for (const [id, tab] of tabs) {
-      if (id === activeId) {
-        tab.view.setBounds(rect);
-      } else {
-        tab.view.setBounds({ x: 0, y: 0, width: 0, height: 0 });
-      }
+      if (id === activeId) showView(tab, rect);
+      else hideView(tab);
     }
     return;
   }
@@ -136,7 +151,7 @@ function applyLayout() {
   ids.forEach((id, i) => {
     const col = i % cols;
     const row = Math.floor(i / cols);
-    tabs.get(id).view.setBounds({
+    showView(tabs.get(id), {
       x: rect.x + col * (cellW + gap),
       y: rect.y + row * (cellH + gap),
       width: cellW,
@@ -180,10 +195,10 @@ function applyAudio() {
 }
 
 
-// Autoplay per site rule: "on" starts media (falls back to muted if the page
-// refuses sound), "muted" starts it muted, "off" pauses media the page starts
-// on its own before the user has interacted with it.
-// Autoplay per site rule (scripts in core/page-scripts.js).
+// Autoplay per site rule (scripts in core/page-scripts.js): "on" plays the
+// page's main media with sound (muted if the page refuses sound), "muted" plays
+// it muted, "off" pauses media the page starts on its own before the user has
+// interacted with it.
 function tryAutoplay(wc, mode = "on") {
   if (mode === "off") return blockAutoplay(wc);
   wc.executeJavaScript(autoplayScript(mode), true).catch(() => {});
@@ -215,13 +230,17 @@ function attachListeners(tab) {
     ping();
   });
   wc.on("did-navigate-in-page", (_e, url, isMainFrame) => {
-    if (isMainFrame) refreshRule(tab, url);
+    if (isMainFrame) {
+      refreshRule(tab, url);
+      // Single-page sites (YouTube and similar) change address without loading.
+      tryAutoplay(wc, tab.rule?.autoplay);
+    }
     applyLayout();
     ping();
   });
-  wc.on("dom-ready", () => {
-    if (tab.rule?.autoplay === "off") blockAutoplay(wc);
-  });
+  // Start media as soon as the page is parsed, not after every image and ad
+  // has loaded. did-stop-loading tries again; the script runs once per address.
+  wc.on("dom-ready", () => tryAutoplay(wc, tab.rule?.autoplay));
   wc.on("did-start-loading", ping);
   wc.on("did-stop-loading", () => {
     ping();
@@ -256,7 +275,6 @@ function createTab(url, opts = {}) {
       additionalArguments: [`--scout-tab=${id}`],
       sandbox: true,
       contextIsolation: true,
-      backgroundThrottling: false,
       autoplayPolicy: "no-user-gesture-required",
     },
   });
@@ -266,6 +284,7 @@ function createTab(url, opts = {}) {
   refreshRule(tab, normalizeUrl(url));
   tabs.set(id, tab);
   win.contentView.addChildView(view);
+  tab.attached = true;
   attachListeners(tab);
   if (!opts.background || !activeId) activeId = id;
   view.webContents.loadURL(normalizeUrl(url));
@@ -277,7 +296,7 @@ function createTab(url, opts = {}) {
 function closeTab(id) {
   const tab = tabs.get(id);
   if (!tab) return;
-  win.contentView.removeChildView(tab.view);
+  if (tab.attached) win.contentView.removeChildView(tab.view);
   try {
     // WebContentsView does not free its page on removal; close it explicitly.
     tab.view.webContents.close();
@@ -367,6 +386,8 @@ function loadSettings() {
     }
     base.providers[id] = merged;
   }
+  // Settings saved before Brave became the default source had it switched off.
+  if ((raw.version || 1) < 2 && raw.providers?.brave) base.providers.brave.enabled = true;
   // AI query ideas (B20). The Grok key is stored like the search keys.
   const ai = raw.ai || {};
   base.ai = {
@@ -401,7 +422,7 @@ function saveSettings(next) {
     if (inAi.grok?.key !== undefined) a.grok.key = String(inAi.grok.key).trim();
     if (JSON.stringify(a) !== before) aiReset();
   }
-  const disk = { providers: {} };
+  const disk = { version: SETTINGS_VERSION, providers: {} };
   for (const [id, conf] of Object.entries(current.providers)) {
     const copy = { ...conf };
     for (const key of secretFields(id)) {
@@ -435,7 +456,7 @@ function publicSettings() {
     providers,
     ai: { enabled: a.enabled, provider: a.provider, local: { ...a.local }, grok: { model: a.grok.model, keySet: Boolean(a.grok.key) } },
     aiStatus: { ...aiState },
-    meta: Object.values(PROVIDERS).map((p) => ({ id: p.id, label: p.label, role: p.role, fields: p.fields })),
+    meta: Object.values(PROVIDERS).map((p) => ({ id: p.id, label: p.label, role: p.role, fields: p.fields, setupHint: p.setupHint || "" })),
     encrypted: safeStorage.isEncryptionAvailable(),
   };
 }
@@ -449,8 +470,18 @@ const { suggest, suggestFor, aiTest, aiReset, aiState } = searchFlow;
 // Session-wide document frequency, so words that appear on every page lose weight.
 const sessionDF = new SessionDF();
 
-async function pageKeywords(id, banned = []) {
+// opts.ifChanged (the 5 s timer): skip reading the page when it has not been
+// scrolled, resized or had text selected since the last read of the same URL.
+async function pageKeywords(id, banned = [], opts = {}) {
   const tab = tabs.get(id);
+  if (tab && opts.ifChanged) {
+    const url = tab.view.webContents.getURL();
+    if (tab.readUrl === url && (tab.activityAt || 0) <= (tab.readAt || 0)) return { unchanged: true };
+  }
+  if (tab) {
+    tab.readAt = Date.now();
+    tab.readUrl = tab.view.webContents.getURL();
+  }
   if (tab?.rule && tab.rule.suggest === false) {
     // Site rule: never read this page or send its words to a search engine.
     const wc = tab.view.webContents;
@@ -756,6 +787,10 @@ ipcMain.handle("layout:library", (_e, open) => {
   applyLayout();
   return libraryOpen;
 });
+ipcMain.on("tab:activity", (_e, id) => {
+  const tab = tabs.get(String(id));
+  if (tab) tab.activityAt = Date.now();
+});
 ipcMain.on("tab:clicked", (_e, id) => {
   const tab = tabs.get(String(id));
   if (!tab) return;
@@ -816,7 +851,7 @@ ipcMain.handle("rules:reload", () => {
 ipcMain.handle("settings:set", (_e, next) => saveSettings(next));
 ipcMain.handle("search:status", () => search.status());
 ipcMain.handle("search:test", (_e, id) => (PROVIDERS[id] ? search.test(id) : { ok: false, error: "Unknown source" }));
-ipcMain.handle("page:keywords", (_e, id, banned) => pageKeywords(id, banned));
+ipcMain.handle("page:keywords", (_e, id, banned, opts) => pageKeywords(id, banned, opts));
 ipcMain.handle("suggest:preview", (_e, url, keywords) => preview(url, keywords));
 
 function libraryRoot() {

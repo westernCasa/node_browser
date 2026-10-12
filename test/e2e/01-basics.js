@@ -68,7 +68,8 @@ const log = (...a) => console.log("•", ...a);
   log("status:", await ui.textContent("#suggest-status"));
 
   // Gesture-backed popup: real mouse click on the target=_blank link.
-  const before = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].contentView.children.length);
+  // Tabs are counted by their pages: hidden tabs are detached from the window.
+  const before = await app.evaluate(({ webContents }) => webContents.getAllWebContents().filter((w) => !w.getURL().startsWith("file:")).length);
   await app.evaluate(async ({ BrowserWindow }) => {
     const v = BrowserWindow.getAllWindows()[0].contentView.children[0];
     const r = await v.webContents.executeJavaScript("(() => { const b = document.getElementById('pop').getBoundingClientRect(); return {x: b.x + 5, y: b.y + 5}; })()");
@@ -76,10 +77,10 @@ const log = (...a) => console.log("•", ...a);
     v.webContents.sendInputEvent({ type: "mouseUp", x: Math.round(r.x), y: Math.round(r.y), button: "left", clickCount: 1 });
   });
   await sleep(2500);
-  const after = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].contentView.children.length);
+  const after = await app.evaluate(({ webContents }) => webContents.getAllWebContents().filter((w) => !w.getURL().startsWith("file:")).length);
   log(`tabs before click ${before}, after click ${after}`);
   log("tab titles:", (await ui.$$eval("#tabs .tab span", (els) => els.map((e) => e.textContent))).join(" | "));
-  const audio = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].contentView.children.map((v) => v.webContents.isAudioMuted()));
+  const audio = await app.evaluate(({ webContents }) => webContents.getAllWebContents().filter((w) => !w.getURL().startsWith("file:")).sort((a, b) => a.id - b.id).map((w) => w.isAudioMuted()));
   log("muted per tab (active is the new one):", JSON.stringify(audio));
 
   // Back to first tab; press plain S inside the page -> screenshot.

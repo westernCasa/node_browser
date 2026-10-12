@@ -13,6 +13,29 @@ window.addEventListener(
   true
 );
 
+// Tell the app the visible part of the page may have changed (scroll,
+// selection, resize), at most once a second. The sidebar re-reads the page
+// only after such activity, instead of every 5 seconds.
+let lastActivity = 0;
+let activityTimer = null;
+const activity = () => {
+  if (!tabId) return;
+  const wait = 1000 - (Date.now() - lastActivity);
+  if (wait <= 0) {
+    lastActivity = Date.now();
+    ipcRenderer.send("tab:activity", tabId);
+  } else if (!activityTimer) {
+    activityTimer = setTimeout(() => {
+      activityTimer = null;
+      lastActivity = Date.now();
+      ipcRenderer.send("tab:activity", tabId);
+    }, wait);
+  }
+};
+window.addEventListener("scroll", activity, { capture: true, passive: true });
+window.addEventListener("resize", activity, { passive: true });
+document.addEventListener("selectionchange", activity);
+
 const isEditable = (el) => {
   if (!el) return false;
   if (el.isContentEditable) return true;
