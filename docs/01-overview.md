@@ -107,6 +107,7 @@ The end-to-end tests are described in `test/e2e/README.md`.
 | 2026-10-10 | AI query ideas use a local model or Grok (xAI). |
 | 2026-10-10 | Mobile (Tauri) is on hold until the desktop app passes Phase 4 (daily use for a week with no blocking bugs). |
 | 2026-10-10 | While desktop testing waits: plan the mobile app and lay groundwork now; the full mobile build still waits for the Phase 4 gate. |
+| 2026-10-12 | Mosaic is available on phones too (up to 4 tiles in portrait), not only tablets. |
 | 2026-10-12 | Brave Search is the default web source and address-bar search engine. |
 | 2026-10-12 | Autoplay plays only the page's main media, with sound, as soon as the page is parsed. |
 | 2026-10-10 | Recommended framework for mobile: React Native (Expo) instead of Tauri, because it supports several web pages per screen and reuses Scout's JavaScript logic. Reversible; confirm after trying the skeleton (M01). |

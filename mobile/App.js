@@ -18,7 +18,8 @@ import SettingsSheet from "./src/components/SettingsSheet";
 const { SuggestController } = require("../core/controller");
 const { HOME_URL, normalizeUrl } = require("../core/urls");
 
-const MOSAIC_MIN_WIDTH = 700; // tablets and large phones in landscape
+const WIDE = 700; // tablets, and large phones in landscape
+const PHONE_TILES = 4; // most tiles shown at once on a phone screen
 let tabSeq = 1;
 let requestSeq = 1;
 
@@ -189,9 +190,21 @@ function Browser({ services }) {
   };
 
   const active = tabs.find((t) => t.id === activeId) || tabs[0];
-  const canMosaic = width >= MOSAIC_MIN_WIDTH;
-  const showMosaic = mosaic && canMosaic && tabs.length > 1;
-  const cols = Math.ceil(Math.sqrt(tabs.length));
+  // Mosaic works on every screen. Tablets and landscape phones get a square-ish
+  // grid of all tabs. Phones in portrait stack up to 3 tiles in one column, or
+  // show 4 in two columns; with more tabs, the active tab and the 3 most
+  // recently opened others are shown.
+  const canMosaic = true;
+  const showMosaic = mosaic && tabs.length > 1;
+  const wide = width >= WIDE;
+  const tiled = !showMosaic
+    ? []
+    : wide
+      ? tabs
+      : [active, ...tabs.filter((t) => t.id !== active?.id).slice(-(PHONE_TILES - 1))].sort((a, b) => tabs.indexOf(a) - tabs.indexOf(b));
+  const tiledIds = new Set(tiled.map((t) => t.id));
+  const cols = wide ? Math.ceil(Math.sqrt(tiled.length)) : tiled.length <= 3 ? 1 : 2;
+  const rows = Math.ceil(tiled.length / cols) || 1;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg2 }} edges={["top", "bottom"]}>
@@ -226,8 +239,8 @@ function Browser({ services }) {
       <View style={{ flex: 1, flexDirection: "row", flexWrap: "wrap", backgroundColor: colors.bg }}>
         {tabs.map((t) => {
           const isActive = t.id === activeId;
-          const style = showMosaic
-            ? { width: `${100 / cols}%`, height: `${100 / Math.ceil(tabs.length / cols)}%`, borderWidth: isActive ? 2 : 0, borderColor: colors.accent }
+          const style = showMosaic && tiledIds.has(t.id)
+            ? { width: `${100 / cols}%`, height: `${100 / rows}%`, borderWidth: isActive ? 2 : 0, borderColor: colors.accent }
             : isActive
               ? { flex: 1, width: "100%" }
               : { position: "absolute", width: 1, height: 1, opacity: 0, left: -10 };
@@ -254,6 +267,7 @@ function Browser({ services }) {
       {/* Bottom bar */}
       <View style={{ flexDirection: "row", gap: 6, padding: 8, borderTopWidth: 1, borderColor: colors.line, alignItems: "center" }}>
         <Button label={`Suggestions${state.results.length ? ` (${state.results.length})` : ""}`} active={state.busy} onPress={() => setSheet("suggest")} />
+        <Button label="Mosaic" active={mosaic} onPress={() => setMosaic(!mosaic)} />
         <Button label="Trail" onPress={() => setSheet("trail")} />
         <Button label="Settings" onPress={() => setSheet("settings")} />
         <Text style={[ui.help, { flex: 1 }]} numberOfLines={1}>

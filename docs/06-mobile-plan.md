@@ -5,7 +5,7 @@ Last updated: 2026-10-10. Status: planning and groundwork done; full build waits
 ## Summary
 
 - **Recommendation:** build the mobile app with React Native (Expo), not Tauri. Backlog items B21-B24 (Tauri) are replaced by M01-M15 below.
-- **Why:** a research browser needs several web pages on one screen (tabs kept loaded, Mosaic on tablets), scripts injected into each page, and the keyword, search and session logic Scout already has. React Native's WebView component supports all three, and it runs JavaScript, so Scout's existing logic is reused as-is. Tauri documents multiple windows on tablets but not several web views on one phone screen, and its existing Scout code does not compile.
+- **Why:** a research browser needs several web pages on one screen (tabs kept loaded, Mosaic), scripts injected into each page, and the keyword, search and session logic Scout already has. React Native's WebView component supports all three, and it runs JavaScript, so Scout's existing logic is reused as-is. Tauri documents multiple windows on tablets but not several web views on one phone screen, and its existing Scout code does not compile.
 - **Groundwork done:** the platform-neutral logic now lives in `core/` and the desktop app uses it (all desktop tests pass). A walking-skeleton app in `mobile/` uses the same `core/` and compiles for iOS and Android. It has not been run on a device yet (M01).
 - **Next step for Sven:** install Expo Go on a phone and run the skeleton (M01). About 10 minutes; see `mobile/README.md`.
 
@@ -14,7 +14,7 @@ Last updated: 2026-10-10. Status: planning and groundwork done; full build waits
 | Constraint | Effect on Scout |
 | --- | --- |
 | On iOS, outside the EU (and Japan, where a law requiring alternative engines was due by December 2025), browsers must use Apple's WebKit | Every option uses WKWebView on iPhone. Pages render the same as in Safari; Scout adds its features around them |
-| Phones show one app screen at a time | Mosaic (several tabs at once) only makes sense on tablets or large phones in landscape; phones show one tab with a tab switcher |
+| Phones have small screens | Mosaic on phones shows at most 4 tiles (stacked in one column for 2-3 tabs, 2 by 2 for 4); tablets and landscape phones show every tab |
 | A WebView has no mute switch | Background tabs are muted from inside the page by an injected script |
 | iOS limits background activity | Media in tabs will likely pause when Scout is in the background. To confirm on a device (M02) |
 | Phones cannot run large AI models comfortably | "Local model" on a phone means a model server on your own network (for example Ollama on your computer), or Grok |
@@ -61,7 +61,7 @@ What each platform supplies to `core/`:
 | Desktop feature | Mobile approach | In skeleton |
 | --- | --- | --- |
 | Tabs | One WebView per tab, kept loaded; tab switcher sheet | Yes |
-| Mosaic | Grid of tabs on screens 700 pt wide or more; tap a tile to make it active | Yes (tablets) |
+| Mosaic | All screens (decided 2026-10-12). Tablets and landscape phones: grid of all tabs. Phones in portrait: up to 4 tiles. Tap a tile to make it active; only the active tile plays sound | Yes |
 | Autoplay | `mediaPlaybackRequiresUserAction=false`, inline playback, injected autoplay script per site rule | Yes |
 | Only the active tab plays sound | Injected script mutes media when a tab goes to the background | Yes |
 | Popups | `onOpenWindow` opens a new tab; site rule "block" ignores it. iOS blocks scripted popups without a tap by default | Yes |
@@ -85,7 +85,7 @@ Phase 5 starts building after the desktop Phase 4 gate passes. M01-M02 can run a
 | ID | Item | Priority | Effort | Status |
 | --- | --- | --- | --- | --- |
 | M01 | Run the skeleton on a phone with Expo Go and report what breaks | P0 | XS | Not started (Sven) |
-| M02 | Check on iPhone and Android: page extraction, selection and scroll reports, autoplay, background muting, several tabs playing, popups, permission prompts, media in the background | P0 | S | Not started |
+| M02 | Check on iPhone and Android: page extraction, selection and scroll reports, autoplay, background muting, several tabs playing, Mosaic on a phone (2, 3 and 4 tiles, memory with 4 pages playing), popups, permission prompts, media in the background | P0 | S | Not started |
 | M03 | Allow plain `http://` to a model server on the local network (iOS App Transport Security, Android cleartext traffic) | P1 | S | Not started |
 | M04 | Site rules on mobile: same file format as desktop, with a simple editor | P1 | M | Not started |
 | M05 | Library on mobile: screenshot of a tab, save a page note, share to other apps | P1 | M | Not started |
@@ -107,7 +107,7 @@ Phase 5 starts building after the desktop Phase 4 gate passes. M01-M02 can run a
 | Shared logic moved out of `main.js` into `core/` (network, search flow, AI, history, previews, page scripts, storage adapters, URL helper) | `core/`, `fs-storage.js` | All 6 desktop end-to-end suites (69 checks) and 4 unit demos pass unchanged |
 | Shared suggestion controller (pins, hides, re-search rules, Wikipedia-first, dismissed results, session trail) | `core/controller.js` | `npm run test:controller` |
 | `core/` made safe for the mobile JavaScript engine (no Node modules, timeout fallback) | `core/compat.js`, `core/README.md` | Compiles to Hermes bytecode in the mobile bundles |
-| Expo SDK 57 app: tabs, Mosaic on tablets, suggestions, trail, settings, keys in the keychain | `mobile/` | `npm run bundle:check` builds iOS and Android bundles; `expo-doctor` 19 of 21 checks (the 2 others need Expo's servers, unreachable from the build sandbox) |
+| Expo SDK 57 app: tabs, Mosaic (phones and tablets), suggestions, trail, settings, keys in the keychain | `mobile/` | `npm run bundle:check` builds iOS and Android bundles; `expo-doctor` 19 of 21 checks (the 2 others need Expo's servers, unreachable from the build sandbox) |
 
 ## Risks and open questions
 

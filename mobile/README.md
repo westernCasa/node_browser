@@ -5,7 +5,7 @@ Phase 5 groundwork. A React Native (Expo SDK 57) app that reuses the desktop app
 ## What works in this skeleton
 
 - Tabs, each a WebView kept loaded; address bar with back and forward; tab switcher
-- Mosaic grid of tabs on screens 700 pt wide or more (tablets, large phones in landscape)
+- Mosaic on every screen (Mosaic button in the bottom bar): all tabs in a grid on tablets and phones in landscape; up to 4 tiles on a phone in portrait (the active tab plus the 3 most recent others)
 - Autoplay per site rule; background tabs muted
 - Links that open a new window open a new Scout tab (unless the site rule blocks popups)
 - Suggestions sheet: keywords from the page (tap to pin, hold to hide), Wikipedia results first, then web results, AI query ideas

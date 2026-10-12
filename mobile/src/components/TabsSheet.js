@@ -1,4 +1,4 @@
-// Tab switcher: list of open tabs, close, new tab, Mosaic on tablets.
+// Tab switcher: list of open tabs, close, new tab, Mosaic.
 import { Pressable, Text, View } from "react-native";
 import { colors, ui } from "../theme";
 import Button from "./Button";
@@ -11,7 +11,7 @@ export default function TabsSheet({ visible, onClose, tabs, activeId, onActivate
         <Button label="New tab" onPress={onNewTab} small />
         {canMosaic ? <Button label={mosaic ? "Mosaic on" : "Mosaic"} active={mosaic} onPress={onToggleMosaic} small /> : null}
       </View>
-      {!canMosaic ? <Text style={[ui.help, { marginBottom: 8 }]}>Mosaic (several tabs on screen) needs a tablet-sized screen.</Text> : null}
+      <Text style={[ui.help, { marginBottom: 8 }]}>Mosaic shows several tabs at once (up to 4 on a phone). Tap a tile to make it the active tab; only the active tab plays sound.</Text>
       {tabs.map((t) => (
         <Pressable
           key={t.id}
