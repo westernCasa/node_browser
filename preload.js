@@ -49,6 +49,7 @@ contextBridge.exposeInMainWorld("scout", {
   revealFile: (file) => ipcRenderer.invoke("library:reveal", file),
   toggleTabAudio: (id) => ipcRenderer.invoke("tab:audio", id),
   resetTabAudio: (id) => ipcRenderer.invoke("tab:audio-reset", id),
+  setSoundAll: (on) => ipcRenderer.invoke("audio:all", on),
   onTabEvent: (fn) => {
     ipcRenderer.on("tab:event", (_e, payload) => fn(payload));
   },

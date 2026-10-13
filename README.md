@@ -38,6 +38,7 @@ Requires Node 18+.
 | Cmd/Ctrl+= , Cmd/Ctrl+-, Cmd/Ctrl+0 | Zoom in, out, reset (pinch and Ctrl+scroll also work) |
 | Cmd/Ctrl+Y | History |
 | Cmd/Ctrl+Shift+M | Mosaic on or off |
+| Cmd/Ctrl+Shift+A | Sound from all playing tabs, or only the current one |
 | Cmd/Ctrl+Shift+U | Mute or unmute the tab |
 | Cmd/Ctrl+Shift+S, or S | Screenshot the tab |
 
@@ -62,16 +63,17 @@ The old Tauri setup (`src-tauri/`, `renderer/tauri-bridge.js`) does not compile 
 1. Each tab is an Electron `WebContentsView`, a real Chromium page. Tabs that are not on screen are detached from the window, so Chromium stops drawing them and slows their timers; their media keeps playing. In Mosaic every tile is on screen, so several videos play together.
 2. **Mosaic** tiles every open tab. Click a tile to make it the current tab. **Focus** shows one tab at full size.
 3. **Playing in several tabs:** media autoplays in every tab, and up to 4 tabs play at once. When a fifth tab starts, the tab that started playing longest ago is paused and marked ⏸ in the tab bar (the active tab is never paused this way). Opening a paused tab resumes it.
-   **Sound:** only the active tab is audible. Other tabs keep playing muted. The speaker button on a tab overrides this; right-click it to go back to automatic.
-4. **Autoplay** is allowed without a prior click. As soon as a page is parsed, Scout plays its main media with sound: the largest visible video or YouTube, Vimeo or Dailymotion embed, or else the first audio player. Players that appear later (built by a script, or on sites like YouTube that change address without reloading) are caught for 20 seconds. Only the main player starts, and media you pause stays paused.
-5. **Popups** open as a new tab only if you clicked or typed in the page in the previous 2 seconds. Other popups are blocked and listed in the sidebar with an "Open in new tab" button.
-6. **Permissions:** camera, microphone, location, notifications, clipboard reading and screen capture always ask first. Answers can be remembered per site (File → Reset Site Permissions clears them).
-7. **Keywords** (`keywords.js`): Scout reads the page title, description, headings, selected text and the text currently on screen (navigation and footers skipped). Words are scored by where they appear, how specific they are, and how rare they are across the pages you have visited this session. Multi-word names ("Marie Curie") are kept together.
-8. **Pin and hide:** click a keyword to pin it; pinned keywords go into every search and are never replaced. × hides a keyword for good (Show all brings them back).
-9. **Search:** pins and the top keywords become 2 or 3 short queries (at most 4 words each). Wikipedia runs for every query. Web results come from the first working source in this order: Brave Search API (the default; needs your API key), SearXNG, DuckDuckGo. Searches typed in the address bar open Brave Search (search.brave.com). A source that rejects a key, hits a rate limit or starts blocking is paused for a while and the next one is used. Results are cached for 30 minutes and requests are spaced out per site.
-10. **Results** show Wikipedia first, within about a second; web results are merged in when they arrive.
-11. **Previews** on result cards load only when a card scrolls into view, 3 at a time. Wikipedia and Brave results that already include an image skip the fetch.
-12. **Auto** re-searches when you open a new page, select text, or scroll to content with different keywords (at most every 20 seconds). Turn Auto off to search only when you press **Crawl**.
+4. **Sound:** by default only the active tab is audible and other tabs keep playing muted. The **Sound: one / Sound: all** button in the toolbar (or Cmd/Ctrl+Shift+A) makes every playing tab audible at once. The speaker button on a tab overrides this; right-click it to go back to automatic.
+5. **Autoplay** is allowed without a prior click. As soon as a page is parsed, Scout plays its main media with sound: the largest visible video or YouTube, Vimeo or Dailymotion embed, or else the first audio player. Players that appear later (built by a script, or on sites like YouTube that change address without reloading) are caught for 20 seconds. Only the main player starts, and media you pause stays paused.
+6. **Center on click:** clicking a video, an image or an embedded player (YouTube, Vimeo and similar) smoothly scrolls the page so it sits in the middle of the view. Small images such as icons are ignored. Site rule `center` turns it off per site.
+7. **Popups** open as a new tab only if you clicked or typed in the page in the previous 2 seconds. Other popups are blocked and listed in the sidebar with an "Open in new tab" button.
+8. **Permissions:** camera, microphone, location, notifications, clipboard reading and screen capture always ask first. Answers can be remembered per site (File → Reset Site Permissions clears them).
+9. **Keywords** (`keywords.js`): Scout reads the page title, description, headings, selected text and the text currently on screen (navigation and footers skipped). Words are scored by where they appear, how specific they are, and how rare they are across the pages you have visited this session. Multi-word names ("Marie Curie") are kept together.
+10. **Pin and hide:** click a keyword to pin it; pinned keywords go into every search and are never replaced. × hides a keyword for good (Show all brings them back).
+11. **Search:** pins and the top keywords become 2 or 3 short queries (at most 4 words each). Wikipedia runs for every query. Web results come from the first working source in this order: Brave Search API (the default; needs your API key), SearXNG, DuckDuckGo. Searches typed in the address bar open Brave Search (search.brave.com). A source that rejects a key, hits a rate limit or starts blocking is paused for a while and the next one is used. Results are cached for 30 minutes and requests are spaced out per site.
+12. **Results** show Wikipedia first, within about a second; web results are merged in when they arrive.
+13. **Previews** on result cards load only when a card scrolls into view, 3 at a time. Wikipedia and Brave results that already include an image skip the fetch.
+14. **Auto** re-searches when you open a new page, select text, or scroll to content with different keywords (at most every 20 seconds). Turn Auto off to search only when you press **Crawl**.
 
 ## Research sessions
 
@@ -90,6 +92,7 @@ Scout reads `rules.json` (File → Edit Site Rules…, or Settings → Edit rule
 | `popups` | `gesture`, `block`, `allow` | Popups only after a click, never, or always |
 | `suggest` | `true`, `false` | `false` stops Scout reading the page for keywords or sending its words to search |
 | `mosaic` | `true`, `false` | `false` keeps the site out of the Mosaic grid unless it is the active tab |
+| `center` | `true`, `false` | `true` (default): clicking a video, image or embedded player scrolls it to the middle of the view. `false` turns this off for the site |
 | `extract.include`, `extract.skip` | lists of CSS selectors | Extra text to read with priority; areas to ignore |
 
 `match` can be `example.com` (with subdomains), `*.example.com` (subdomains only), `example.com/path`, a list of these, `*` for every site, or a regular expression like `/\/login/i`. Rules apply in order and later matches win. The first run creates examples for Wikipedia, YouTube, and sign-in, banking and payment pages (no suggestions, no autoplay). A broken file is reported in the sidebar and the previous rules stay in use.

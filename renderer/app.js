@@ -627,6 +627,17 @@ layoutBtn.addEventListener("click", async () => {
   if (api) await api.setLayout(layout);
 });
 
+// Sound from every playing tab, or only the current one. Remembered between runs.
+const soundBtn = document.getElementById("sound-btn");
+let soundAll = store.get("scout.soundAll", false);
+const paintSound = () => {
+  soundBtn.classList.toggle("active", soundAll);
+  soundBtn.textContent = soundAll ? "Sound: all" : "Sound: one";
+};
+soundBtn.addEventListener("click", () => api?.setSoundAll?.(!soundAll));
+paintSound();
+if (soundAll) api?.setSoundAll?.(true);
+
 const libraryEl = document.getElementById("shelf");
 const libraryList = document.getElementById("library-list");
 let shelfFolder = "all";
@@ -1266,6 +1277,10 @@ if (api) {
     if (msg.cmd === "focus-omni") {
       omni.focus();
       omni.select();
+    } else if (msg.cmd === "sound-all") {
+      soundAll = msg.on;
+      store.set("scout.soundAll", soundAll);
+      paintSound();
     } else if (msg.cmd === "toggle-layout") {
       layoutBtn.click();
     } else if (msg.cmd === "shot-done") {

@@ -12,7 +12,7 @@ const { HistoryStore } = require("./core/history");
 const { createNet } = require("./core/net");
 const { createSuggest } = require("./core/suggest");
 const { createPreview } = require("./core/preview");
-const { extractionScript, autoplayScript, blockAutoplayScript, pauseForLimitScript, resumeScript, anyPlayingScript } = require("./core/page-scripts");
+const { extractionScript, autoplayScript, blockAutoplayScript, centerOnClickScript, pauseForLimitScript, resumeScript, anyPlayingScript } = require("./core/page-scripts");
 const { PlaybackLimiter } = require("./core/playback");
 const { fsStorage } = require("./fs-storage");
 const { normalizeUrl } = require("./core/urls");
@@ -189,9 +189,22 @@ function emitList() {
 
 // Sound policy (B03). "auto": only the active tab is audible; background and
 // non-focused Mosaic tiles keep playing but muted. "on"/"off" are user overrides.
+// soundAll (toolbar "Sound: all" or View menu): every "auto" tab is audible, so
+// all playing tabs (up to the playback limit of 4) can be heard together.
+let soundAll = false;
+
+function setSoundAll(on) {
+  soundAll = Boolean(on);
+  applyAudio();
+  emitList();
+  const item = Menu.getApplicationMenu()?.getMenuItemById("sound-all");
+  if (item) item.checked = soundAll;
+  sendUi("sound-all", { on: soundAll });
+}
+
 function applyAudio() {
   for (const tab of tabs.values()) {
-    const muted = tab.audio === "off" ? true : tab.audio === "on" ? false : tab.id !== activeId;
+    const muted = tab.audio === "off" ? true : tab.audio === "on" ? false : !soundAll && tab.id !== activeId;
     if (tab.view.webContents.isAudioMuted() !== muted) tab.view.webContents.setAudioMuted(muted);
   }
 }
@@ -267,7 +280,11 @@ function attachListeners(tab) {
   });
   // Start media as soon as the page is parsed, not after every image and ad
   // has loaded. did-stop-loading tries again; the script runs once per address.
-  on("dom-ready", () => tryAutoplay(wc, tab.rule?.autoplay));
+  on("dom-ready", () => {
+    tryAutoplay(wc, tab.rule?.autoplay);
+    // Clicking a video, image or embedded player scrolls it to the middle (site rule "center").
+    if (tab.rule?.center !== false) wc.executeJavaScript(centerOnClickScript()).catch(() => {});
+  });
   on("did-start-loading", ping);
   on("did-stop-loading", () => {
     ping();
@@ -703,6 +720,13 @@ function buildMenu() {
           click: () => activeWc()?.canGoForward() && activeWc().goForward(),
         },
         { label: "Toggle Mosaic", accelerator: "CmdOrCtrl+Shift+M", click: () => sendUi("toggle-layout") },
+        {
+          id: "sound-all",
+          label: "Sound from All Playing Tabs",
+          type: "checkbox",
+          accelerator: "CmdOrCtrl+Shift+A",
+          click: (item) => setSoundAll(item.checked),
+        },
         { type: "separator" },
         { label: "Find in Page", accelerator: "CmdOrCtrl+F", click: () => sendUi("find-open") },
         { label: "Find Next", accelerator: "CmdOrCtrl+G", click: () => sendUi("find-step", { forward: true }) },
@@ -863,6 +887,7 @@ ipcMain.handle("tab:audio", (_e, id) => {
   emitList();
   return tab.audio;
 });
+ipcMain.handle("audio:all", (_e, on) => setSoundAll(on));
 ipcMain.handle("tab:audio-reset", (_e, id) => {
   const tab = tabs.get(id);
   if (!tab) return null;

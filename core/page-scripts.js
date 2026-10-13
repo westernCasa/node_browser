@@ -290,6 +290,51 @@ function blockAutoplayScript() {
   })()`;
 }
 
+/**
+ * Centers media in the view when the user clicks it: a video, audio player,
+ * image, canvas, or embedded player (YouTube, Vimeo and similar iframes).
+ * Clicks on overlays drawn above a video (custom player controls) count too.
+ * Small images (icons, avatars) are ignored, and media already near the
+ * middle of the view is left where it is. Installed once per page.
+ */
+function centerOnClickScript() {
+  return `(() => {
+    if (window.__scoutCenter) return;
+    window.__scoutCenter = true;
+    const MEDIA = "video, audio, img, picture, canvas, embed, object, iframe";
+    const PLAYER = /youtube\\.com|youtube-nocookie\\.com|youtu\\.be|vimeo\\.com|dailymotion\\.com|twitch\\.tv|soundcloud\\.com|spotify\\.com|bandcamp\\.com|streamable\\.com|wistia|jwplayer|brightcove/;
+    const isMedia = (el) => {
+      if (!el || !el.matches || !el.matches(MEDIA)) return false;
+      if (el.tagName !== "IFRAME") return true;
+      const src = el.getAttribute("src") || el.getAttribute("data-src") || "";
+      const allow = (el.getAttribute("allow") || "") + (el.hasAttribute("allowfullscreen") ? " fullscreen" : "");
+      return PLAYER.test(src) || /autoplay|fullscreen|picture-in-picture/.test(allow);
+    };
+    const center = (el) => {
+      if (!el || !el.getBoundingClientRect) return;
+      if (el.tagName === "SOURCE" || el.tagName === "PICTURE") el = el.querySelector("img") || el.parentElement || el;
+      const r = el.getBoundingClientRect();
+      if (el.tagName !== "AUDIO" && (r.width < 120 || r.height < 80)) return;
+      const vh = window.innerHeight || 0;
+      const offset = r.top + r.height / 2 - vh / 2;
+      if (r.height <= vh && Math.abs(offset) < 40) return;
+      el.scrollIntoView({ behavior: "smooth", block: r.height > vh ? "start" : "center", inline: "nearest" });
+    };
+    window.addEventListener("click", (e) => {
+      const path = e.composedPath ? e.composedPath() : [e.target];
+      let el = path.find(isMedia);
+      if (!el && document.elementsFromPoint) el = document.elementsFromPoint(e.clientX, e.clientY).find(isMedia);
+      if (el) requestAnimationFrame(() => center(el));
+    }, true);
+    // A click inside an embedded player goes to the iframe, not this page;
+    // the page only sees that it lost focus to the iframe.
+    window.addEventListener("blur", () => setTimeout(() => {
+      const a = document.activeElement;
+      if (a && a.tagName === "IFRAME" && isMedia(a)) center(a);
+    }, 0));
+  })()`;
+}
+
 /** Pauses all playing media and marks it, so resumeScript can start it again (playback limit). */
 function pauseForLimitScript() {
   return `(() => {
@@ -317,4 +362,4 @@ function anyPlayingScript() {
   return `[...document.querySelectorAll("video, audio")].some((el) => !el.paused && !el.ended)`;
 }
 
-module.exports = { extractionScript, autoplayScript, blockAutoplayScript, pauseForLimitScript, resumeScript, anyPlayingScript };
+module.exports = { extractionScript, autoplayScript, blockAutoplayScript, centerOnClickScript, pauseForLimitScript, resumeScript, anyPlayingScript };

@@ -6,7 +6,7 @@ import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
 import { createServices } from "./src/services";
-import { autoplayCall, extractCall, MUTE_ALL, PAUSE_FOR_LIMIT, RESUME } from "./src/bridge";
+import { autoplayCall, CENTER_ON_TAP, extractCall, MUTE_ALL, PAUSE_FOR_LIMIT, RESUME } from "./src/bridge";
 import { colors, ui } from "./src/theme";
 import TabView from "./src/components/TabView";
 import Button from "./src/components/Button";
@@ -148,6 +148,7 @@ function Browser({ services }) {
       services.history.record(tab.url, tab.title);
       playback.navigated(tabId); // media of the previous page will not resume
       view.injectJavaScript(autoplayCall(tab.rule.autoplay));
+      if (tab.rule.center !== false) view.injectJavaScript(CENTER_ON_TAP);
       if (tabId !== activeRef.current) {
         view.injectJavaScript(MUTE_ALL); // only the active tab plays sound
         return;

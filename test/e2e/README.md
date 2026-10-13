@@ -23,3 +23,4 @@ On Linux without a display, run each script under `xvfb-run -a`.
 | 07-performance | Page reads while a large article sits idle, time for one read, whether a background tab is throttled and stops drawing |
 | 08-media-and-brave | Brave on by default (also for older settings), first-run notice, address-bar search goes to Brave; main video plays while the page is still loading, small video stays paused, paused video stays paused, late and single-page players, background tab keeps playing muted |
 | 09-playback-limit | Five video tabs: four play, the oldest pauses and is marked; opening it resumes it and pauses the next oldest; closing a playing tab (this used to crash Electron) |
+| 10-center-and-sound | Clicking a video, a video under a player overlay, and an embedded player centers it; a small icon and a site with `center: false` do not; Sound: one / all mutes and unmutes background tabs |

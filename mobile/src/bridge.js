@@ -1,5 +1,5 @@
 // Scripts injected into each tab's WebView, built from core/page-scripts.js.
-const { extractionScript, autoplayScript, blockAutoplayScript, pauseForLimitScript, resumeScript } = require("../../core/page-scripts");
+const { extractionScript, autoplayScript, blockAutoplayScript, centerOnClickScript, pauseForLimitScript, resumeScript } = require("../../core/page-scripts");
 
 // Runs before the page's own scripts: reports text selection and scroll stops,
 // so the app knows when to read the page again.
@@ -57,3 +57,6 @@ export const MUTE_ALL = `document.querySelectorAll("video, audio").forEach(funct
 // Playback limit: pause this tab's media (marked so it can resume), or resume it.
 export const PAUSE_FOR_LIMIT = `${pauseForLimitScript()};\ntrue;`;
 export const RESUME = `${resumeScript()};\ntrue;`;
+
+// Tapping a video, image or embedded player scrolls it to the middle (site rule "center").
+export const CENTER_ON_TAP = `${centerOnClickScript()};\ntrue;`;
