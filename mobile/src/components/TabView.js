@@ -25,6 +25,7 @@ const TabView = forwardRef(function TabView({ tab, style, onMessage, onNav, onLo
       // Autoplay and inline video (autoplay itself follows the site rule).
       mediaPlaybackRequiresUserAction={false}
       allowsInlineMediaPlayback
+      allowsPictureInPictureMediaPlayback
       allowsFullscreenVideo
       // target=_blank and window.open from a tap open a new Scout tab.
       setSupportMultipleWindows

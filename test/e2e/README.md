@@ -25,3 +25,5 @@ On Linux without a display, run each script under `xvfb-run -a`.
 | 09-playback-limit | Five video tabs: four play, the oldest pauses and is marked; opening it resumes it and pauses the next oldest; closing a playing tab (this used to crash Electron) |
 | 10-center-and-sound | Clicking a video, a video under a player overlay, and an embedded player centers it; a small icon and a site with `center: false` do not; Sound: one / all mutes and unmutes background tabs |
 | 11-gestures | Two-finger swipe back and forward, no navigation over a sideways-scrolling area, mouse side buttons, middle-click on a link (background tab), double-click on the tab bar, drag to reorder tabs, middle-click to close a tab |
+| 12-pip-bookmarks-adblock | Ad blocked with a test filter list, photo not blocked, site rule and Settings switch allow it; bookmark star, saved file, address-bar suggestion, Bookmarks shelf; picture-in-picture opens and closes |
+| 13-ask-ai | Ask AI with a fake local model: privacy line, what is sent (page text without navigation or footer), answer shown, follow-up carries the conversation, new page starts over, Ollama not running, server down |

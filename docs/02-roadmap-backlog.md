@@ -12,7 +12,7 @@ Each phase ends at a gate that must pass before the next phase starts. No dates 
 | 1. Keyword engine | Keywords come from the page text, and the user's pins and hides stick | B07-B11 | Text-only articles give relevant keywords; a pinned word survives scrolling | Done |
 | 2. Network layer | Cached, rate-limited search through swappable sources | B12-B15 | An hour of browsing with no search blocks; repeat pages load previews from cache | Done (gate still needs a live check) |
 | 3. Behaviour shell | Per-site rules, research session, WebContentsView, history and find, AI query ideas | B16-B20, B25 | A new site behaviour can be added by editing a rules file, without code changes | Done. Gate passed in testing (rules edited live) |
-| 4. Desktop release readiness | Installable, stable and easy to set up on macOS and Windows | B26-B40 | Scout is your daily research browser for a week with no blocking bugs | Next |
+| 4. Desktop release readiness | Installable, stable and easy to set up on macOS and Windows | B26-B50 | Scout is your daily research browser for a week with no blocking bugs | Next |
 | 5. Mobile app | React Native (Expo) app reusing `core/`; see `06-mobile-plan.md` | M01-M15 | To be set when Phase 5 starts | Planning and groundwork done; build waits for the Phase 4 gate. M01-M02 (try it on a phone) can run now |
 
 ## Backlog
@@ -47,7 +47,7 @@ Effort: XS under 1 hour, S half a day, M 1-2 days, L 3+ days. Finding IDs (C1, K
 | B24 | 5 | Decide the mobile tab model | P2 | M | Done in planning: one WebView per tab, Mosaic on tablets (`06-mobile-plan.md`) |
 | B25 | 3 | Show Wikipedia results first while web results load (web requests are spaced 2.5 s apart, so a search can take 6 s) | P1 | S | Done |
 | B26 | 4 | Check on a real machine: live Wikipedia, DuckDuckGo, Brave, Grok and local model results, and an hour of browsing (Phase 2 gate) | P0 | S | Not started |
-| B27 | 4 | Installable builds for macOS (.dmg) and Windows (.exe) with an app icon | P0 | M | Not started |
+| B27 | 4 | Installable builds for macOS (.dmg) and Windows (.exe) with an app icon | P0 | M | Done (0.4): `npm run dist:mac` / `dist:win`; not signed; automatic updates are B46 |
 | B28 | 4 | Visual editor for site rules in Settings, so no JSON editing is needed | P1 | M | Not started |
 | B29 | 4 | Sleep background tabs that are not playing media, to save memory with many tabs open | P1 | M | Not started |
 | B30 | 4 | First-run setup: start page, search sources, AI option | P2 | S | Not started |
@@ -61,6 +61,16 @@ Effort: XS under 1 hour, S half a day, M 1-2 days, L 3+ days. Finding IDs (C1, K
 | B38 | 4 | Clicking a video, image or embedded player scrolls it to the middle of the view; site rule `center` (desktop and mobile) | P2 | S | Done |
 | B39 | 4 | Standard browser gestures: trackpad swipe back/forward with an edge arrow, three-finger swipe, mouse side buttons, middle-click tab to close, double-click tab bar for a new tab, drag tabs to reorder (mobile gestures: see M16) | P2 | S | Done |
 | B40 | 4 | Google sign-in said "This browser or app may not be secure": upgrade Electron 32 to 44 (Chromium 128 to 152) and use a standard Chrome user agent for the real system; Safari user agent ending on iPhone. To confirm with a real sign-in | P0 | S | Done, to confirm |
+| B41 | 4 | Bookmarks: star and Cmd+D, Bookmarks shelf, bookmarks first in address-bar suggestions; mobile star and list | P1 | S | Done (0.4) |
+| B42 | 4 | Picture-in-picture: toolbar button and Cmd+Shift+P, works for embedded players | P1 | XS | Done (0.4) |
+| B43 | 4 | Ad and tracker blocking (EasyList, EasyPrivacy) with a Settings switch and site rule `adblock` | P1 | M | Done (0.4, desktop; mobile needs a custom build) |
+| B44 | 4 | Ask AI about the current page (local model or Grok): sidebar pane and mobile sheet | P1 | M | Done (0.4) |
+| B45 | 4 | Competitor matrix and gap list (Scout: Current Features doc) | P1 | S | Done |
+| B46 | 4 | Code signing (Apple Developer ID, Windows) and automatic updates | P1 | M | Not started |
+| B47 | 4 | Passwords and autofill | P2 | L | Not started |
+| B48 | 4 | Chrome Web Store extensions | P2 | L | Not started |
+| B49 | 4 | AI chat across tabs and cited summaries of a research session | P2 | M | Not started |
+| B50 | 4 | Sync across devices | P3 | L | Not started |
 
 ## Open checks
 

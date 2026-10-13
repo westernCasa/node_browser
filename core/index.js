@@ -15,6 +15,8 @@ module.exports = {
   ...require("./urls"),
   ...require("./controller"),
   ...require("./playback"),
+  ...require("./bookmarks"),
   AI: require("./ai"),
+  Chat: require("./chat"),
   Rules: require("./rules"),
 };

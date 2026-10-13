@@ -9,7 +9,7 @@ const { SEARCH_URL, normalizeUrl } = require("../../../core/urls");
 
 const looksLikeAddress = (q) => /^[a-z]+:\/\//i.test(q) || (!q.includes(" ") && q.includes("."));
 
-export default function AddressSuggestions({ query, history, getText, lang = "en", onPick }) {
+export default function AddressSuggestions({ query, history, bookmarks, getText, lang = "en", onPick }) {
   const q = String(query || "").trim();
   const [wiki, setWiki] = useState([]);
 
@@ -41,7 +41,8 @@ export default function AddressSuggestions({ query, history, getText, lang = "en
         : { key: "search", label: `Search Brave for “${q}”`, sub: "search.brave.com", url: SEARCH_URL + encodeURIComponent(q) }
     );
   }
-  for (const h of history.search(q, q ? 5 : 8)) rows.push({ key: "h" + h.url, label: h.title || h.url, sub: h.url, url: h.url, history: true });
+  for (const b of bookmarks ? bookmarks.search(q, q ? 3 : 4) : []) rows.push({ key: "b" + b.url, label: "★ " + (b.title || b.url), sub: b.url, url: b.url });
+  for (const h of history.search(q, q ? 5 : 8)) if (!rows.some((r) => r.url === h.url)) rows.push({ key: "h" + h.url, label: h.title || h.url, sub: h.url, url: h.url, history: true });
   for (const w of wiki) if (!rows.some((r) => r.url === w.url)) rows.push({ key: "w" + w.url, label: w.title, sub: "Wikipedia", url: w.url });
   if (!rows.length) return null;
 

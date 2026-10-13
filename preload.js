@@ -51,6 +51,13 @@ contextBridge.exposeInMainWorld("scout", {
   resetTabAudio: (id) => ipcRenderer.invoke("tab:audio-reset", id),
   setSoundAll: (on) => ipcRenderer.invoke("audio:all", on),
   moveTabs: (order) => ipcRenderer.invoke("tab:order", order),
+  pip: (id) => ipcRenderer.invoke("tab:pip", id),
+  askPage: (id, question, history) => ipcRenderer.invoke("ai:ask", id, question, history),
+  chatInfo: () => ipcRenderer.invoke("ai:chat-info"),
+  bookmarkSearch: (q, limit) => ipcRenderer.invoke("bookmarks:search", q, limit),
+  bookmarkHas: (url) => ipcRenderer.invoke("bookmarks:has", url),
+  bookmarkToggle: (url, title) => ipcRenderer.invoke("bookmarks:toggle", url, title),
+  bookmarkRemove: (url) => ipcRenderer.invoke("bookmarks:remove", url),
   onTabEvent: (fn) => {
     ipcRenderer.on("tab:event", (_e, payload) => fn(payload));
   },

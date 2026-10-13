@@ -7,7 +7,7 @@ import Sheet from "./Sheet";
 
 const { hostOf } = require("../../../core/urls");
 
-export default function SuggestionsSheet({ visible, onClose, state, controller, onOpen }) {
+export default function SuggestionsSheet({ visible, onClose, state, controller, onOpen, onAsk }) {
   const [draft, setDraft] = useState("");
   const pins = state.pinned;
   const auto = controller.autoTerms().slice(0, 8);
@@ -16,6 +16,7 @@ export default function SuggestionsSheet({ visible, onClose, state, controller, 
       <View style={{ flexDirection: "row", gap: 6, marginBottom: 8 }}>
         <Button label={state.autoOn ? "Auto" : "Auto off"} active={state.autoOn} onPress={() => controller.setAuto(!state.autoOn)} small />
         <Button label="Search now" onPress={() => controller.crawl()} small />
+        {onAsk ? <Button label="Ask AI" onPress={onAsk} small /> : null}
       </View>
       <Text style={ui.help}>Tap a keyword to pin it. Press and hold to hide it.</Text>
       <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 8 }}>

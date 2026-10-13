@@ -15,8 +15,8 @@ The long-term goal is a "shell for behaviours": the browser's actions (what to r
 | Electron desktop build | Working. Phases 0 to 3 of the roadmap are done. Next: Phase 4, desktop release readiness. |
 | Mobile app (React Native, Expo) | Planned (`06-mobile-plan.md`). Groundwork done: shared `core/` and a walking-skeleton app in `mobile/` that compiles for iOS and Android. Not yet run on a phone (M01). Full build waits for the Phase 4 gate. |
 | Old Tauri build | Does not compile. Replaced by the React Native plan; to be removed (M15). |
-| Backlog | Desktop: 40 items, 30 done, open B26-B31 (Phase 4). B21-B24 (Tauri) replaced. Mobile: M01-M15 in `06-mobile-plan.md`. |
-| Testing | 11 end-to-end test scripts (111 checks) in `test/e2e`, run in Electron 44.7.0 with search sources and AI servers stubbed. Live results still need a check on a real machine (B26). |
+| Backlog | Desktop: 45 items, 35 done, open B26-B31 (Phase 4). B21-B24 (Tauri) replaced. Mobile: M01-M15 in `06-mobile-plan.md`. |
+| Testing | 13 end-to-end test scripts (130 checks) in `test/e2e`, run in Electron 44.7.0 with search sources and AI servers stubbed. Live results still need a check on a real machine (B26). |
 
 ## Where things are
 
@@ -79,6 +79,8 @@ The end-to-end tests are described in `test/e2e/README.md`.
 - **AI query ideas (Settings).** Optional. A local model (Ollama or LM Studio) or Grok suggests up to 2 extra queries from pinned keywords, page keywords and the title. Never sent: page text or addresses.
 - **Search sources (Settings).** Wikipedia for every search, plus web results from the first working source: Brave Search API (the default; add your key), SearXNG, then DuckDuckGo. Searches typed in the address bar open Brave Search.
 - **Autoplay.** The main video or audio on a page starts as soon as the page is parsed, with sound in the active tab. Media you pause stays paused. Up to 4 tabs play at once; a fifth pauses the oldest, which resumes when you open it. "Sound: all" in the toolbar lets you hear all of them at once.
+- **Bookmarks, picture-in-picture, ad and tracker blocking, Ask AI** (0.4). See the README for details.
+- **Installer.** `npm run dist:mac` builds a .dmg; `npm run dist:win` a Windows installer. Not signed yet; no automatic updates yet.
 - **Center on click.** Clicking a video, image or embedded player scrolls it to the middle of the view (site rule `center` to turn off).
 - **Site rules (Settings, or File → Edit Site Rules).** Per-site autoplay, sound, popups, Mosaic, whether the page is read for keywords, and which parts of the page to read or skip.
 - **Find, zoom and history.** Find in page, per-tab zoom, address-bar suggestions from history, and a History shelf in the Library.
@@ -103,6 +105,9 @@ Desktop: two-finger swipe for back and forward (with an arrow at the page edge),
 | Cmd/Ctrl+Y | History |
 | Cmd/Ctrl+Shift+M | Mosaic on or off |
 | Cmd/Ctrl+Shift+A | Sound from all playing tabs, or only the current one |
+| Cmd/Ctrl+D | Bookmark the page |
+| Cmd/Ctrl+Shift+B | Bookmarks |
+| Cmd/Ctrl+Shift+P | Picture-in-picture |
 | Cmd/Ctrl+Shift+U | Mute or unmute the tab |
 | Cmd/Ctrl+Shift+S, or S on a page | Screenshot the tab |
 
@@ -114,6 +119,8 @@ Desktop: two-finger swipe for back and forward (with an arrow at the page edge),
 | 2026-10-10 | Mobile (Tauri) is on hold until the desktop app passes Phase 4 (daily use for a week with no blocking bugs). |
 | 2026-10-10 | While desktop testing waits: plan the mobile app and lay groundwork now; the full mobile build still waits for the Phase 4 gate. |
 | 2026-10-12 | Media plays in up to 4 tabs at once (desktop and mobile). A toolbar toggle lets all of them play sound (desktop and Android; iPhone and iPad allow only one video with sound at a time). |
+| 2026-10-13 | Competitor matrix made (Scout: Current Features doc). Closed the five "Close now" gaps in 0.4: installer, bookmarks, AI chat about the page, ad and tracker blocking, picture-in-picture. |
+| 2026-10-13 | Ask AI sends the page's text to the chosen model only when the user asks; AI query ideas still never send page text. |
 | 2026-10-13 | Electron upgraded from 32 to 44 (Chromium 152) and the user agent made a standard Chrome one, after Google sign-in refused Scout as "not secure". |
 | 2026-10-12 | Clicking media centers it in the view, on by default, per-site rule `center`. |
 | 2026-10-12 | Mosaic is available on phones too (up to 4 tiles in portrait), not only tablets. |

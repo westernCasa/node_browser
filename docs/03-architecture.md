@@ -118,6 +118,14 @@ Result cards that already have an image (often Wikipedia and Brave) show it dire
 - **Tab bar (`renderer/app.js`).** `auxclick` with the middle button closes a tab; `dblclick` on the empty bar opens one; HTML drag and drop reorders tabs and sends the new order (`tab:order`), which rebuilds the `tabs` map, so Mosaic follows the same order.
 - **Mobile (`mobile/App.js`, `SwipeRow.js`).** `PanResponder` on the address bar row (only for clearly sideways moves of 60 pt or more, not while typing) switches tabs; tab rows in the tab list close on a left swipe past 90 pt; long press on the tab count opens a tab; `BackHandler` sends the Android back button to the page. Edge swipes and pull to refresh come from the WebView (`allowsBackForwardNavigationGestures`, `pullToRefreshEnabled`, iOS).
 
+## Bookmarks, picture-in-picture, ad blocking, Ask AI (0.4)
+
+- **Bookmarks (`core/bookmarks.js`).** `BookmarkStore` over the storage adapter (`bookmarks.json`, newest first): add, remove, toggle, has, search. Desktop IPC `bookmarks:search|has|toggle|remove`; the renderer paints ☆/★ when the active tab's address changes and merges up to 4 bookmark matches ahead of history in the address-bar list. Mobile uses the same store.
+- **Picture-in-picture.** `pipScript()` picks the playing video, else the largest one, and calls `requestPictureInPicture()` (or exits). `main.js` runs it in every frame with the user-gesture flag (`WebFrameMain.executeJavaScript(code, true)`), so embedded players work; IPC `tab:pip`, menu Cmd/Ctrl+Shift+P.
+- **Ad and tracker blocking (`adblock.js`, desktop only).** Ghostery's engine (`@ghostery/adblocker-electron` 2.19) with the prebuilt ads-and-tracking lists, cached in `userData/adblock.bin` and refreshed after 7 days (the old copy is kept as a fallback when offline). Scout installs its own `session.webRequest.onBeforeRequest` listener and asks the engine per request, so the Settings switch and the site rule `adblock: false` apply at once; main-frame navigations are never blocked. Network blocking only (no cosmetic hiding). Counts per tab and in total.
+- **Ask AI (`core/chat.js`).** `askPage()` sends a system prompt, the page message (title, address, selection, readable text up to 20,000 characters from `readableTextScript()`: the article or main element without navigation, footers, forms and scripts), up to 8 earlier messages and the question to the configured OpenAI-compatible endpoint (`core/ai.js` `endpoint`). Works when a model is configured, whether or not AI query ideas are switched on. One conversation per page address in the UI. IPC `ai:ask`, `ai:chat-info`. Mobile reads the page text through the WebView bridge (`readCall`).
+- **Installer.** electron-builder 26.17 (`build` in `package.json`): mac dmg + zip, Windows NSIS, Linux AppImage; icon `build/icon.png` (rendered from `build/icon.html`). Packaged files: main process, preloads, `core/`, `renderer/`.
+
 ## User agent
 
 `main.js` builds the user agent at startup from the computer's system and Scout's real Chromium version, in the reduced form Chrome uses (for example `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36`), and sets it as `app.userAgentFallback`, so tabs and Scout's own requests use it. It leaves out Electron's "Electron/x" and app-name parts. Before 2026-10-13 it was a fixed string claiming Windows and Chrome 128 on every computer, and Google sign-in answered "This browser or app may not be secure". On iPhone and iPad the WebView's `applicationNameForUserAgent` is set to Safari's ending (`Version/N.0 Mobile/15E148 Safari/604.1`), which WKWebView otherwise leaves out. Android keeps the system WebView's default.
@@ -146,6 +154,7 @@ Each tab stores its resolved rule (`tab.rule`), recomputed on every navigation:
 | `suggest` | `pageKeywords()` returns `disabled`; the sidebar shows a message and does not search with page words |
 | `mosaic` | `applyLayout()` leaves the tab out of the grid unless active |
 | `center` | `centerOnClickScript()` injected at DOM ready unless `false` (mobile: after load) |
+| `adblock` | `adblock.js` request listener skips blocking for tabs whose rule says `false` |
 | `extract.include` / `extract.skip` | Passed into the extraction script; include text is scored with weight 3 (`focus` field), skip selectors are added to the ignored areas. Invalid selectors are dropped |
 
 ## Research sessions
@@ -177,7 +186,8 @@ The renderer stores hidden keywords and the Auto setting in local storage.
 
 | Group | Channels |
 | --- | --- |
-| Tabs | `tab:create`, `tab:close`, `tab:activate`, `tab:navigate`, `tab:back`, `tab:forward`, `tab:reload`, `tab:audio`, `tab:audio-reset`, `tab:clicked`, `tab:hotkey`, `tab:activity`, `tab:gesture`, `tab:order`, `audio:all` |
+| Tabs | `tab:create`, `tab:close`, `tab:activate`, `tab:navigate`, `tab:back`, `tab:forward`, `tab:reload`, `tab:audio`, `tab:audio-reset`, `tab:clicked`, `tab:hotkey`, `tab:activity`, `tab:gesture`, `tab:order`, `tab:pip`, `audio:all` |
+| Bookmarks and Ask AI | `bookmarks:search`, `bookmarks:has`, `bookmarks:toggle`, `bookmarks:remove`, `ai:ask`, `ai:chat-info` |
 | Layout | `layout:set`, `layout:sidebar`, `layout:library` |
 | Find, zoom, history | `find:start`, `find:stop`, `tab:zoom`, `history:search`, `history:clear`, `history:remove` |
 | Site rules | `rules:edit`, `rules:reload` |

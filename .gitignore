@@ -2,3 +2,4 @@ node_modules/
 mobile/node_modules/
 mobile/dist-check/
 mobile/.expo/
+dist/

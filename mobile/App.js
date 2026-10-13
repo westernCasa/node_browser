@@ -6,13 +6,14 @@ import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
 import { createServices } from "./src/services";
-import { autoplayCall, CENTER_ON_TAP, extractCall, MUTE_ALL, PAUSE_FOR_LIMIT, RESUME, UNMUTE } from "./src/bridge";
+import { autoplayCall, CENTER_ON_TAP, extractCall, MUTE_ALL, PAUSE_FOR_LIMIT, readCall, RESUME, UNMUTE } from "./src/bridge";
 import { colors, ui } from "./src/theme";
 import TabView from "./src/components/TabView";
 import Button from "./src/components/Button";
 import SuggestionsSheet from "./src/components/SuggestionsSheet";
 import TabsSheet from "./src/components/TabsSheet";
 import AddressSuggestions from "./src/components/AddressSuggestions";
+import AskSheet from "./src/components/AskSheet";
 import TrailSheet from "./src/components/TrailSheet";
 import SettingsSheet from "./src/components/SettingsSheet";
 
@@ -75,6 +76,7 @@ function Browser({ services }) {
   const [address, setAddress] = useState("");
   const [editing, setEditing] = useState(false);
   const [typed, setTyped] = useState(false); // typed since focusing the address bar
+  const [bookmarkVersion, setBookmarkVersion] = useState(0); // re-render after bookmark changes
   const [ctrlState, setCtrlState] = useState(null);
   const [trailVersion, setTrailVersion] = useState(0);
 
@@ -112,6 +114,20 @@ function Browser({ services }) {
     [services]
   );
   const state = ctrlState || controller.state;
+
+  // Page text for Ask AI, read through the WebView (same reply channel as extraction).
+  const readPage = (tab) =>
+    new Promise((resolve, reject) => {
+      const view = refs.current.get(tab.id);
+      if (!view) return reject(new Error("Tab is not ready"));
+      const id = String(requestSeq++);
+      const timer = setTimeout(() => {
+        pending.current.delete(id);
+        reject(new Error("The page did not answer"));
+      }, 5000);
+      pending.current.set(id, { resolve, reject, timer });
+      view.injectJavaScript(readCall(id));
+    });
 
   const updateTab = useCallback((id, patch) => setTabs((list) => list.map((t) => (t.id === id ? { ...t, ...patch } : t))), []);
 
@@ -318,6 +334,15 @@ function Browser({ services }) {
           returnKeyType="go"
           selectTextOnFocus
         />
+        <Button
+          label={active && services.bookmarks.has(active.url) ? "★" : "☆"}
+          small
+          onPress={() => {
+            if (!active || !/^https?:/i.test(active.url || "")) return;
+            services.bookmarks.toggle(active.url, active.title);
+            setBookmarkVersion((v) => v + 1);
+          }}
+        />
         {/* Tap: tab list. Press and hold: new tab. */}
         <Button label={String(tabs.length)} small onPress={() => setSheet("tabs")} onLongPress={() => addTab(HOME_URL)} />
       </View>
@@ -325,6 +350,7 @@ function Browser({ services }) {
         <AddressSuggestions
           query={typed ? address : ""}
           history={services.history}
+          bookmarks={services.bookmarks}
           getText={services.net.getText}
           lang={services.settings.providers.wikipedia?.lang}
           onPick={(url) => {
@@ -388,7 +414,8 @@ function Browser({ services }) {
         </Text>
       </View>
 
-      <SuggestionsSheet visible={sheet === "suggest"} onClose={() => setSheet(null)} state={state} controller={controller} onOpen={openResult} />
+      <SuggestionsSheet visible={sheet === "suggest"} onClose={() => setSheet(null)} state={state} controller={controller} onOpen={openResult} onAsk={() => setSheet("ask")} />
+      <AskSheet visible={sheet === "ask"} onClose={() => setSheet(null)} tab={active} services={services} readPage={readPage} />
       <TabsSheet
         visible={sheet === "tabs"}
         onClose={() => setSheet(null)}
@@ -399,6 +426,16 @@ function Browser({ services }) {
           setSheet(null);
         }}
         onCloseTab={closeTab}
+        bookmarks={services.bookmarks}
+        bookmarkVersion={bookmarkVersion}
+        onOpenBookmark={(url) => {
+          setSheet(null);
+          addTab(url);
+        }}
+        onRemoveBookmark={(url) => {
+          services.bookmarks.remove(url);
+          setBookmarkVersion((v) => v + 1);
+        }}
         onNewTab={() => {
           addTab(HOME_URL);
           setSheet(null);

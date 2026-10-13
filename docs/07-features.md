@@ -1,6 +1,6 @@
 # Scout: Current Features
 
-As of 2026-10-13. The editable version is the "Scout: Current Features" doc: https://claude.ai/code/artifact/f8e89633-9036-4b9a-9726-10aede2884fd
+As of 2026-10-13 (Scout 0.4). The editable version is the "Scout: Current Features" doc: https://claude.ai/code/artifact/f8e89633-9036-4b9a-9726-10aede2884fd
 
 Scout is a research browser that reads the page you are on, picks out keywords, and suggests the next pages to read. It also plays media in several tabs at once and keeps a trail of your research.
 
@@ -8,6 +8,14 @@ Scout is a research browser that reads the page you are on, picks out keywords, 
 | --- | --- |
 | Desktop (macOS, Windows, Linux) | Working. Electron 44 (Chromium 152). Run from Terminal; no installer yet |
 | Mobile (iPhone, Android) | Working in Expo Go on iPhone, still being tested. Same search and keyword logic as desktop |
+
+## New in 0.4
+
+- Bookmarks: star or Cmd+D, Bookmarks shelf (Cmd+Shift+B), bookmarks first in address-bar suggestions; phone star and list.
+- Picture-in-picture: PiP button or Cmd+Shift+P, also for embedded players.
+- Ad and tracker blocking (desktop): EasyList and EasyPrivacy, weekly updates, Settings switch, site rule `adblock`.
+- Ask AI about the current page (sidebar Ask; phone: Suggestions → Ask AI), local model or Grok; page text sent only when asked.
+- Installer: `npm run dist:mac` (.dmg with icon), `npm run dist:win`. Not signed; no automatic updates yet.
 
 ## Desktop: tabs and layout
 
@@ -76,5 +84,6 @@ Scout is a research browser that reads the page you are on, picks out keywords, 
 ## Not built yet or still to confirm
 
 - Live check of results and an hour of browsing (B26); Google sign-in after the upgrade (B40); iPhone retest (M01, M16).
-- Installers (B27), site rules editor (B28), sleeping background tabs (B29), first-run setup (B30), error log (B31).
+- Code signing and automatic updates (B46), passwords (B47), extensions (B48), chat across tabs (B49), sync (B50), ad blocking on the phone.
+- Site rules editor (B28), sleeping background tabs (B29), first-run setup (B30), error log (B31).
 - Media in the background when the phone app is not in front (needs a custom build, not Expo Go).

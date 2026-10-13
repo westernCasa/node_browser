@@ -30,6 +30,7 @@
           <input id="omni" type="text" spellcheck="false" placeholder="Search or enter address" list="history-list" autocomplete="off" />
           <datalist id="history-list"></datalist>
         </form>
+        <button class="icon" id="star-btn" title="Bookmark this page (Cmd/Ctrl+D)">☆</button>
         <button class="chip" id="zoom-badge" title="Zoom. Click to reset to 100%" hidden>100%</button>
         <div class="findbar" id="findbar" hidden>
           <input id="find-input" type="text" spellcheck="false" placeholder="Find in page" />
@@ -40,6 +41,7 @@
         </div>
         <button class="chip" id="layout-btn" title="Tile every tab so media can play together">Mosaic</button>
         <button class="chip" id="sound-btn" title="Hear every playing tab at once (up to 4), not only the current one. Shortcut: Cmd/Ctrl+Shift+A">Sound: one</button>
+        <button class="chip" id="pip-btn" title="Picture in picture for this page's video. Shortcut: Cmd/Ctrl+Shift+P">PiP</button>
         <button class="chip" id="shot-btn" title="Shortcut: S">Shot <kbd>S</kbd></button>
         <button class="chip" id="save-btn">Save</button>
         <button class="chip" id="media-btn">Media</button>
@@ -57,6 +59,7 @@
           <div class="rail-actions">
             <button class="chip active" id="auto-btn" title="Re-search when the visible page changes">Auto</button>
             <button class="chip" id="refresh-suggest" title="Search now">Crawl</button>
+            <button class="chip" id="ask-btn" title="Ask AI about this page">Ask</button>
             <button class="chip" id="trail-btn" title="This research session: pages read, recurring keywords">Trail</button>
             <button class="chip" id="sources-btn" title="Search sources and site rules">Settings</button>
           </div>
@@ -71,6 +74,29 @@
         <div class="status" id="suggest-status">Waiting for a page to settle.</div>
         <div class="rule-line" id="rule-line" hidden></div>
         <div class="results" id="results"></div>
+      </div>
+      <div id="ask-pane" hidden>
+        <div class="rail-head">
+          <div>
+            <p class="kicker">This page</p>
+            <h1>Ask AI</h1>
+          </div>
+          <button class="chip" id="ask-back">Back</button>
+        </div>
+        <p class="help" id="ask-privacy"></p>
+        <div class="actions-row" id="ask-quick">
+          <button class="chip" data-q="Summarize this page in 5 bullet points.">Summarize</button>
+          <button class="chip" data-q="What are the key facts, names and dates on this page?">Key facts</button>
+          <button class="chip" data-q="What questions does this page leave open, and what should I read next to answer them?">What next?</button>
+        </div>
+        <div id="ask-log"></div>
+        <form id="ask-form" class="ask-form">
+          <textarea id="ask-input" rows="3" placeholder="Ask about this page (Enter to send, Shift+Enter for a new line)"></textarea>
+          <div class="actions-row">
+            <button class="chip" type="submit" id="ask-send">Send</button>
+            <button class="chip" type="button" id="ask-clear">Clear</button>
+          </div>
+        </form>
       </div>
       <div id="trail-pane" hidden>
         <div class="rail-head">
@@ -132,6 +158,19 @@
           <div class="actions"><button id="ai-test" title="Save, list the server's models and try one request">Test</button></div>
           <p class="help" id="ai-privacy"></p>
         </div>
+        <div class="rail-head rules-head">
+          <div>
+            <p class="kicker">Privacy</p>
+            <h1>Ads and trackers</h1>
+          </div>
+        </div>
+        <div class="source" id="adblock-box">
+          <div class="top">
+            <label class="toggle"><input type="checkbox" id="adblock-enabled" /> Block ads and trackers</label>
+          </div>
+          <div class="state" id="adblock-state"></div>
+          <p class="help">Uses the EasyList and EasyPrivacy lists, updated weekly. To allow ads on one site, add a site rule with <code>"adblock": false</code>.</p>
+        </div>
         <button class="chip wide" id="sources-save">Save</button>
         <p class="help" id="sources-msg"></p>
         <div class="rail-head rules-head">
@@ -161,6 +200,7 @@
         <button class="chip" data-folder="screenshots">Shots</button>
         <button class="chip" data-folder="media">Media</button>
         <button class="chip" data-folder="saves">Saves</button>
+        <button class="chip" data-folder="bookmarks">Bookmarks</button>
         <button class="chip" data-folder="history">History</button>
       </div>
       <button class="chip" id="library-folder">Show folder</button>

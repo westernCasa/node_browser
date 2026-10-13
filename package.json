@@ -1,7 +1,7 @@
 {
   "name": "scout",
-  "version": "0.3.0",
-  "description": "Research browser with multi-tab mosaic playback and keyword-based next-page suggestions.",
+  "version": "0.4.0",
+  "description": "Research browser that suggests the next pages to read, plays media across tabs, and keeps a research trail.",
   "main": "main.js",
   "author": "",
   "license": "MIT",
@@ -18,13 +18,73 @@
     "test:rules": "node test/rules-demo.js",
     "test:ai": "node test/ai-demo.js",
     "test:controller": "node test/controller-demo.js",
-    "test:playback": "node test/playback-demo.js"
+    "test:playback": "node test/playback-demo.js",
+    "test:bookmarks": "node test/bookmarks-demo.js",
+    "dist": "electron-builder",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.8.0",
-    "electron": "^44.7.0"
+    "electron": "^44.7.0",
+    "electron-builder": "^26.17.0"
   },
   "dependencies": {
+    "@ghostery/adblocker-electron": "2.19",
     "@tauri-apps/api": "^2.8.0"
+  },
+  "productName": "Scout",
+  "build": {
+    "appId": "app.scout.browser",
+    "productName": "Scout",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "view-preload.js",
+      "fs-storage.js",
+      "adblock.js",
+      "core/**",
+      "renderer/**",
+      "!renderer/tauri-bridge.js",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "icon": "build/icon.png",
+      "target": [
+        {
+          "target": "dmg"
+        },
+        {
+          "target": "zip"
+        }
+      ]
+    },
+    "dmg": {
+      "title": "Scout"
+    },
+    "win": {
+      "icon": "build/icon.png",
+      "target": [
+        {
+          "target": "nsis"
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "linux": {
+      "icon": "build/icon.png",
+      "target": [
+        "AppImage"
+      ],
+      "category": "Network"
+    }
   }
 }

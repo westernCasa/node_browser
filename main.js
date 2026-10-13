@@ -7,12 +7,15 @@ const { rankTerms, SessionDF } = require("./core/keywords");
 const { PROVIDERS, Registry, defaultSettings, SETTINGS_VERSION } = require("./core/providers");
 const Rules = require("./core/rules");
 const AI = require("./core/ai");
+const Chat = require("./core/chat");
 const { ResearchStore } = require("./core/research");
 const { HistoryStore } = require("./core/history");
+const { BookmarkStore } = require("./core/bookmarks");
+const { createAdblock } = require("./adblock");
 const { createNet } = require("./core/net");
 const { createSuggest } = require("./core/suggest");
 const { createPreview } = require("./core/preview");
-const { extractionScript, autoplayScript, blockAutoplayScript, centerOnClickScript, pauseForLimitScript, resumeScript, anyPlayingScript } = require("./core/page-scripts");
+const { extractionScript, autoplayScript, blockAutoplayScript, centerOnClickScript, pipScript, readableTextScript, pauseForLimitScript, resumeScript, anyPlayingScript } = require("./core/page-scripts");
 const { PlaybackLimiter } = require("./core/playback");
 const { fsStorage } = require("./fs-storage");
 const { normalizeUrl } = require("./core/urls");
@@ -85,6 +88,8 @@ function watchRules() {
 // ---- History (B19) ----
 // core/history.js, stored in userData/history.json. Created when the app is ready.
 let historyStore = null;
+let bookmarkStore = null;
+let adblock = null;
 
 function ruleFor(url) {
   return Rules.resolve(siteRules, url);
@@ -474,6 +479,7 @@ function loadSettings() {
     local: { ...AI.AI_DEFAULTS.local, ...(ai.local || {}) },
     grok: { model: ai.grok?.model || AI.AI_DEFAULTS.grok.model, key: decryptSecret(ai.grok?.key) },
   };
+  base.adblock = raw.adblock !== false;
   settingsCache = base;
   return settingsCache;
 }
@@ -488,6 +494,7 @@ function saveSettings(next) {
     for (const k of allowed) if (k in incoming) current.providers[id][k] = k === "enabled" ? Boolean(incoming[k]) : String(incoming[k] || "").trim();
     if (JSON.stringify(current.providers[id]) !== before) search.reset(id);
   }
+  if (next && "adblock" in next) current.adblock = Boolean(next.adblock);
   const inAi = next?.ai;
   if (inAi) {
     const a = current.ai;
@@ -500,7 +507,7 @@ function saveSettings(next) {
     if (inAi.grok?.key !== undefined) a.grok.key = String(inAi.grok.key).trim();
     if (JSON.stringify(a) !== before) aiReset();
   }
-  const disk = { version: SETTINGS_VERSION, providers: {} };
+  const disk = { version: SETTINGS_VERSION, adblock: current.adblock !== false, providers: {} };
   for (const [id, conf] of Object.entries(current.providers)) {
     const copy = { ...conf };
     for (const key of secretFields(id)) {
@@ -534,6 +541,8 @@ function publicSettings() {
     providers,
     ai: { enabled: a.enabled, provider: a.provider, local: { ...a.local }, grok: { model: a.grok.model, keySet: Boolean(a.grok.key) } },
     aiStatus: { ...aiState },
+    adblock: s.adblock !== false,
+    adblockStats: adblock ? adblock.stats() : { status: "off", blocked: 0 },
     meta: Object.values(PROVIDERS).map((p) => ({ id: p.id, label: p.label, role: p.role, fields: p.fields, setupHint: p.setupHint || "" })),
     encrypted: safeStorage.isEncryptionAvailable(),
   };
@@ -703,6 +712,8 @@ function buildMenu() {
         },
         { label: "Close Tab", accelerator: "CmdOrCtrl+W", click: () => activeId && closeTab(activeId) },
         { label: "Open Location", accelerator: "CmdOrCtrl+L", click: () => sendUi("focus-omni") },
+        { label: "Bookmark This Page", accelerator: "CmdOrCtrl+D", click: () => sendUi("bookmark-toggle") },
+        { label: "Bookmarks", accelerator: "CmdOrCtrl+Shift+B", click: () => sendUi("open-bookmarks") },
         { type: "separator" },
         { label: "Screenshot Tab", accelerator: "CmdOrCtrl+Shift+S", click: () => runShotFromMain(activeId) },
         { label: "Reset Site Permissions", click: resetPermissions },
@@ -729,6 +740,13 @@ function buildMenu() {
           click: () => activeWc()?.canGoForward() && activeWc().goForward(),
         },
         { label: "Toggle Mosaic", accelerator: "CmdOrCtrl+Shift+M", click: () => sendUi("toggle-layout") },
+        {
+          label: "Picture in Picture",
+          accelerator: "CmdOrCtrl+Shift+P",
+          click: async () => {
+            if ((await togglePip(activeId)) === "none") sendUi("error", { message: "No video on this page for picture-in-picture." });
+          },
+        },
         {
           id: "sound-all",
           label: "Sound from All Playing Tabs",
@@ -841,10 +859,23 @@ app.whenReady().then(() => {
     }
   });
   installPermissionHandlers(session.defaultSession);
+  // Ad and tracker blocking (adblock.js): on unless turned off in Settings or by a site rule.
+  adblock = createAdblock({
+    userData: app.getPath("userData"),
+    fetch: (...args) => globalThis.fetch(...args),
+    isEnabled: () => loadSettings().adblock !== false,
+    isAllowedFor: (wcId) => {
+      for (const tab of tabs.values()) if (tab.view.webContents.id === wcId) return tab.rule?.adblock !== false;
+      return true;
+    },
+  });
+  adblock.install(session.defaultSession);
+  adblock.load();
   loadRules();
   watchRules();
   research = new ResearchStore(fsStorage(path.join(app.getPath("userData"), "sessions")));
   historyStore = new HistoryStore(fsStorage(app.getPath("userData")));
+  bookmarkStore = new BookmarkStore(fsStorage(app.getPath("userData")));
   buildMenu();
   createWindow();
 });
@@ -894,6 +925,52 @@ ipcMain.on("tab:clicked", (_e, id) => {
 });
 // Plain-key shortcuts pressed inside a web page (sent by view-preload.js only
 // when focus is not in a text field).
+// Picture-in-picture for the active tab's main video. Tries the page itself,
+// then embedded players (YouTube and similar iframes). Runs as a user gesture,
+// which browsers require before opening picture-in-picture.
+async function togglePip(id) {
+  const tab = tabs.get(id || activeId);
+  if (!tab) return "none";
+  const wc = tab.view.webContents;
+  let frames = [];
+  try {
+    frames = wc.mainFrame.framesInSubtree;
+  } catch (_) {}
+  for (const f of frames) {
+    try {
+      const r = await f.executeJavaScript(pipScript(), true);
+      if (r && r !== "none") return r;
+    } catch (_) {}
+  }
+  return "none";
+}
+ipcMain.handle("tab:pip", (_e, id) => togglePip(id));
+
+// Ask AI about the current page (core/chat.js). Sends the page's readable text,
+// title and address to the model the user set up under Settings → AI.
+ipcMain.handle("ai:ask", async (_e, id, question, history) => {
+  const tab = tabs.get(id || activeId);
+  if (!tab) return { ok: false, error: "No page open." };
+  const ai = loadSettings().ai;
+  if (!Chat.canChat(ai)) return { ok: false, error: "Set up a model first under Settings → AI: a local model (Ollama or LM Studio) or a Grok API key." };
+  let page;
+  try {
+    page = await tab.view.webContents.executeJavaScript(readableTextScript(Chat.PAGE_CHARS), true);
+  } catch (err) {
+    return { ok: false, error: "Could not read the page: " + String(err.message || err) };
+  }
+  try {
+    const answer = await Chat.askPage({ question, page, history }, ai, { fetch: (...a) => globalThis.fetch(...a) });
+    return { ok: true, answer, url: page.url, chars: page.text.length };
+  } catch (err) {
+    return { ok: false, error: String(err.message || err) };
+  }
+});
+ipcMain.handle("ai:chat-info", () => {
+  const ai = loadSettings().ai;
+  return { ready: Chat.canChat(ai), provider: ai.provider, model: AI.endpoint(ai).model };
+});
+
 // Gestures (view-preload.js): trackpad swipe and mouse side buttons.
 function gestureNav(tab, dir) {
   const wc = tab?.view.webContents;
@@ -949,6 +1026,14 @@ ipcMain.handle("find:start", (_e, id, text, opts = {}) => {
 ipcMain.handle("find:stop", (_e, id) => tabs.get(id)?.view.webContents.stopFindInPage("keepSelection"));
 ipcMain.handle("tab:zoom", (_e, id, step) => zoomTab(tabs.get(id), Number(step) || 0));
 ipcMain.handle("history:search", (_e, q, limit) => historyStore.search(q, limit));
+// Bookmarks (core/bookmarks.js).
+ipcMain.handle("bookmarks:search", (_e, q, limit) => bookmarkStore.search(q, limit));
+ipcMain.handle("bookmarks:has", (_e, url) => bookmarkStore.has(url));
+ipcMain.handle("bookmarks:toggle", (_e, url, title) => bookmarkStore.toggle(url, title));
+ipcMain.handle("bookmarks:remove", (_e, url) => {
+  bookmarkStore.remove(url);
+  return true;
+});
 ipcMain.handle("history:clear", () => {
   historyStore.clear();
   return true;

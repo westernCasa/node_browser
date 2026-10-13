@@ -518,3 +518,20 @@ html, body {
 .tab.dragging { opacity: 0.4; }
 .tab.drop-before { box-shadow: inset 2px 0 0 #7aa2ff; }
 .tab.drop-after { box-shadow: inset -2px 0 0 #7aa2ff; }
+
+/* Bookmark star */
+#star-btn.on { color: #f5c542; }
+
+/* Ask AI pane */
+#ask-log { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; max-height: calc(100vh - 360px); overflow-y: auto; }
+.ask-msg { white-space: pre-wrap; font-size: 13px; line-height: 1.45; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line, #2e2e2e); }
+.ask-msg.user { align-self: flex-end; background: #1f2a44; max-width: 90%; }
+.ask-msg.assistant { background: #1a1a1a; }
+.ask-msg.pending { color: #8a8a8a; font-style: italic; }
+.ask-msg.error { color: #ff8a80; }
+.ask-form textarea { width: 100%; box-sizing: border-box; resize: vertical; font: inherit; font-size: 13px; padding: 8px; border-radius: 6px; border: 1px solid var(--line, #2e2e2e); background: #121212; color: #ececec; }
+
+/* Suggestions header: title on top, one row of actions under it (5 buttons do not fit beside the title). */
+#suggest-pane > .rail-head { flex-direction: column; align-items: stretch; }
+#suggest-pane .rail-actions { justify-content: flex-start; flex-wrap: wrap; gap: 3px; }
+#suggest-pane .rail-actions .chip { padding: 0 6px; }

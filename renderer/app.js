@@ -1,6 +1,7 @@
 const api = window.scout || null;
 
 const tabsEl = document.getElementById("tabs");
+let starUrl = ""; // address the bookmark star was last painted for
 // Double-click the empty part of the tab bar to open a new tab.
 tabsEl.addEventListener("dblclick", (e) => {
   if (e.target !== tabsEl) return;
@@ -132,6 +133,7 @@ function renderZoom() {
 
 function renderTabs() {
   renderRuleLine();
+  if (typeof paintStar === "function" && (tabs.find((t) => t.id === activeId)?.url || "") !== starUrl) paintStar();
   renderZoom();
   // Find bar open while switching tabs: clear the old tab, search the new one.
   if (typeof findbar !== "undefined" && !findbar.hidden && findTabId && findTabId !== activeId) {
@@ -743,11 +745,64 @@ async function renderHistoryShelf(filter = "") {
   input.focus();
 }
 
+// Bookmarks shelf: search, open, remove.
+async function renderBookmarksShelf() {
+  libraryList.innerHTML = "";
+  const tools = document.createElement("div");
+  tools.className = "history-tools";
+  const input = document.createElement("input");
+  input.placeholder = "Search bookmarks";
+  tools.append(input);
+  libraryList.appendChild(tools);
+  const list = document.createElement("div");
+  list.className = "history-list";
+  libraryList.appendChild(list);
+  const fill = async () => {
+    const rows = await api.bookmarkSearch(input.value, 500);
+    list.innerHTML = rows.length ? "" : `<p class="help">No bookmarks yet. Press ☆ next to the address bar, or Cmd/Ctrl+D, to add the page you are on.</p>`;
+    for (const r of rows) {
+      const row = document.createElement("div");
+      row.className = "history-row";
+      const text = document.createElement("div");
+      text.innerHTML = `<div class="t">${escapeHtml(r.title || r.url)}</div><div class="u">${escapeHtml(r.url)}</div>`;
+      const when = document.createElement("span");
+      when.className = "when";
+      when.textContent = whenText(r.addedAt);
+      const open = document.createElement("button");
+      open.textContent = "Open";
+      open.addEventListener("click", async () => {
+        await closeLibrary();
+        api.createTab(r.url);
+      });
+      const del = document.createElement("button");
+      del.textContent = "Remove";
+      del.addEventListener("click", async () => {
+        await api.bookmarkRemove(r.url);
+        row.remove();
+        paintStar();
+      });
+      row.append(text, when, open, del);
+      list.appendChild(row);
+    }
+  };
+  let t = null;
+  input.addEventListener("input", () => {
+    clearTimeout(t);
+    t = setTimeout(fill, 150);
+  });
+  await fill();
+  input.focus();
+}
+
 async function openLibrary() {
   libraryEl.hidden = false;
   if (api?.setLibraryOpen) await api.setLibraryOpen(true);
   if (shelfFolder === "history") {
     if (api?.historySearch) await renderHistoryShelf();
+    return;
+  }
+  if (shelfFolder === "bookmarks") {
+    if (api?.bookmarkSearch) await renderBookmarksShelf();
     return;
   }
   const rows = api?.libraryList ? await api.libraryList() : [];
@@ -845,6 +900,12 @@ document.getElementById("save-btn").addEventListener("click", () => {
   if (!api?.savePage || !activeId) return;
   api.savePage(activeId).then(openLibrary).catch((e) => showNotice(errText(e)));
 });
+document.getElementById("pip-btn").addEventListener("click", async () => {
+  if (!api?.pip || !activeId) return;
+  const r = await api.pip(activeId);
+  if (r === "none") showNotice("No video on this page for picture-in-picture.");
+});
+
 document.getElementById("media-btn").addEventListener("click", () => {
   if (!api?.grabMedia || !activeId) return;
   api.grabMedia(activeId).then(openLibrary).catch((e) => showNotice(errText(e)));
@@ -964,6 +1025,10 @@ document.getElementById("ai-test").addEventListener("click", async () => {
 async function renderSources() {
   const [settings, status] = await Promise.all([api.getSettings(), api.searchStatus()]);
   fillAI(settings.ai, settings.aiStatus);
+  document.getElementById("adblock-enabled").checked = settings.adblock !== false;
+  const ab = settings.adblockStats || {};
+  document.getElementById("adblock-state").textContent =
+    settings.adblock === false ? "Off" : ab.status === "ready" || String(ab.status).startsWith("ready") ? `On · ${ab.blocked} requests blocked since Scout started` : `On · ${ab.status}`;
   sourcesDraft = { providers: {} };
   sourcesList.innerHTML = "";
   for (const meta of settings.meta) {
@@ -1048,7 +1113,7 @@ async function renderSources() {
 
 async function saveSources(rerender = true) {
   if (!sourcesDraft) return;
-  await api.setSettings({ ...sourcesDraft, ai: aiDraft() });
+  await api.setSettings({ ...sourcesDraft, ai: aiDraft(), adblock: document.getElementById("adblock-enabled").checked });
   if (rerender) await renderSources();
 }
 
@@ -1068,6 +1133,7 @@ function closeSources() {
 // One sidebar pane at a time: suggestions, trail or settings.
 function showPane(name) {
   suggestPane.hidden = name !== "suggest";
+  document.getElementById("ask-pane").hidden = name !== "ask";
   sourcesPane.hidden = name !== "sources";
   document.getElementById("trail-pane").hidden = name !== "trail";
 }
@@ -1141,19 +1207,42 @@ document.getElementById("find-prev").addEventListener("click", () => runFind(fal
 document.getElementById("find-close").addEventListener("click", closeFind);
 document.getElementById("zoom-badge").addEventListener("click", () => activeId && api?.zoom?.(activeId, 0));
 
-// ---- Address-bar suggestions from history (B19) ----
+// ---- Bookmarks star ----
+const starBtn = document.getElementById("star-btn");
+async function paintStar() {
+  const tab = tabs.find((t) => t.id === activeId);
+  starUrl = tab?.url || "";
+  const on = api?.bookmarkHas && /^https?:/i.test(starUrl) ? await api.bookmarkHas(starUrl) : false;
+  starBtn.textContent = on ? "★" : "☆";
+  starBtn.classList.toggle("on", on);
+  starBtn.title = on ? "Bookmarked. Click to remove (Cmd/Ctrl+D)" : "Bookmark this page (Cmd/Ctrl+D)";
+}
+async function toggleBookmark() {
+  const tab = tabs.find((t) => t.id === activeId);
+  if (!api?.bookmarkToggle || !tab || !/^https?:/i.test(tab.url || "")) return;
+  const on = await api.bookmarkToggle(tab.url, tab.title);
+  statusEl.textContent = on ? `Bookmarked: ${tab.title || tab.url}` : "Bookmark removed.";
+  paintStar();
+}
+starBtn.addEventListener("click", toggleBookmark);
+
+// ---- Address-bar suggestions from bookmarks and history (B19) ----
 const historyList = document.getElementById("history-list");
 let omniTimer = null;
 omni.addEventListener("input", () => {
   if (!api?.historySearch) return;
   clearTimeout(omniTimer);
   omniTimer = setTimeout(async () => {
+    const marks = api.bookmarkSearch ? await api.bookmarkSearch(omni.value, 4) : [];
     const rows = await api.historySearch(omni.value, 8);
     historyList.innerHTML = "";
-    for (const r of rows) {
+    const seen = new Set();
+    for (const r of [...marks.map((m) => ({ ...m, star: true })), ...rows]) {
+      if (seen.has(r.url)) continue;
+      seen.add(r.url);
       const o = document.createElement("option");
       o.value = r.url;
-      o.label = r.title || r.url;
+      o.label = (r.star ? "★ " : "") + (r.title || r.url);
       historyList.appendChild(o);
     }
   }, 120);
@@ -1317,6 +1406,12 @@ if (api) {
     if (msg.cmd === "focus-omni") {
       omni.focus();
       omni.select();
+    } else if (msg.cmd === "bookmark-toggle") {
+      toggleBookmark();
+    } else if (msg.cmd === "open-bookmarks") {
+      shelfFolder = "bookmarks";
+      document.querySelectorAll("#shelf-filters .chip").forEach((c) => c.classList.toggle("active", c.dataset.folder === "bookmarks"));
+      openLibrary();
     } else if (msg.cmd === "sound-all") {
       soundAll = msg.on;
       store.set("scout.soundAll", soundAll);
@@ -1381,3 +1476,74 @@ function demoNavigate(input) {
 
 renderKeys();
 renderResults([]);
+
+// ---- Ask AI about the current page (core/chat.js) ----
+// One conversation per page address; it starts over when the page changes.
+const askLog = document.getElementById("ask-log");
+const askInput = document.getElementById("ask-input");
+let ask = { url: "", messages: [] };
+
+function askTab() {
+  return tabs.find((t) => t.id === activeId);
+}
+
+function renderAsk() {
+  askLog.innerHTML = "";
+  for (const m of ask.messages) {
+    const el = document.createElement("div");
+    el.className = "ask-msg " + m.role;
+    el.textContent = m.content;
+    askLog.appendChild(el);
+  }
+  askLog.scrollTop = askLog.scrollHeight;
+}
+
+async function openAsk() {
+  if (!api?.askPage) return showNotice("Ask needs the desktop app.");
+  showPane("ask");
+  const tab = askTab();
+  if (tab && tab.url !== ask.url) ask = { url: tab.url, messages: [] };
+  const info = await api.chatInfo();
+  document.getElementById("ask-privacy").textContent = info.ready
+    ? `Questions send this page's text, title and address to ${info.provider === "grok" ? "Grok (xAI)" : "your local model"} (${info.model}). Nothing is sent until you ask.`
+    : "Set up a model first in Settings → AI: a local model (Ollama or LM Studio) or a Grok API key.";
+  renderAsk();
+  askInput.focus();
+}
+
+async function sendAsk(question) {
+  const q = String(question || "").trim();
+  const tab = askTab();
+  if (!q || !tab) return;
+  if (tab.url !== ask.url) ask = { url: tab.url, messages: [] };
+  const history = ask.messages.filter((m) => m.role !== "error");
+  ask.messages.push({ role: "user", content: q });
+  ask.messages.push({ role: "pending", content: "Thinking…" });
+  renderAsk();
+  askInput.value = "";
+  const r = await api.askPage(tab.id, q, history);
+  ask.messages.pop();
+  ask.messages.push(r.ok ? { role: "assistant", content: r.answer } : { role: "error", content: r.error });
+  renderAsk();
+}
+
+document.getElementById("ask-btn").addEventListener("click", openAsk);
+document.getElementById("ask-back").addEventListener("click", () => showPane("suggest"));
+document.getElementById("ask-clear").addEventListener("click", () => {
+  ask.messages = [];
+  renderAsk();
+});
+document.getElementById("ask-quick").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-q]");
+  if (b) sendAsk(b.dataset.q);
+});
+document.getElementById("ask-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  sendAsk(askInput.value);
+});
+askInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    sendAsk(askInput.value);
+  }
+});

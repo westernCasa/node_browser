@@ -39,6 +39,9 @@ Requires Node 18+.
 | Cmd/Ctrl+Y | History |
 | Cmd/Ctrl+Shift+M | Mosaic on or off |
 | Cmd/Ctrl+Shift+A | Sound from all playing tabs, or only the current one |
+| Cmd/Ctrl+D | Bookmark the page |
+| Cmd/Ctrl+Shift+B | Bookmarks |
+| Cmd/Ctrl+Shift+P | Picture-in-picture |
 | Cmd/Ctrl+Shift+U | Mute or unmute the tab |
 | Cmd/Ctrl+Shift+S, or S | Screenshot the tab |
 
@@ -74,6 +77,25 @@ The old Tauri setup (`src-tauri/`, `renderer/tauri-bridge.js`) does not compile 
 12. **Results** show Wikipedia first, within about a second; web results are merged in when they arrive.
 13. **Previews** on result cards load only when a card scrolls into view, 3 at a time. Wikipedia and Brave results that already include an image skip the fetch.
 14. **Auto** re-searches when you open a new page, select text, or scroll to content with different keywords (at most every 20 seconds). Turn Auto off to search only when you press **Crawl**.
+
+## Bookmarks, picture-in-picture, ad blocking and Ask AI
+
+- **Bookmarks.** ☆ next to the address bar (or Cmd/Ctrl+D) bookmarks the page; ★ means it is saved. Bookmarks appear first in address-bar suggestions and in the Bookmarks shelf of the Library (Cmd/Ctrl+Shift+B).
+- **Picture-in-picture.** PiP in the toolbar (or Cmd/Ctrl+Shift+P) puts the page's video, or an embedded YouTube or Vimeo player, in a floating window. Again to close it.
+- **Ad and tracker blocking.** On by default, using the EasyList and EasyPrivacy lists (Ghostery's filter engine), downloaded on first run and updated weekly. Turn it off in Settings, or for one site with a site rule `"adblock": false`. Settings shows how many requests were blocked.
+- **Ask AI.** Ask in the sidebar opens a chat about the current page, with Summarize, Key facts and What next? buttons. It uses the model set up under Settings → AI (a local model or Grok). Questions send the page's readable text, title and address to that model; nothing is sent until you ask.
+
+## Installing
+
+Build an installer on the computer it is for:
+
+```bash
+npm install
+npm run dist:mac    # macOS: dist/Scout-0.4.0-arm64.dmg (or x64 on Intel Macs)
+npm run dist:win    # Windows: dist/Scout Setup 0.4.0.exe
+```
+
+The app is not signed with an Apple Developer ID yet, so the first time macOS says it cannot check the app: right-click Scout in Applications, choose Open, then Open. Automatic updates need a signed app and a download host; they come later.
 
 ## Gestures
 
@@ -122,6 +144,7 @@ Scout reads `rules.json` (File → Edit Site Rules…, or Settings → Edit rule
 | `suggest` | `true`, `false` | `false` stops Scout reading the page for keywords or sending its words to search |
 | `mosaic` | `true`, `false` | `false` keeps the site out of the Mosaic grid unless it is the active tab |
 | `center` | `true`, `false` | `true` (default): clicking a video, image or embedded player scrolls it to the middle of the view. `false` turns this off for the site |
+| `adblock` | `true`, `false` | `true` (default): block ads and trackers. `false` allows them on the site |
 | `extract.include`, `extract.skip` | lists of CSS selectors | Extra text to read with priority; areas to ignore |
 
 `match` can be `example.com` (with subdomains), `*.example.com` (subdomains only), `example.com/path`, a list of these, `*` for every site, or a regular expression like `/\/login/i`. Rules apply in order and later matches win. The first run creates examples for Wikipedia, YouTube, and sign-in, banking and payment pages (no suggestions, no autoplay). A broken file is reported in the sidebar and the previous rules stay in use.

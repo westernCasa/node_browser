@@ -5,7 +5,7 @@ import Button from "./Button";
 import Sheet from "./Sheet";
 import SwipeRow from "./SwipeRow";
 
-export default function TabsSheet({ visible, onClose, tabs, activeId, onActivate, onCloseTab, onNewTab, mosaic, onToggleMosaic, canMosaic, canSoundAll, soundAll, onToggleSoundAll }) {
+export default function TabsSheet({ visible, onClose, tabs, activeId, onActivate, onCloseTab, onNewTab, mosaic, onToggleMosaic, canMosaic, canSoundAll, soundAll, onToggleSoundAll, bookmarks, onOpenBookmark, onRemoveBookmark }) {
   return (
     <Sheet visible={visible} onClose={onClose} title={`${tabs.length} tabs`} kicker="Tabs">
       <View style={{ flexDirection: "row", gap: 6, marginBottom: 10 }}>
@@ -32,6 +32,20 @@ export default function TabsSheet({ visible, onClose, tabs, activeId, onActivate
           </Pressable>
         </SwipeRow>
       ))}
+      {bookmarks ? (
+        <View>
+          <Text style={ui.kicker}>Bookmarks</Text>
+          {bookmarks.search("", 100).length === 0 ? <Text style={ui.help}>No bookmarks yet. Tap ☆ next to the address bar to add the page you are on.</Text> : null}
+          {bookmarks.search("", 100).map((b) => (
+            <SwipeRow key={"b" + b.url} label="Remove" onSwipe={() => onRemoveBookmark(b.url)}>
+              <Pressable onPress={() => onOpenBookmark(b.url)} style={{ borderTopWidth: 1, borderColor: colors.line, paddingVertical: 10 }}>
+                <Text style={{ color: colors.text, fontWeight: "600" }} numberOfLines={1}>★ {b.title || b.url}</Text>
+                <Text style={ui.help} numberOfLines={1}>{b.url}</Text>
+              </Pressable>
+            </SwipeRow>
+          ))}
+        </View>
+      ) : null}
     </Sheet>
   );
 }

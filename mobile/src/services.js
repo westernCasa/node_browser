@@ -43,6 +43,7 @@ export async function createServices() {
   const { preview } = core.createPreview({ getText: net.getText });
   const research = new core.ResearchStore(core.prefixedStorage(storage, "sessions/"));
   const history = new core.HistoryStore(storage);
+  const bookmarks = new core.BookmarkStore(storage);
   const rules = core.validate(core.DEFAULT_FILE).rules; // default rules for now; editing comes later (M-backlog)
 
   async function saveSettings(next) {
@@ -72,6 +73,7 @@ export async function createServices() {
     net,
     research,
     history,
+    bookmarks,
     ruleFor: (url) => core.resolve(rules, url),
   };
 }

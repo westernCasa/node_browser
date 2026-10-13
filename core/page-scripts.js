@@ -335,6 +335,41 @@ function centerOnClickScript() {
   })()`;
 }
 
+/**
+ * The page's readable text for "Ask about this page": the main article (or
+ * <main>, or the body) without navigation, footers, scripts and forms.
+ * Evaluates to { url, title, text, selection }.
+ */
+function readableTextScript(maxChars = 20000) {
+  return `(() => {
+    const root = document.querySelector("article") || document.querySelector("main, [role=main]") || document.body;
+    const copy = root ? root.cloneNode(true) : document.createElement("div");
+    copy.querySelectorAll("nav, footer, aside, header nav, script, style, noscript, form, iframe, svg, [role=navigation], [aria-hidden=true], .navbox, .reflist, .mw-editsection").forEach((n) => n.remove());
+    const text = (copy.innerText || copy.textContent || "").replace(/\\n{3,}/g, "\\n\\n").trim().slice(0, ${Number(maxChars) || 20000});
+    return { url: location.href, title: document.title || "", text, selection: String(window.getSelection ? window.getSelection() : "").slice(0, 1500) };
+  })()`;
+}
+
+/**
+ * Picture-in-picture for the page's main video: the playing one, else the
+ * largest visible one. Closes picture-in-picture if it is already open.
+ * Evaluates to "opened", "closed", or "none" (no video in this frame).
+ */
+function pipScript() {
+  return `(async () => {
+    if (document.pictureInPictureElement) {
+      await document.exitPictureInPicture();
+      return "closed";
+    }
+    const vids = [...document.querySelectorAll("video")].filter((v) => v.readyState > 0 && !v.disablePictureInPicture);
+    if (!vids.length) return "none";
+    const area = (v) => { const r = v.getBoundingClientRect(); return r.width * r.height; };
+    const v = vids.find((x) => !x.paused) || vids.sort((a, b) => area(b) - area(a))[0];
+    await v.requestPictureInPicture();
+    return "opened";
+  })()`;
+}
+
 /** Pauses all playing media and marks it, so resumeScript can start it again (playback limit). */
 function pauseForLimitScript() {
   return `(() => {
@@ -362,4 +397,4 @@ function anyPlayingScript() {
   return `[...document.querySelectorAll("video, audio")].some((el) => !el.paused && !el.ended)`;
 }
 
-module.exports = { extractionScript, autoplayScript, blockAutoplayScript, centerOnClickScript, pauseForLimitScript, resumeScript, anyPlayingScript };
+module.exports = { extractionScript, autoplayScript, blockAutoplayScript, centerOnClickScript, pipScript, readableTextScript, pauseForLimitScript, resumeScript, anyPlayingScript };

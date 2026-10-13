@@ -1,5 +1,5 @@
 // Scripts injected into each tab's WebView, built from core/page-scripts.js.
-const { extractionScript, autoplayScript, blockAutoplayScript, centerOnClickScript, pauseForLimitScript, resumeScript } = require("../../core/page-scripts");
+const { extractionScript, autoplayScript, blockAutoplayScript, centerOnClickScript, pauseForLimitScript, resumeScript, readableTextScript } = require("../../core/page-scripts");
 
 // Runs before the page's own scripts: reports text selection and scroll stops,
 // so the app knows when to read the page again.
@@ -78,6 +78,20 @@ export function extractCall(ruleExtract, requestId) {
   return `(function () {
   try {
     var d = ${extractionScript(ruleExtract)};
+    window.ReactNativeWebView.postMessage(JSON.stringify({ type: "extract", id: ${id}, data: d }));
+  } catch (e) {
+    window.ReactNativeWebView.postMessage(JSON.stringify({ type: "extract", id: ${id}, error: String(e) }));
+  }
+})();
+true;`;
+}
+
+// Reads the page's readable text for Ask AI and posts it back with the request id.
+export function readCall(requestId) {
+  const id = JSON.stringify(requestId);
+  return `(function () {
+  try {
+    var d = ${readableTextScript(20000)};
     window.ReactNativeWebView.postMessage(JSON.stringify({ type: "extract", id: ${id}, data: d }));
   } catch (e) {
     window.ReactNativeWebView.postMessage(JSON.stringify({ type: "extract", id: ${id}, error: String(e) }));
