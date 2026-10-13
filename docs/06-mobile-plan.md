@@ -86,7 +86,7 @@ Phase 5 starts building after the desktop Phase 4 gate passes. M01-M02 can run a
 
 | ID | Item | Priority | Effort | Status |
 | --- | --- | --- | --- | --- |
-| M01 | Run the skeleton on a phone with Expo Go and report what breaks | P0 | XS | Started (Sven, iPhone, 2026-10-12): autoplay stopped in background tabs and only one tab had sound; fixes in progress |
+| M01 | Run the skeleton on a phone with Expo Go and report what breaks | P0 | XS | Started (Sven, iPhone, 2026-10-12). Round 1: autoplay stopped in background tabs, only one tab had sound. Round 2: videos still paused a few seconds after another started; no address-bar suggestions. Fixes for both rounds delivered; to retest |
 | M02 | Check on iPhone and Android: page extraction, selection and scroll reports, autoplay, background muting, several tabs playing (limit of 4, center on tap, and whether iOS allows several videos at once), Mosaic on a phone (2, 3 and 4 tiles, memory with 4 pages playing), popups, permission prompts, media in the background | P0 | S | Not started |
 | M03 | Allow plain `http://` to a model server on the local network (iOS App Transport Security, Android cleartext traffic) | P1 | S | Not started |
 | M04 | Site rules on mobile: same file format as desktop, with a simple editor | P1 | M | Not started |

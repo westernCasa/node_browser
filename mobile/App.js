@@ -1,7 +1,7 @@
 // Scout mobile: walking skeleton (Phase 5 groundwork).
 // Tabs of WebViews, address bar, and the shared suggestion engine from core/.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Platform, Pressable, Text, TextInput, View, useWindowDimensions } from "react-native";
+import { ActivityIndicator, Keyboard, Platform, Pressable, Text, TextInput, View, useWindowDimensions } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
@@ -12,6 +12,7 @@ import TabView from "./src/components/TabView";
 import Button from "./src/components/Button";
 import SuggestionsSheet from "./src/components/SuggestionsSheet";
 import TabsSheet from "./src/components/TabsSheet";
+import AddressSuggestions from "./src/components/AddressSuggestions";
 import TrailSheet from "./src/components/TrailSheet";
 import SettingsSheet from "./src/components/SettingsSheet";
 
@@ -73,6 +74,7 @@ function Browser({ services }) {
   const [sheet, setSheet] = useState(null); // "suggest" | "tabs" | "trail" | "settings"
   const [address, setAddress] = useState("");
   const [editing, setEditing] = useState(false);
+  const [typed, setTyped] = useState(false); // typed since focusing the address bar
   const [ctrlState, setCtrlState] = useState(null);
   const [trailVersion, setTrailVersion] = useState(0);
 
@@ -141,6 +143,11 @@ function Browser({ services }) {
         }
         return;
       }
+      if (msg.type === "syspause") {
+        // The system paused this tab's video and the page started it again.
+        setTabs((list) => list.map((t) => (t.id === tabId ? { ...t, sysPauses: (t.sysPauses || 0) + 1 } : t)));
+        return;
+      }
       if (tabId !== activeRef.current) return;
       const tab = withRule(tabById(tabId));
       if (msg.type === "selection") controller.onPage(tab, "selection", msg.text);
@@ -155,6 +162,7 @@ function Browser({ services }) {
     // Single-page sites (m.youtube.com and similar) change address without a
     // new load, so onLoadEnd does not run: start the new page's media here.
     if (before && !nav.loading && before.url && nav.url !== before.url) {
+      services.history.record(nav.url, nav.title);
       const tab = withRule({ ...before, url: nav.url });
       refs.current.get(tabId)?.injectJavaScript(autoplayCall(tab.rule.autoplay));
     }
@@ -250,7 +258,8 @@ function Browser({ services }) {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg2 }} edges={["top", "bottom"]}>
       <StatusBar style="light" />
-      {/* Address bar */}
+      {/* Address bar, with suggestions from history and Wikipedia while typing */}
+      <View style={{ zIndex: 20, elevation: 20 }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 6, padding: 8, borderBottomWidth: 1, borderColor: colors.line }}>
         <Button label="‹" small onPress={() => refs.current.get(activeId)?.goBack()} style={!active?.canGoBack && { opacity: 0.4 }} />
         <Button label="›" small onPress={() => refs.current.get(activeId)?.goForward()} style={!active?.canGoForward && { opacity: 0.4 }} />
@@ -259,10 +268,14 @@ function Browser({ services }) {
           value={editing ? address : active?.url || ""}
           onFocus={() => {
             setEditing(true);
+            setTyped(false);
             setAddress(active?.url || "");
           }}
           onBlur={() => setEditing(false)}
-          onChangeText={setAddress}
+          onChangeText={(v) => {
+            setAddress(v);
+            setTyped(true);
+          }}
           onSubmitEditing={() => {
             setEditing(false);
             navigate(normalizeUrl(address));
@@ -274,6 +287,20 @@ function Browser({ services }) {
           selectTextOnFocus
         />
         <Button label={String(tabs.length)} small onPress={() => setSheet("tabs")} />
+      </View>
+      {editing ? (
+        <AddressSuggestions
+          query={typed ? address : ""}
+          history={services.history}
+          getText={services.net.getText}
+          lang={services.settings.providers.wikipedia?.lang}
+          onPick={(url) => {
+            setEditing(false);
+            Keyboard.dismiss();
+            navigate(url);
+          }}
+        />
+      ) : null}
       </View>
 
       {/* Tabs: every WebView stays mounted at full size. Tabs not on screen sit

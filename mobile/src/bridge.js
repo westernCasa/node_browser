@@ -14,6 +14,39 @@ export const BRIDGE = `(function () {
     var el = e.target;
     if (window.__scoutMute && el && !el.muted) { el.muted = true; el.__scoutMuted = true; }
   }, true);
+  // Keep playing: iOS can pause a tab's video when another tab starts one. A
+  // pause that does not follow a tap or key press in this page (and was not
+  // done by Scout's 4-tab limit) is treated as a system pause: the video is
+  // started again, muted if this tab is in the background. At most 6 restarts
+  // per video per minute, so Scout never fights the system in a loop.
+  var lastTouch = 0;
+  ["touchstart", "pointerdown", "mousedown", "keydown"].forEach(function (ev) {
+    document.addEventListener(ev, function () { lastTouch = Date.now(); }, true);
+  });
+  document.addEventListener("play", function (e) {
+    var el = e.target;
+    if (el && Date.now() - lastTouch < 1500) el.__scoutUserPaused = false;
+  }, true);
+  document.addEventListener("pause", function (e) {
+    var el = e.target;
+    if (!el || (el.tagName !== "VIDEO" && el.tagName !== "AUDIO")) return;
+    if (el.ended || el.__scoutLimited) return;
+    if (Date.now() - lastTouch < 1500) { el.__scoutUserPaused = true; return; }
+    if (el.__scoutUserPaused) return;
+    var now = Date.now();
+    el.__scoutRestarts = (el.__scoutRestarts || []).filter(function (t) { return now - t < 60000; });
+    if (el.__scoutRestarts.length >= 6) return;
+    el.__scoutRestarts.push(now);
+    post({ type: "syspause" });
+    setTimeout(function () {
+      if (!el.paused || el.ended || el.__scoutLimited || el.__scoutUserPaused || !el.isConnected) return;
+      if (window.__scoutMute && !el.muted) { el.muted = true; el.__scoutMuted = true; }
+      el.play().catch(function () {
+        if (!el.muted) { el.muted = true; if (window.__scoutMute) el.__scoutMuted = true; }
+        el.play().catch(function () {});
+      });
+    }, 700);
+  }, true);
   document.addEventListener("selectionchange", function () {
     clearTimeout(t1);
     t1 = setTimeout(function () {

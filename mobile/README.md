@@ -8,6 +8,8 @@ Phase 5 groundwork. A React Native (Expo SDK 57) app that reuses the desktop app
 - Mosaic on every screen (Mosaic button in the bottom bar): all tabs in a grid on tablets and phones in landscape; up to 4 tiles on a phone in portrait (the active tab plus the 3 most recent others)
 - Autoplay per site rule, also after in-page navigation (m.youtube.com); background tabs keep playing muted, and the tab you switch to gets its sound back
 - Tabs not on screen stay full size behind the visible ones, because iOS pauses videos it considers invisible
+- A video paused by the system (not by a tap, and not by the 4-tab limit) is started again, at most 6 times a minute; the tab list shows how often this happened
+- Address-bar suggestions while typing: Brave search for the text, matching history, Wikipedia titles; recent history before typing
 - Only one tab with sound on iPhone and iPad (an iOS rule); on Android, "Sound: all" in the tab list lets all playing tabs be heard
 - Links that open a new window open a new Scout tab (unless the site rule blocks popups)
 - Suggestions sheet: keywords from the page (tap to pin, hold to hide), Wikipedia results first, then web results, AI query ideas

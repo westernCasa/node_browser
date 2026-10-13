@@ -69,6 +69,7 @@ export async function createServices() {
     registry,
     flow,
     preview,
+    net,
     research,
     history,
     ruleFor: (url) => core.resolve(rules, url),
