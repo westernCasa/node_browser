@@ -23,6 +23,11 @@ const log = (...a) => console.log("•", ...a);
   await ui.type("#omni", "t");
   await sleep(600);
   log("address-bar suggestions:", (await ui.$$eval("#history-list option", (o) => o.map((x) => x.value))).join(" | "));
+  // Typed short text: after Enter the bar shows the page's full address, not what was typed.
+  await ui.fill("#omni", "127.0.0.1:8765/other.html?typed=1");
+  await ui.press("#omni", "Enter");
+  await sleep(1500);
+  log("address bar after Enter on typed text:", await ui.$eval("#omni", (e) => e.value), "| focused:", await ui.evaluate(() => document.activeElement.id === "omni"));
 
   await go(BASE + "/article.html");
   await send("find-open");

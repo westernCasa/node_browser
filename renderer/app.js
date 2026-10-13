@@ -2,6 +2,8 @@ const api = window.scout || null;
 
 const tabsEl = document.getElementById("tabs");
 let starUrl = ""; // address the bookmark star was last painted for
+let omniTyping = false; // the user has typed in the address bar since the last navigation
+let omniTabId = null;
 // Double-click the empty part of the tab bar to open a new tab.
 tabsEl.addEventListener("dblclick", (e) => {
   if (e.target !== tabsEl) return;
@@ -217,7 +219,16 @@ function renderTabs() {
     tabsEl.appendChild(el);
   }
   const current = tabs.find((t) => t.id === activeId);
-  if (current && document.activeElement !== omni) omni.value = current.url || "";
+  // The address bar shows the page's real address, except while the user is
+  // typing in it. After Enter (or picking a suggestion) it follows the page again.
+  if (activeId !== omniTabId) {
+    omniTabId = activeId; // switching tabs drops what was typed for the old tab
+    omniTyping = false;
+  }
+  if (current && (!omniTyping || document.activeElement !== omni)) {
+    if (omni.value !== (current.url || "")) omni.value = current.url || "";
+    omniTyping = false;
+  }
 }
 
 function renderKeys() {
@@ -644,8 +655,19 @@ autoBtn.addEventListener("click", () => {
 });
 paintAuto();
 
+omni.addEventListener("input", () => (omniTyping = true));
+omni.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    omniTyping = false;
+    const current = tabs.find((t) => t.id === activeId);
+    omni.value = current?.url || "";
+    omni.blur();
+  }
+});
 omniForm.addEventListener("submit", (e) => {
   e.preventDefault();
+  omniTyping = false;
+  omni.blur();
   if (api && activeId) api.navigate(activeId, omni.value);
   else demoNavigate(omni.value);
 });
@@ -1389,6 +1411,12 @@ if (api) {
     renderTabs();
     if (payload.type === "find") {
       if (payload.tabId === activeId) findCount.textContent = payload.total ? `${payload.active}/${payload.total}` : "0/0";
+      return;
+    }
+    if (payload.type === "google-signin-blocked") {
+      showNotice("Google does not allow signing in from apps built on Electron, which NODE is for now. Pages that need your Google account can be opened in your default browser.", [
+        { label: "Open in default browser", run: () => api.openExternal("https://accounts.google.com/") },
+      ]);
       return;
     }
     if (payload.type === "popup-blocked") {

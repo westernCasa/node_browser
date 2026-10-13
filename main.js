@@ -44,7 +44,7 @@ const { createPreview } = require("./core/preview");
 const { extractionScript, autoplayScript, blockAutoplayScript, centerOnClickScript, pipScript, readableTextScript, pauseForLimitScript, resumeScript, anyPlayingScript } = require("./core/page-scripts");
 const { PlaybackLimiter } = require("./core/playback");
 const { fsStorage } = require("./fs-storage");
-const { normalizeUrl } = require("./core/urls");
+const { normalizeUrl, hostOf } = require("./core/urls");
 let research = null; // current research session store (B17), created when the app is ready
 
 const HOME_URL = "https://en.wikipedia.org/wiki/Main_Page";
@@ -294,6 +294,11 @@ function attachListeners(tab) {
   });
   on("page-title-updated", (_e, title) => {
     historyStore.updateTitle(wc.getURL(), title);
+    // Google refuses sign-in in apps built on Electron. Say so, and offer the
+    // system browser for tasks that need a Google account.
+    if (/(^|\.)accounts\.google\.com$/.test(hostOf(wc.getURL())) && /couldn.t sign you in/i.test(title)) {
+      emit({ type: "google-signin-blocked", tabId: tab.id, url: wc.getURL() });
+    }
     ping();
   });
   on("found-in-page", (_e, r) => {
@@ -1018,6 +1023,9 @@ ipcMain.handle("tab:order", (_e, order) => {
   for (const [id, tab] of moved) tabs.set(id, tab);
   applyLayout();
   emitList();
+});
+ipcMain.handle("open-external", (_e, url) => {
+  if (/^https:\/\//i.test(String(url))) shell.openExternal(String(url));
 });
 ipcMain.on("tab:gesture", (_e, id, dir) => gestureNav(tabs.get(String(id)), dir));
 

@@ -60,7 +60,7 @@ Effort: XS under 1 hour, S half a day, M 1-2 days, L 3+ days. Finding IDs (C1, K
 | B37 | 4 | Sound from all playing tabs at once: toolbar toggle and Cmd/Ctrl+Shift+A (desktop; mobile later) | P2 | XS | Done |
 | B38 | 4 | Clicking a video, image or embedded player scrolls it to the middle of the view; site rule `center` (desktop and mobile) | P2 | S | Done |
 | B39 | 4 | Standard browser gestures: trackpad swipe back/forward with an edge arrow, three-finger swipe, mouse side buttons, middle-click tab to close, double-click tab bar for a new tab, drag tabs to reorder (mobile gestures: see M16) | P2 | S | Done |
-| B40 | 4 | Google sign-in said "This browser or app may not be secure": upgrade Electron 32 to 44 (Chromium 128 to 152) and use a standard Chrome user agent for the real system; Safari user agent ending on iPhone. To confirm with a real sign-in | P0 | S | Done, to confirm |
+| B40 | 4 | Google sign-in said "This browser or app may not be secure": upgraded Electron 32 to 44 and made the user agent a standard Chrome one. Still refused: Google blocks Electron-based apps. NODE now explains this and offers the default browser. A real fix means building NODE on Chromium itself rather than Electron (B51) | P0 | S | Done as far as Electron allows |
 | B41 | 4 | Bookmarks: star and Cmd+D, Bookmarks shelf, bookmarks first in address-bar suggestions; mobile star and list | P1 | S | Done (0.4) |
 | B42 | 4 | Picture-in-picture: toolbar button and Cmd+Shift+P, works for embedded players | P1 | XS | Done (0.4) |
 | B43 | 4 | Ad and tracker blocking (EasyList, EasyPrivacy) with a Settings switch and site rule `adblock` | P1 | M | Done (0.4, desktop; mobile needs a custom build) |
@@ -71,6 +71,7 @@ Effort: XS under 1 hour, S half a day, M 1-2 days, L 3+ days. Finding IDs (C1, K
 | B48 | 4 | Chrome Web Store extensions | P2 | L | Not started |
 | B49 | 4 | AI chat across tabs and cited summaries of a research session | P2 | M | Not started |
 | B50 | 4 | Sync across devices | P3 | L | Not started |
+| B51 | 5+ | Decide whether to move NODE from Electron to a Chromium-based browser build (as Brave, Vivaldi and Arc do), which Google sign-in accepts; large effort | P1 | L | To decide |
 
 ## Open checks
 

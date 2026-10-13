@@ -52,6 +52,7 @@ contextBridge.exposeInMainWorld("scout", {
   setSoundAll: (on) => ipcRenderer.invoke("audio:all", on),
   moveTabs: (order) => ipcRenderer.invoke("tab:order", order),
   pip: (id) => ipcRenderer.invoke("tab:pip", id),
+  openExternal: (url) => ipcRenderer.invoke("open-external", url),
   askPage: (id, question, history) => ipcRenderer.invoke("ai:ask", id, question, history),
   chatInfo: () => ipcRenderer.invoke("ai:chat-info"),
   bookmarkSearch: (q, limit) => ipcRenderer.invoke("bookmarks:search", q, limit),
