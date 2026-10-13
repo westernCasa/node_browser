@@ -1,5 +1,5 @@
 // Scripts injected into each tab's WebView, built from core/page-scripts.js.
-const { extractionScript, autoplayScript, blockAutoplayScript } = require("../../core/page-scripts");
+const { extractionScript, autoplayScript, blockAutoplayScript, pauseForLimitScript, resumeScript } = require("../../core/page-scripts");
 
 // Runs before the page's own scripts: reports text selection and scroll stops,
 // so the app knows when to read the page again.
@@ -15,6 +15,17 @@ export const BRIDGE = `(function () {
       if (s.length > 2) post({ type: "selection", text: s.slice(0, 600) });
     }, 700);
   });
+  // Media state for the playback limit (up to 4 tabs playing at once).
+  var t3 = null, last = null;
+  var media = function () {
+    clearTimeout(t3);
+    t3 = setTimeout(function () {
+      var playing = Array.prototype.some.call(document.querySelectorAll("video, audio"), function (el) { return !el.paused && !el.ended; });
+      if (playing !== last) { last = playing; post({ type: "media", playing: playing }); }
+    }, 300);
+  };
+  ["play", "playing", "pause", "ended", "emptied"].forEach(function (ev) { document.addEventListener(ev, media, true); });
+  window.addEventListener("load", media);
   window.addEventListener("scroll", function () {
     clearTimeout(t2);
     t2 = setTimeout(function () { post({ type: "scroll" }); }, 1200);
@@ -42,3 +53,7 @@ export function autoplayCall(mode) {
 
 // WebViews have no mute switch, so background tabs mute their media from inside.
 export const MUTE_ALL = `document.querySelectorAll("video, audio").forEach(function (el) { el.muted = true; });\ntrue;`;
+
+// Playback limit: pause this tab's media (marked so it can resume), or resume it.
+export const PAUSE_FOR_LIMIT = `${pauseForLimitScript()};\ntrue;`;
+export const RESUME = `${resumeScript()};\ntrue;`;

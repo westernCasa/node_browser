@@ -12,7 +12,8 @@ const { HistoryStore } = require("./core/history");
 const { createNet } = require("./core/net");
 const { createSuggest } = require("./core/suggest");
 const { createPreview } = require("./core/preview");
-const { extractionScript, autoplayScript, blockAutoplayScript } = require("./core/page-scripts");
+const { extractionScript, autoplayScript, blockAutoplayScript, pauseForLimitScript, resumeScript, anyPlayingScript } = require("./core/page-scripts");
+const { PlaybackLimiter } = require("./core/playback");
 const { fsStorage } = require("./fs-storage");
 const { normalizeUrl } = require("./core/urls");
 let research = null; // current research session store (B17), created when the app is ready
@@ -176,6 +177,7 @@ function tabState(tab) {
     muted: wc.isAudioMuted(),
     audible: wc.isCurrentlyAudible(),
     audio: tab.audio,
+    pausedByLimit: playback.snapshot().pausedByLimit.includes(tab.id),
     zoom: Math.round(wc.getZoomFactor() * 100),
     rule: tab.rule ? { matched: tab.rule.matched, suggest: tab.rule.suggest, autoplay: tab.rule.autoplay } : null,
   };
@@ -208,28 +210,53 @@ function blockAutoplay(wc) {
   wc.executeJavaScript(blockAutoplayScript()).catch(() => {});
 }
 
+// Playback limit (core/playback.js): media plays in up to 4 tabs at once. The
+// scripts run in every frame, so embedded players (YouTube iframes) count too.
+const playback = new PlaybackLimiter();
+
+function inFrames(wc, code) {
+  let frames = [];
+  try {
+    frames = wc.mainFrame.framesInSubtree;
+  } catch (_) {}
+  return Promise.all(frames.map((f) => f.executeJavaScript(code).catch(() => null)));
+}
+
+function pauseForLimit(id) {
+  const tab = tabs.get(id);
+  if (!tab || tab.view.webContents.isDestroyed()) return;
+  inFrames(tab.view.webContents, pauseForLimitScript()).then(() => {
+    if (tabs.has(id) && !tab.view.webContents.isDestroyed()) emit({ type: "update", tab: tabState(tab), activeId });
+  });
+}
+
 function attachListeners(tab) {
   const wc = tab.view.webContents;
+  // A closed tab's page is blanked before it is destroyed; ignore its events.
+  const open = () => tabs.has(tab.id) && !wc.isDestroyed();
+  const on = (event, fn) => wc.on(event, (...args) => (open() ? fn(...args) : undefined));
   const ping = () => emit({ type: "update", tab: tabState(tab), activeId });
-  wc.on("focus", () => {
+  on("focus", () => {
     if (activeId !== tab.id) activateTab(tab.id);
   });
-  wc.on("page-title-updated", (_e, title) => {
+  on("page-title-updated", (_e, title) => {
     historyStore.updateTitle(wc.getURL(), title);
     ping();
   });
-  wc.on("found-in-page", (_e, r) => {
+  on("found-in-page", (_e, r) => {
     if (r.finalUpdate) emit({ type: "find", tabId: tab.id, active: r.activeMatchOrdinal, total: r.matches });
   });
   // Ctrl/Cmd + mouse wheel or trackpad pinch.
-  wc.on("zoom-changed", (_e, direction) => zoomTab(tab, direction === "in" ? 0.5 : -0.5));
-  wc.on("did-navigate", (_e, url) => {
+  on("zoom-changed", (_e, direction) => zoomTab(tab, direction === "in" ? 0.5 : -0.5));
+  on("did-navigate", (_e, url) => {
+    playback.stopped(tab.id);
+    playback.navigated(tab.id);
     historyStore.record(url, wc.getTitle());
     refreshRule(tab, url);
     applyLayout();
     ping();
   });
-  wc.on("did-navigate-in-page", (_e, url, isMainFrame) => {
+  on("did-navigate-in-page", (_e, url, isMainFrame) => {
     if (isMainFrame) {
       refreshRule(tab, url);
       // Single-page sites (YouTube and similar) change address without loading.
@@ -240,14 +267,25 @@ function attachListeners(tab) {
   });
   // Start media as soon as the page is parsed, not after every image and ad
   // has loaded. did-stop-loading tries again; the script runs once per address.
-  wc.on("dom-ready", () => tryAutoplay(wc, tab.rule?.autoplay));
-  wc.on("did-start-loading", ping);
-  wc.on("did-stop-loading", () => {
+  on("dom-ready", () => tryAutoplay(wc, tab.rule?.autoplay));
+  on("did-start-loading", ping);
+  on("did-stop-loading", () => {
     ping();
     tryAutoplay(wc, tab.rule?.autoplay);
     emit({ type: "settled", tab: tabState(tab) });
   });
-  wc.on("audio-state-changed", ping);
+  on("audio-state-changed", ping);
+  on("media-started-playing", () => {
+    for (const id of playback.started(tab.id, activeId)) pauseForLimit(id);
+    ping();
+  });
+  on("media-paused", async () => {
+    // Fired when any one element pauses; the tab stops counting only when nothing plays.
+    const still = await inFrames(wc, anyPlayingScript());
+    if (!open()) return;
+    if (!still.some(Boolean)) playback.stopped(tab.id);
+    ping();
+  });
   // Popups (B04): only open a new tab if the user clicked or typed in this
   // page in the last 2 s. Everything else is blocked and reported to the UI.
   wc.setWindowOpenHandler(({ url, disposition }) => {
@@ -262,7 +300,7 @@ function attachListeners(tab) {
   });
   // Shortcuts typed while a web page has focus (B02). Menu accelerators cover
   // Cmd/Ctrl combos; this only records user activity for the popup check.
-  wc.on("before-input-event", (_e, input) => {
+  on("before-input-event", (_e, input) => {
     if (input.type === "keyDown" || input.type === "mouseDown") tab.lastGesture = Date.now();
   });
 }
@@ -296,12 +334,24 @@ function createTab(url, opts = {}) {
 function closeTab(id) {
   const tab = tabs.get(id);
   if (!tab) return;
-  if (tab.attached) win.contentView.removeChildView(tab.view);
-  try {
-    // WebContentsView does not free its page on removal; close it explicitly.
-    tab.view.webContents.close();
-  } catch (_) {}
   tabs.delete(id);
+  if (tab.attached) win.contentView.removeChildView(tab.view);
+  // WebContentsView does not free its page on removal; close it explicitly.
+  // Closing a page while a video is playing crashed Electron (seen on Linux),
+  // so the page is first replaced with a blank one, then closed.
+  const wc = tab.view.webContents;
+  const close = () => {
+    try {
+      if (!wc.isDestroyed()) wc.close();
+    } catch (_) {}
+  };
+  try {
+    wc.setAudioMuted(true);
+    wc.loadURL("about:blank").then(close, close);
+  } catch (_) {
+    close();
+  }
+  playback.closed(id);
   if (activeId === id) {
     activeId = [...tabs.keys()].at(-1) || null;
   }
@@ -313,6 +363,8 @@ function closeTab(id) {
 function activateTab(id) {
   if (!tabs.has(id)) return;
   activeId = id;
+  // A tab paused by the playback limit resumes when it becomes active.
+  if (playback.activated(id)) inFrames(tabs.get(id).view.webContents, resumeScript());
   applyLayout();
   emitList();
 }

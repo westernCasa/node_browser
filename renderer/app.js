@@ -138,6 +138,13 @@ function renderTabs() {
     const el = document.createElement("div");
     el.className = "tab" + (t.id === activeId ? " active" : "");
     el.innerHTML = `<span title="${escapeHtml(t.url || "")}">${escapeHtml(t.title || "New tab")}</span>`;
+    if (t.pausedByLimit) {
+      const p = document.createElement("i");
+      p.className = "limit";
+      p.textContent = "⏸";
+      p.title = "Paused: media was already playing in 4 other tabs. Open this tab to resume it.";
+      el.appendChild(p);
+    }
     if (api?.toggleTabAudio && (t.audible || t.audio !== "auto")) {
       const snd = document.createElement("button");
       snd.className = "snd" + (t.muted ? "" : " on");

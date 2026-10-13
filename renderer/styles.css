@@ -510,3 +510,6 @@ html, body {
   font: 12px/1 inherit;
 }
 #ai-box .help { margin-top: 8px; }
+
+/* Tab paused by the 4-tab playback limit */
+.tab .limit { font-style: normal; font-size: 11px; opacity: 0.7; margin-left: 4px; }

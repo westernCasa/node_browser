@@ -6,7 +6,7 @@ import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
 import { createServices } from "./src/services";
-import { autoplayCall, extractCall, MUTE_ALL } from "./src/bridge";
+import { autoplayCall, extractCall, MUTE_ALL, PAUSE_FOR_LIMIT, RESUME } from "./src/bridge";
 import { colors, ui } from "./src/theme";
 import TabView from "./src/components/TabView";
 import Button from "./src/components/Button";
@@ -16,6 +16,7 @@ import TrailSheet from "./src/components/TrailSheet";
 import SettingsSheet from "./src/components/SettingsSheet";
 
 const { SuggestController } = require("../core/controller");
+const { PlaybackLimiter } = require("../core/playback");
 const { HOME_URL, normalizeUrl } = require("../core/urls");
 
 const WIDE = 700; // tablets, and large phones in landscape
@@ -63,6 +64,7 @@ function Browser({ services }) {
   const [trailVersion, setTrailVersion] = useState(0);
 
   const refs = useRef(new Map()); // tab id -> WebView ref
+  const playback = useRef(new PlaybackLimiter()).current; // up to 4 tabs playing at once
   const pending = useRef(new Map()); // extract request id -> { resolve, reject, timer }
   const tabsRef = useRef(tabs);
   tabsRef.current = tabs;
@@ -114,6 +116,18 @@ function Browser({ services }) {
         msg.error ? p.reject(new Error(msg.error)) : p.resolve(msg.data);
         return;
       }
+      if (msg.type === "media") {
+        if (msg.playing) {
+          for (const id of playback.started(tabId, activeRef.current)) {
+            refs.current.get(id)?.injectJavaScript(PAUSE_FOR_LIMIT);
+            updateTab(id, { pausedByLimit: true });
+          }
+          updateTab(tabId, { pausedByLimit: false });
+        } else {
+          playback.stopped(tabId);
+        }
+        return;
+      }
       if (tabId !== activeRef.current) return;
       const tab = withRule(tabById(tabId));
       if (msg.type === "selection") controller.onPage(tab, "selection", msg.text);
@@ -132,6 +146,7 @@ function Browser({ services }) {
       const view = refs.current.get(tabId);
       if (!tab || !view) return;
       services.history.record(tab.url, tab.title);
+      playback.navigated(tabId); // media of the previous page will not resume
       view.injectJavaScript(autoplayCall(tab.rule.autoplay));
       if (tabId !== activeRef.current) {
         view.injectJavaScript(MUTE_ALL); // only the active tab plays sound
@@ -154,12 +169,15 @@ function Browser({ services }) {
     if (prev && activeRef.current !== id) prev.injectJavaScript(MUTE_ALL);
     setActiveId(id);
     activeRef.current = id;
+    // A tab paused by the playback limit resumes when it becomes active.
+    if (playback.activated(id)) refs.current.get(id)?.injectJavaScript(RESUME);
     const tab = withRule(tabById(id));
     if (tab && !tab.loading) controller.onPage(tab, "tick");
   };
 
   const closeTab = (id) => {
     refs.current.delete(id);
+    playback.closed(id);
     setTabs((list) => {
       const rest = list.filter((t) => t.id !== id);
       if (!rest.length) {

@@ -30,6 +30,7 @@ Last updated: 2026-10-10 (commit 025fb03, shared core and mobile groundwork). De
 | `research.js` | 174 | Research sessions (takes a storage object) |
 | `history.js` | 83 | Visit history and suggestions (`HistoryStore`, takes a storage object) |
 | `preview.js` | 215 | Result-card previews (`createPreview`) |
+| `playback.js` | 58 | `PlaybackLimiter`: which tab to pause when more than 4 play, which to resume |
 | `page-scripts.js` | 293 | Scripts injected into pages: extraction, autoplay, autoplay blocking |
 | `controller.js` | 194 | Suggestion controller: when to search again, pins, hides, results (used by mobile; desktop sidebar still has its own copy, M13) |
 | `storage.js` | 30 | `memoryStorage`, `prefixedStorage` |
@@ -102,6 +103,8 @@ Result cards that already have an image (often Wikipedia and Brave) show it dire
 
 - **Layout.** Focus shows the active tab; Mosaic tiles all tabs in a grid. Tabs have a white default background. Tabs not on screen are removed from the window (`removeChildView`) and added back when shown; this is what makes Chromium stop drawing them (`setVisible(false)` and 0x0 bounds did not). Background throttling is on (Electron default), so hidden tabs' timers slow down; media keeps playing.
 - **Sound.** Each tab's audio is "auto" (audible only when active), "on" or "off". The speaker button on a tab sets on/off; right-click returns it to auto.
+- **Playback limit (`core/playback.js`).** Media may play in up to 4 tabs at once. `main.js` reports `media-started-playing` and `media-paused` per tab to a `PlaybackLimiter`; when a fifth tab starts, the limiter returns the tab that started playing longest ago (never the active tab or the one starting), and `pauseForLimitScript()` pauses its media in every frame (embedded players included) and marks it. The tab shows ⏸ in the tab bar. Activating it runs `resumeScript()`, which plays the marked media again (and may pause the next oldest tab). A tab counts as stopped only when no media in any frame is playing. Mobile uses the same limiter with play and pause reports from the page bridge (main frame only).
+- **Closing tabs.** A closed tab's page is first replaced with `about:blank` and then closed; closing a page while a video played crashed Electron 32 (SIGSEGV, seen on Linux, also in versions before this change). Events from a closing tab are ignored.
 - **Popups.** A `window.open` opens a new tab only if the user clicked or typed in that page in the last 2 s. Otherwise it is blocked and shown in the sidebar with an "Open in new tab" button.
 - **Autoplay.** At DOM ready, after load, and after in-page navigation, `autoplayScript()` plays the page's main media: the largest visible video or YouTube, Vimeo or Dailymotion embed (embeds get `autoplay=1`), or else the first audio element. It runs once per page address, so media the user pauses stays paused. If there is no player yet, a MutationObserver checks again (at most every 250 ms) for 20 s. Sound is on unless the page refuses it, then it plays muted.
 

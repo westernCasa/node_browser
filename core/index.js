@@ -14,6 +14,7 @@ module.exports = {
   ...require("./compat"),
   ...require("./urls"),
   ...require("./controller"),
+  ...require("./playback"),
   AI: require("./ai"),
   Rules: require("./rules"),
 };

@@ -17,7 +17,8 @@
     "test:providers": "node test/providers-demo.js",
     "test:rules": "node test/rules-demo.js",
     "test:ai": "node test/ai-demo.js",
-    "test:controller": "node test/controller-demo.js"
+    "test:controller": "node test/controller-demo.js",
+    "test:playback": "node test/playback-demo.js"
   },
   "devDependencies": {
     "electron": "^32.0.0",

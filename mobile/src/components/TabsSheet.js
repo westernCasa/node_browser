@@ -11,7 +11,7 @@ export default function TabsSheet({ visible, onClose, tabs, activeId, onActivate
         <Button label="New tab" onPress={onNewTab} small />
         {canMosaic ? <Button label={mosaic ? "Mosaic on" : "Mosaic"} active={mosaic} onPress={onToggleMosaic} small /> : null}
       </View>
-      <Text style={[ui.help, { marginBottom: 8 }]}>Mosaic shows several tabs at once (up to 4 on a phone). Tap a tile to make it the active tab; only the active tab plays sound.</Text>
+      <Text style={[ui.help, { marginBottom: 8 }]}>Mosaic shows several tabs at once (up to 4 on a phone). Tap a tile to make it the active tab; only the active tab plays sound. Media plays in up to 4 tabs at once; opening a paused tab resumes it.</Text>
       {tabs.map((t) => (
         <Pressable
           key={t.id}
@@ -22,7 +22,7 @@ export default function TabsSheet({ visible, onClose, tabs, activeId, onActivate
             <Text style={{ color: t.id === activeId ? colors.accent : colors.text, fontWeight: "600" }} numberOfLines={1}>
               {t.title || "New tab"}
             </Text>
-            <Text style={ui.help} numberOfLines={1}>{t.url}</Text>
+            <Text style={ui.help} numberOfLines={1}>{t.pausedByLimit ? "⏸ Paused (4 tabs already playing) · " : ""}{t.url}</Text>
           </View>
           <Pressable onPress={() => onCloseTab(t.id)} hitSlop={10} style={{ paddingHorizontal: 8 }}>
             <Text style={{ color: colors.mute, fontSize: 18 }}>×</Text>

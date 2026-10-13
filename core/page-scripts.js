@@ -290,4 +290,31 @@ function blockAutoplayScript() {
   })()`;
 }
 
-module.exports = { extractionScript, autoplayScript, blockAutoplayScript };
+/** Pauses all playing media and marks it, so resumeScript can start it again (playback limit). */
+function pauseForLimitScript() {
+  return `(() => {
+    let n = 0;
+    document.querySelectorAll("video, audio").forEach((el) => {
+      if (!el.paused && !el.ended) { el.__scoutLimited = true; el.pause(); n++; }
+    });
+    return n;
+  })()`;
+}
+
+/** Resumes media paused by pauseForLimitScript. */
+function resumeScript() {
+  return `(() => {
+    let n = 0;
+    document.querySelectorAll("video, audio").forEach((el) => {
+      if (el.__scoutLimited) { el.__scoutLimited = false; el.play().catch(() => {}); n++; }
+    });
+    return n;
+  })()`;
+}
+
+/** True if any media element in the document is playing. */
+function anyPlayingScript() {
+  return `[...document.querySelectorAll("video, audio")].some((el) => !el.paused && !el.ended)`;
+}
+
+module.exports = { extractionScript, autoplayScript, blockAutoplayScript, pauseForLimitScript, resumeScript, anyPlayingScript };

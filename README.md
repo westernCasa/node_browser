@@ -61,7 +61,8 @@ The old Tauri setup (`src-tauri/`, `renderer/tauri-bridge.js`) does not compile 
 
 1. Each tab is an Electron `WebContentsView`, a real Chromium page. Tabs that are not on screen are detached from the window, so Chromium stops drawing them and slows their timers; their media keeps playing. In Mosaic every tile is on screen, so several videos play together.
 2. **Mosaic** tiles every open tab. Click a tile to make it the current tab. **Focus** shows one tab at full size.
-3. **Sound:** only the active tab is audible. Other tabs keep playing muted. The speaker button on a tab overrides this; right-click it to go back to automatic.
+3. **Playing in several tabs:** media autoplays in every tab, and up to 4 tabs play at once. When a fifth tab starts, the tab that started playing longest ago is paused and marked ⏸ in the tab bar (the active tab is never paused this way). Opening a paused tab resumes it.
+   **Sound:** only the active tab is audible. Other tabs keep playing muted. The speaker button on a tab overrides this; right-click it to go back to automatic.
 4. **Autoplay** is allowed without a prior click. As soon as a page is parsed, Scout plays its main media with sound: the largest visible video or YouTube, Vimeo or Dailymotion embed, or else the first audio player. Players that appear later (built by a script, or on sites like YouTube that change address without reloading) are caught for 20 seconds. Only the main player starts, and media you pause stays paused.
 5. **Popups** open as a new tab only if you clicked or typed in the page in the previous 2 seconds. Other popups are blocked and listed in the sidebar with an "Open in new tab" button.
 6. **Permissions:** camera, microphone, location, notifications, clipboard reading and screen capture always ask first. Answers can be remembered per site (File → Reset Site Permissions clears them).

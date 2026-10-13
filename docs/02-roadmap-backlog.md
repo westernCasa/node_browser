@@ -12,7 +12,7 @@ Each phase ends at a gate that must pass before the next phase starts. No dates 
 | 1. Keyword engine | Keywords come from the page text, and the user's pins and hides stick | B07-B11 | Text-only articles give relevant keywords; a pinned word survives scrolling | Done |
 | 2. Network layer | Cached, rate-limited search through swappable sources | B12-B15 | An hour of browsing with no search blocks; repeat pages load previews from cache | Done (gate still needs a live check) |
 | 3. Behaviour shell | Per-site rules, research session, WebContentsView, history and find, AI query ideas | B16-B20, B25 | A new site behaviour can be added by editing a rules file, without code changes | Done. Gate passed in testing (rules edited live) |
-| 4. Desktop release readiness | Installable, stable and easy to set up on macOS and Windows | B26-B34 | Scout is your daily research browser for a week with no blocking bugs | Next |
+| 4. Desktop release readiness | Installable, stable and easy to set up on macOS and Windows | B26-B36 | Scout is your daily research browser for a week with no blocking bugs | Next |
 | 5. Mobile app | React Native (Expo) app reusing `core/`; see `06-mobile-plan.md` | M01-M15 | To be set when Phase 5 starts | Planning and groundwork done; build waits for the Phase 4 gate. M01-M02 (try it on a phone) can run now |
 
 ## Backlog
@@ -55,6 +55,8 @@ Effort: XS under 1 hour, S half a day, M 1-2 days, L 3+ days. Finding IDs (C1, K
 | B32 | 4 | Speed (feedback: "a little laggy"): read the page on the 5 s timer only after scroll, resize or selection; measure only elements near the viewport; stop drawing hidden tabs and allow background throttling | P0 | S | Done |
 | B33 | 4 | Brave Search as the default: on by default (also for older settings), address-bar searches open Brave Search, one-time notice to add the key | P1 | XS | Done |
 | B34 | 4 | Play media directly: start the main video or embed as soon as the page is parsed, with sound; catch late and single-page players; leave paused media paused | P1 | S | Done |
+| B35 | 4 | Autoplay in several tabs at once, limit 4: the oldest playing tab pauses when a fifth starts, resumes when opened (desktop and mobile) | P1 | S | Done |
+| B36 | 4 | Closing a tab while its video played crashed the app (found while testing B35; also in earlier versions) | P0 | XS | Done |
 
 ## Open checks
 

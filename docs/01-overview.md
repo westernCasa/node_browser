@@ -15,8 +15,8 @@ The long-term goal is a "shell for behaviours": the browser's actions (what to r
 | Electron desktop build | Working. Phases 0 to 3 of the roadmap are done. Next: Phase 4, desktop release readiness. |
 | Mobile app (React Native, Expo) | Planned (`06-mobile-plan.md`). Groundwork done: shared `core/` and a walking-skeleton app in `mobile/` that compiles for iOS and Android. Not yet run on a phone (M01). Full build waits for the Phase 4 gate. |
 | Old Tauri build | Does not compile. Replaced by the React Native plan; to be removed (M15). |
-| Backlog | Desktop: 34 items, 24 done, open B26-B31 (Phase 4). B21-B24 (Tauri) replaced. Mobile: M01-M15 in `06-mobile-plan.md`. |
-| Testing | 8 end-to-end test scripts (83 checks) in `test/e2e`, run in Electron 32.3.3 with search sources and AI servers stubbed. Live results still need a check on a real machine (B26). |
+| Backlog | Desktop: 36 items, 26 done, open B26-B31 (Phase 4). B21-B24 (Tauri) replaced. Mobile: M01-M15 in `06-mobile-plan.md`. |
+| Testing | 9 end-to-end test scripts (92 checks) in `test/e2e`, run in Electron 32.3.3 with search sources and AI servers stubbed. Live results still need a check on a real machine (B26). |
 
 ## Where things are
 
@@ -78,7 +78,7 @@ The end-to-end tests are described in `test/e2e/README.md`.
 - **Research sessions (Trail).** Pages read with their top keywords, keywords that recur across pages, results opened or hidden. Pins are saved per session. Sessions can be renamed, switched, and exported as Markdown notes.
 - **AI query ideas (Settings).** Optional. A local model (Ollama or LM Studio) or Grok suggests up to 2 extra queries from pinned keywords, page keywords and the title. Never sent: page text or addresses.
 - **Search sources (Settings).** Wikipedia for every search, plus web results from the first working source: Brave Search API (the default; add your key), SearXNG, then DuckDuckGo. Searches typed in the address bar open Brave Search.
-- **Autoplay.** The main video or audio on a page starts as soon as the page is parsed, with sound in the active tab. Media you pause stays paused.
+- **Autoplay.** The main video or audio on a page starts as soon as the page is parsed, with sound in the active tab. Media you pause stays paused. Up to 4 tabs play at once; a fifth pauses the oldest, which resumes when you open it.
 - **Site rules (Settings, or File → Edit Site Rules).** Per-site autoplay, sound, popups, Mosaic, whether the page is read for keywords, and which parts of the page to read or skip.
 - **Find, zoom and history.** Find in page, per-tab zoom, address-bar suggestions from history, and a History shelf in the Library.
 - **Library.** Shot (or press S), Save (JSON note) and Media (downloads the main image or video) store files in a local folder.
@@ -107,6 +107,7 @@ The end-to-end tests are described in `test/e2e/README.md`.
 | 2026-10-10 | AI query ideas use a local model or Grok (xAI). |
 | 2026-10-10 | Mobile (Tauri) is on hold until the desktop app passes Phase 4 (daily use for a week with no blocking bugs). |
 | 2026-10-10 | While desktop testing waits: plan the mobile app and lay groundwork now; the full mobile build still waits for the Phase 4 gate. |
+| 2026-10-12 | Media plays in up to 4 tabs at once (desktop and mobile). |
 | 2026-10-12 | Mosaic is available on phones too (up to 4 tiles in portrait), not only tablets. |
 | 2026-10-12 | Brave Search is the default web source and address-bar search engine. |
 | 2026-10-12 | Autoplay plays only the page's main media, with sound, as soon as the page is parsed. |
