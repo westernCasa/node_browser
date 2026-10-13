@@ -109,7 +109,7 @@ The end-to-end tests are described in `test/e2e/README.md`.
 | 2026-10-10 | AI query ideas use a local model or Grok (xAI). |
 | 2026-10-10 | Mobile (Tauri) is on hold until the desktop app passes Phase 4 (daily use for a week with no blocking bugs). |
 | 2026-10-10 | While desktop testing waits: plan the mobile app and lay groundwork now; the full mobile build still waits for the Phase 4 gate. |
-| 2026-10-12 | Media plays in up to 4 tabs at once (desktop and mobile). A toolbar toggle lets all of them play sound (desktop). |
+| 2026-10-12 | Media plays in up to 4 tabs at once (desktop and mobile). A toolbar toggle lets all of them play sound (desktop and Android; iPhone and iPad allow only one video with sound at a time). |
 | 2026-10-12 | Clicking media centers it in the view, on by default, per-site rule `center`. |
 | 2026-10-12 | Mosaic is available on phones too (up to 4 tiles in portrait), not only tablets. |
 | 2026-10-12 | Brave Search is the default web source and address-bar search engine. |

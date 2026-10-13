@@ -6,7 +6,9 @@ Phase 5 groundwork. A React Native (Expo SDK 57) app that reuses the desktop app
 
 - Tabs, each a WebView kept loaded; address bar with back and forward; tab switcher
 - Mosaic on every screen (Mosaic button in the bottom bar): all tabs in a grid on tablets and phones in landscape; up to 4 tiles on a phone in portrait (the active tab plus the 3 most recent others)
-- Autoplay per site rule; background tabs muted
+- Autoplay per site rule, also after in-page navigation (m.youtube.com); background tabs keep playing muted, and the tab you switch to gets its sound back
+- Tabs not on screen stay full size behind the visible ones, because iOS pauses videos it considers invisible
+- Only one tab with sound on iPhone and iPad (an iOS rule); on Android, "Sound: all" in the tab list lets all playing tabs be heard
 - Links that open a new window open a new Scout tab (unless the site rule blocks popups)
 - Suggestions sheet: keywords from the page (tap to pin, hold to hide), Wikipedia results first, then web results, AI query ideas
 - Re-search when a page loads, when you select text, or after scrolling to different content (same rules as desktop: 20 s minimum, 3 s for selections)

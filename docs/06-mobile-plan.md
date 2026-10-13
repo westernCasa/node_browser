@@ -16,6 +16,8 @@ Last updated: 2026-10-10. Status: planning and groundwork done; full build waits
 | On iOS, outside the EU (and Japan, where a law requiring alternative engines was due by December 2025), browsers must use Apple's WebKit | Every option uses WKWebView on iPhone. Pages render the same as in Safari; Scout adds its features around them |
 | Phones have small screens | Mosaic on phones shows at most 4 tiles (stacked in one column for 2-3 tabs, 2 by 2 for 4); tablets and landscape phones show every tab |
 | A WebView has no mute switch | Background tabs are muted from inside the page by an injected script |
+| iOS plays only one video with sound at a time | WebKit (which every iOS browser must use) pauses a playing video that has sound when another one with sound starts; muted videos are not limited. So on iPhone and iPad, several tabs can play at once but only the active tab has sound. Android has no such rule, so "Sound: all" is offered there only. Found in the first phone test (2026-10-12) |
+| iOS pauses videos it considers invisible | Tabs shrunk to 1x1 off-screen counted as invisible, so their videos stopped. Tabs now stay full size, stacked behind the visible ones (fixed 2026-10-12, to confirm on the phone) |
 | iOS limits background activity | Media in tabs will likely pause when Scout is in the background. To confirm on a device (M02) |
 | Phones cannot run large AI models comfortably | "Local model" on a phone means a model server on your own network (for example Ollama on your computer), or Grok |
 | Publishing | Apple Developer Program $99 per year. Google Play $25 once; new personal accounts must run a closed test with at least 12 testers for 14 days before going public |
@@ -84,7 +86,7 @@ Phase 5 starts building after the desktop Phase 4 gate passes. M01-M02 can run a
 
 | ID | Item | Priority | Effort | Status |
 | --- | --- | --- | --- | --- |
-| M01 | Run the skeleton on a phone with Expo Go and report what breaks | P0 | XS | Not started (Sven) |
+| M01 | Run the skeleton on a phone with Expo Go and report what breaks | P0 | XS | Started (Sven, iPhone, 2026-10-12): autoplay stopped in background tabs and only one tab had sound; fixes in progress |
 | M02 | Check on iPhone and Android: page extraction, selection and scroll reports, autoplay, background muting, several tabs playing (limit of 4, center on tap, and whether iOS allows several videos at once), Mosaic on a phone (2, 3 and 4 tiles, memory with 4 pages playing), popups, permission prompts, media in the background | P0 | S | Not started |
 | M03 | Allow plain `http://` to a model server on the local network (iOS App Transport Security, Android cleartext traffic) | P1 | S | Not started |
 | M04 | Site rules on mobile: same file format as desktop, with a simple editor | P1 | M | Not started |

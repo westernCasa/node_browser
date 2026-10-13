@@ -8,6 +8,12 @@ export const BRIDGE = `(function () {
   window.__scoutBridge = true;
   var post = function (m) { try { window.ReactNativeWebView.postMessage(JSON.stringify(m)); } catch (e) {} };
   var t1 = null, t2 = null;
+  // Background tabs are muted by the app (window.__scoutMute). Media that starts
+  // later in a muted tab (a new player, the next video) is muted as it starts.
+  document.addEventListener("play", function (e) {
+    var el = e.target;
+    if (window.__scoutMute && el && !el.muted) { el.muted = true; el.__scoutMuted = true; }
+  }, true);
   document.addEventListener("selectionchange", function () {
     clearTimeout(t1);
     t1 = setTimeout(function () {
@@ -52,7 +58,14 @@ export function autoplayCall(mode) {
 }
 
 // WebViews have no mute switch, so background tabs mute their media from inside.
-export const MUTE_ALL = `document.querySelectorAll("video, audio").forEach(function (el) { el.muted = true; });\ntrue;`;
+// Only media muted this way is unmuted again, not media the page itself muted.
+export const MUTE_ALL = `window.__scoutMute = true;
+document.querySelectorAll("video, audio").forEach(function (el) { if (!el.muted) { el.muted = true; el.__scoutMuted = true; } });
+true;`;
+
+export const UNMUTE = `window.__scoutMute = false;
+document.querySelectorAll("video, audio").forEach(function (el) { if (el.__scoutMuted) { el.__scoutMuted = false; el.muted = false; } });
+true;`;
 
 // Playback limit: pause this tab's media (marked so it can resume), or resume it.
 export const PAUSE_FOR_LIMIT = `${pauseForLimitScript()};\ntrue;`;

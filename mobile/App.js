@@ -1,12 +1,12 @@
 // Scout mobile: walking skeleton (Phase 5 groundwork).
 // Tabs of WebViews, address bar, and the shared suggestion engine from core/.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, Text, TextInput, View, useWindowDimensions } from "react-native";
+import { ActivityIndicator, Platform, Pressable, Text, TextInput, View, useWindowDimensions } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
 import { createServices } from "./src/services";
-import { autoplayCall, CENTER_ON_TAP, extractCall, MUTE_ALL, PAUSE_FOR_LIMIT, RESUME } from "./src/bridge";
+import { autoplayCall, CENTER_ON_TAP, extractCall, MUTE_ALL, PAUSE_FOR_LIMIT, RESUME, UNMUTE } from "./src/bridge";
 import { colors, ui } from "./src/theme";
 import TabView from "./src/components/TabView";
 import Button from "./src/components/Button";
@@ -57,6 +57,19 @@ function Browser({ services }) {
   const [tabs, setTabs] = useState(() => [newTab(HOME_URL)]);
   const [activeId, setActiveId] = useState(() => tabs[0].id);
   const [mosaic, setMosaic] = useState(false);
+  // Sound from every playing tab. Android only: iOS (WebKit) lets only one
+  // video with sound play at a time and pauses the others.
+  const canSoundAll = Platform.OS === "android";
+  const [soundAll, setSoundAllState] = useState(false);
+  const soundAllRef = useRef(false);
+  const setSoundAll = (on) => {
+    soundAllRef.current = on;
+    setSoundAllState(on);
+    for (const [id, view] of refs.current) {
+      if (id === activeRef.current) continue;
+      view.injectJavaScript(on ? UNMUTE : MUTE_ALL);
+    }
+  };
   const [sheet, setSheet] = useState(null); // "suggest" | "tabs" | "trail" | "settings"
   const [address, setAddress] = useState("");
   const [editing, setEditing] = useState(false);
@@ -137,7 +150,14 @@ function Browser({ services }) {
   );
 
   const onNav = useCallback((tabId, nav) => {
+    const before = tabById(tabId);
     updateTab(tabId, { url: nav.url, title: nav.title, canGoBack: nav.canGoBack, canGoForward: nav.canGoForward, loading: nav.loading });
+    // Single-page sites (m.youtube.com and similar) change address without a
+    // new load, so onLoadEnd does not run: start the new page's media here.
+    if (before && !nav.loading && before.url && nav.url !== before.url) {
+      const tab = withRule({ ...before, url: nav.url });
+      refs.current.get(tabId)?.injectJavaScript(autoplayCall(tab.rule.autoplay));
+    }
   }, []);
 
   const onLoadEnd = useCallback(
@@ -150,7 +170,7 @@ function Browser({ services }) {
       view.injectJavaScript(autoplayCall(tab.rule.autoplay));
       if (tab.rule.center !== false) view.injectJavaScript(CENTER_ON_TAP);
       if (tabId !== activeRef.current) {
-        view.injectJavaScript(MUTE_ALL); // only the active tab plays sound
+        if (!soundAllRef.current) view.injectJavaScript(MUTE_ALL); // only the active tab plays sound
         return;
       }
       controller.onPage(tab, "load");
@@ -167,7 +187,9 @@ function Browser({ services }) {
 
   const switchTo = (id) => {
     const prev = refs.current.get(activeRef.current);
-    if (prev && activeRef.current !== id) prev.injectJavaScript(MUTE_ALL);
+    // Mute the tab being left (it keeps playing), then give sound to the new one.
+    if (prev && activeRef.current !== id && !soundAllRef.current) prev.injectJavaScript(MUTE_ALL);
+    refs.current.get(id)?.injectJavaScript(UNMUTE);
     setActiveId(id);
     activeRef.current = id;
     // A tab paused by the playback limit resumes when it becomes active.
@@ -254,17 +276,29 @@ function Browser({ services }) {
         <Button label={String(tabs.length)} small onPress={() => setSheet("tabs")} />
       </View>
 
-      {/* Tabs: every WebView stays mounted; inactive ones are hidden unless Mosaic is on. */}
-      <View style={{ flex: 1, flexDirection: "row", flexWrap: "wrap", backgroundColor: colors.bg }}>
+      {/* Tabs: every WebView stays mounted at full size. Tabs not on screen sit
+          behind the visible ones instead of being shrunk away, because iOS pauses
+          videos it considers invisible. */}
+      <View style={{ flex: 1, backgroundColor: colors.bg }}>
         {tabs.map((t) => {
           const isActive = t.id === activeId;
-          const style = showMosaic && tiledIds.has(t.id)
-            ? { width: `${100 / cols}%`, height: `${100 / rows}%`, borderWidth: isActive ? 2 : 0, borderColor: colors.accent }
-            : isActive
-              ? { flex: 1, width: "100%" }
-              : { position: "absolute", width: 1, height: 1, opacity: 0, left: -10 };
+          const tile = showMosaic ? tiled.findIndex((x) => x.id === t.id) : -1;
+          const onScreen = tile >= 0 || (!showMosaic && isActive);
+          const style =
+            tile >= 0
+              ? {
+                  position: "absolute",
+                  left: `${((tile % cols) * 100) / cols}%`,
+                  top: `${(Math.floor(tile / cols) * 100) / rows}%`,
+                  width: `${100 / cols}%`,
+                  height: `${100 / rows}%`,
+                  zIndex: 2,
+                  borderWidth: isActive ? 2 : 0,
+                  borderColor: colors.accent,
+                }
+              : { position: "absolute", left: 0, top: 0, right: 0, bottom: 0, zIndex: onScreen ? 2 : 0 };
           return (
-            <View key={t.id} style={style}>
+            <View key={t.id} style={style} pointerEvents={onScreen ? "auto" : "none"}>
               <TabView
                 ref={(r) => (r ? refs.current.set(t.id, r) : null)}
                 tab={t}
@@ -311,6 +345,9 @@ function Browser({ services }) {
         }}
         mosaic={mosaic}
         onToggleMosaic={() => setMosaic(!mosaic)}
+        canSoundAll={canSoundAll}
+        soundAll={soundAll}
+        onToggleSoundAll={() => setSoundAll(!soundAll)}
         canMosaic={canMosaic}
       />
       <TrailSheet

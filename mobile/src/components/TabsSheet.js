@@ -4,14 +4,15 @@ import { colors, ui } from "../theme";
 import Button from "./Button";
 import Sheet from "./Sheet";
 
-export default function TabsSheet({ visible, onClose, tabs, activeId, onActivate, onCloseTab, onNewTab, mosaic, onToggleMosaic, canMosaic }) {
+export default function TabsSheet({ visible, onClose, tabs, activeId, onActivate, onCloseTab, onNewTab, mosaic, onToggleMosaic, canMosaic, canSoundAll, soundAll, onToggleSoundAll }) {
   return (
     <Sheet visible={visible} onClose={onClose} title={`${tabs.length} tabs`} kicker="Tabs">
       <View style={{ flexDirection: "row", gap: 6, marginBottom: 10 }}>
         <Button label="New tab" onPress={onNewTab} small />
         {canMosaic ? <Button label={mosaic ? "Mosaic on" : "Mosaic"} active={mosaic} onPress={onToggleMosaic} small /> : null}
+        {canSoundAll ? <Button label={soundAll ? "Sound: all" : "Sound: one"} active={soundAll} onPress={onToggleSoundAll} small /> : null}
       </View>
-      <Text style={[ui.help, { marginBottom: 8 }]}>Mosaic shows several tabs at once (up to 4 on a phone). Tap a tile to make it the active tab; only the active tab plays sound. Media plays in up to 4 tabs at once; opening a paused tab resumes it.</Text>
+      <Text style={[ui.help, { marginBottom: 8 }]}>Mosaic shows several tabs at once (up to 4 on a phone). Tap a tile to make it the active tab. Media plays in up to 4 tabs at once; opening a paused tab resumes it. Only the active tab plays sound{canSoundAll ? " unless Sound: all is on" : " (iPhone and iPad allow one video with sound at a time)"}.</Text>
       {tabs.map((t) => (
         <Pressable
           key={t.id}
