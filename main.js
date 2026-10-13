@@ -2,6 +2,32 @@ const { app, BrowserWindow, WebContentsView, ipcMain, session, shell, protocol, 
 const path = require("path");
 const fs = require("fs");
 const { URL } = require("url");
+
+// The app was renamed from Scout to NODE on 2026-10-13. Its data folder follows
+// the app name, so the first NODE run copies NODE's own files from the old
+// Scout folder: settings, history, bookmarks, site rules, permissions, research
+// sessions, the library and the ad-block lists. (Chromium's own files, such as
+// cookies, start fresh: they are created before this code runs.)
+if (!app.commandLine.hasSwitch("user-data-dir")) {
+  try {
+    const target = app.getPath("userData");
+    const marker = path.join(target, "migrated-from-scout");
+    if (!fs.existsSync(marker) && !fs.existsSync(path.join(target, "settings.json"))) {
+      for (const old of ["Scout", "scout"]) {
+        const from = path.join(app.getPath("appData"), old);
+        if (!fs.existsSync(from) || path.resolve(from).toLowerCase() === path.resolve(target).toLowerCase()) continue;
+        fs.mkdirSync(target, { recursive: true });
+        for (const name of ["settings.json", "history.json", "bookmarks.json", "rules.json", "permissions.json", "adblock.bin", "sessions", "library"]) {
+          const src = path.join(from, name);
+          if (fs.existsSync(src)) fs.cpSync(src, path.join(target, name), { recursive: true, force: false, errorOnExist: false });
+        }
+        fs.writeFileSync(marker, from);
+        break;
+      }
+    }
+  } catch (_) {}
+}
+
 // Platform-neutral logic lives in core/ (shared with the mobile app).
 const { rankTerms, SessionDF } = require("./core/keywords");
 const { PROVIDERS, Registry, defaultSettings, SETTINGS_VERSION } = require("./core/providers");
@@ -816,7 +842,7 @@ function createWindow() {
     minWidth: 1100,
     minHeight: 700,
     backgroundColor: "#121212",
-    title: "Scout",
+    title: "NODE",
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),

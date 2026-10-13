@@ -1,4 +1,4 @@
-# Scout core
+# NODE core
 
 Logic shared by the desktop app (`main.js`, Electron) and the mobile app (`mobile/`, React Native). Nothing in this folder imports Node, Electron or React Native modules; the platform passes in what it needs (a `fetch` function, a storage object, settings getters).
 

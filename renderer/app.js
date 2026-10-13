@@ -1028,7 +1028,7 @@ async function renderSources() {
   document.getElementById("adblock-enabled").checked = settings.adblock !== false;
   const ab = settings.adblockStats || {};
   document.getElementById("adblock-state").textContent =
-    settings.adblock === false ? "Off" : ab.status === "ready" || String(ab.status).startsWith("ready") ? `On · ${ab.blocked} requests blocked since Scout started` : `On · ${ab.status}`;
+    settings.adblock === false ? "Off" : ab.status === "ready" || String(ab.status).startsWith("ready") ? `On · ${ab.blocked} requests blocked since NODE started` : `On · ${ab.status}`;
   sourcesDraft = { providers: {} };
   sourcesList.innerHTML = "";
   for (const meta of settings.meta) {
@@ -1108,7 +1108,7 @@ async function renderSources() {
   }
   sourcesMsg.textContent = settings.encrypted
     ? "API keys are stored encrypted with your system keychain."
-    : "Your system keychain is not available, so API keys are stored as plain text in Scout's settings file.";
+    : "Your system keychain is not available, so API keys are stored as plain text in NODE's settings file.";
 }
 
 async function saveSources(rerender = true) {

@@ -1,4 +1,4 @@
-# Scout mobile (walking skeleton)
+# NODE mobile (walking skeleton)
 
 Phase 5 groundwork. A React Native (Expo SDK 57) app that reuses the desktop app's logic from `../core`. It is a first runnable version, not a finished app: it has not yet been run on a phone or simulator (see "Status" below).
 
@@ -14,7 +14,7 @@ Phase 5 groundwork. A React Native (Expo SDK 57) app that reuses the desktop app
 - Ask AI about the page (Suggestions → Ask AI), with the model from Settings
 - Picture-in-picture allowed for videos (iPhone and iPad)
 - Only one tab with sound on iPhone and iPad (an iOS rule); on Android, "Sound: all" in the tab list lets all playing tabs be heard
-- Links that open a new window open a new Scout tab (unless the site rule blocks popups)
+- Links that open a new window open a new NODE tab (unless the site rule blocks popups)
 - Suggestions sheet: keywords from the page (tap to pin, hold to hide), Wikipedia results first, then web results, AI query ideas
 - Re-search when a page loads, when you select text, or after scrolling to different content (same rules as desktop: 20 s minimum, 3 s for selections)
 - Trail sheet: research session, recurring keywords, pages read, new session, export through the share sheet

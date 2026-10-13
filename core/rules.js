@@ -30,7 +30,7 @@ const ENUMS = {
 
 const DEFAULT_FILE = {
   _help: [
-    "Scout site rules. Edit and save; Scout reloads them right away.",
+    "NODE site rules. Edit and save; NODE reloads them right away.",
     "Each rule has a 'match' and any of: autoplay (on/muted/off), sound (auto/on/off),",
     "popups (gesture/block/allow), suggest (true/false), mosaic (true/false), center (true/false), adblock (true/false),",
     "extract.include and extract.skip (lists of CSS selectors).",

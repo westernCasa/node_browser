@@ -1,6 +1,8 @@
-# Scout
+# NODE
 
-A research browser. No product branding. Multi-tab, mosaic playback so more than one video can run at once, and a side panel that proposes the next pages from keywords on the page you are viewing.
+(Formerly Scout. Renamed to NODE on 2026-10-13. The project folder, the bundle ID `app.scout.browser` and internal names such as `scoutlib://` keep the old name.)
+
+A research browser. Multi-tab, mosaic playback so more than one video can run at once, and a side panel that proposes the next pages from keywords on the page you are viewing.
 
 ## Run
 
@@ -67,11 +69,11 @@ The old Tauri setup (`src-tauri/`, `renderer/tauri-bridge.js`) does not compile 
 2. **Mosaic** tiles every open tab. Click a tile to make it the current tab. **Focus** shows one tab at full size.
 3. **Playing in several tabs:** media autoplays in every tab, and up to 4 tabs play at once. When a fifth tab starts, the tab that started playing longest ago is paused and marked ⏸ in the tab bar (the active tab is never paused this way). Opening a paused tab resumes it.
 4. **Sound:** by default only the active tab is audible and other tabs keep playing muted. The **Sound: one / Sound: all** button in the toolbar (or Cmd/Ctrl+Shift+A) makes every playing tab audible at once. The speaker button on a tab overrides this; right-click it to go back to automatic.
-5. **Autoplay** is allowed without a prior click. As soon as a page is parsed, Scout plays its main media with sound: the largest visible video or YouTube, Vimeo or Dailymotion embed, or else the first audio player. Players that appear later (built by a script, or on sites like YouTube that change address without reloading) are caught for 20 seconds. Only the main player starts, and media you pause stays paused.
+5. **Autoplay** is allowed without a prior click. As soon as a page is parsed, NODE plays its main media with sound: the largest visible video or YouTube, Vimeo or Dailymotion embed, or else the first audio player. Players that appear later (built by a script, or on sites like YouTube that change address without reloading) are caught for 20 seconds. Only the main player starts, and media you pause stays paused.
 6. **Center on click:** clicking a video, an image or an embedded player (YouTube, Vimeo and similar) smoothly scrolls the page so it sits in the middle of the view. Small images such as icons are ignored. Site rule `center` turns it off per site.
 7. **Popups** open as a new tab only if you clicked or typed in the page in the previous 2 seconds. Other popups are blocked and listed in the sidebar with an "Open in new tab" button.
 8. **Permissions:** camera, microphone, location, notifications, clipboard reading and screen capture always ask first. Answers can be remembered per site (File → Reset Site Permissions clears them).
-9. **Keywords** (`keywords.js`): Scout reads the page title, description, headings, selected text and the text currently on screen (navigation and footers skipped). Words are scored by where they appear, how specific they are, and how rare they are across the pages you have visited this session. Multi-word names ("Marie Curie") are kept together.
+9. **Keywords** (`keywords.js`): NODE reads the page title, description, headings, selected text and the text currently on screen (navigation and footers skipped). Words are scored by where they appear, how specific they are, and how rare they are across the pages you have visited this session. Multi-word names ("Marie Curie") are kept together.
 10. **Pin and hide:** click a keyword to pin it; pinned keywords go into every search and are never replaced. × hides a keyword for good (Show all brings them back).
 11. **Search:** pins and the top keywords become 2 or 3 short queries (at most 4 words each). Wikipedia runs for every query. Web results come from the first working source in this order: Brave Search API (the default; needs your API key), SearXNG, DuckDuckGo. Searches typed in the address bar open Brave Search (search.brave.com). A source that rejects a key, hits a rate limit or starts blocking is paused for a while and the next one is used. Results are cached for 30 minutes and requests are spaced out per site.
 12. **Results** show Wikipedia first, within about a second; web results are merged in when they arrive.
@@ -91,11 +93,11 @@ Build an installer on the computer it is for:
 
 ```bash
 npm install
-npm run dist:mac    # macOS: dist/Scout-0.4.0-arm64.dmg (or x64 on Intel Macs)
-npm run dist:win    # Windows: dist/Scout Setup 0.4.0.exe
+npm run dist:mac    # macOS: dist/NODE-0.4.0-arm64.dmg (or x64 on Intel Macs)
+npm run dist:win    # Windows: dist/NODE Setup 0.4.0.exe
 ```
 
-The app is not signed with an Apple Developer ID yet, so the first time macOS says it cannot check the app: right-click Scout in Applications, choose Open, then Open. Automatic updates need a signed app and a download host; they come later.
+The app is not signed with an Apple Developer ID yet, so the first time macOS says it cannot check the app: right-click NODE in Applications, choose Open, then Open. Automatic updates need a signed app and a download host; they come later.
 
 ## Gestures
 
@@ -134,14 +136,14 @@ On result cards, **×** hides a result for the rest of the session, and results 
 
 ## Site rules
 
-Scout reads `rules.json` (File → Edit Site Rules…, or Settings → Edit rules file) and reloads it when you save. Each rule has a `match` and any of these settings:
+NODE reads `rules.json` (File → Edit Site Rules…, or Settings → Edit rules file) and reloads it when you save. Each rule has a `match` and any of these settings:
 
 | Setting | Values | Effect |
 | --- | --- | --- |
 | `autoplay` | `on`, `muted`, `off` | Start media on load, start it muted, or pause media the page starts before you interact |
 | `sound` | `auto`, `on`, `off` | Default sound for tabs on this site (the speaker button still overrides it) |
 | `popups` | `gesture`, `block`, `allow` | Popups only after a click, never, or always |
-| `suggest` | `true`, `false` | `false` stops Scout reading the page for keywords or sending its words to search |
+| `suggest` | `true`, `false` | `false` stops NODE reading the page for keywords or sending its words to search |
 | `mosaic` | `true`, `false` | `false` keeps the site out of the Mosaic grid unless it is the active tab |
 | `center` | `true`, `false` | `true` (default): clicking a video, image or embedded player scrolls it to the middle of the view. `false` turns this off for the site |
 | `adblock` | `true`, `false` | `true` (default): block ads and trackers. `false` allows them on the site |
@@ -158,7 +160,7 @@ Optional (Settings → AI query ideas). An AI model reads your pinned keywords, 
 | Local model | Install [Ollama](https://ollama.com) and run `ollama pull llama3.2` (or any chat model). Address `http://localhost:11434/v1`. LM Studio also works at `http://localhost:1234/v1`. | Nothing leaves your computer |
 | Grok (xAI) | API key from xAI. Press **Test** to see the model names your key can use and pick one. | Keywords and page titles are sent to xAI |
 
-The model never receives page text or addresses, and pages with suggestions turned off by a site rule are never sent. If the model is unreachable or answers badly, Scout uses its normal keyword queries and shows a note. The Grok key is stored like the search keys (encrypted with the system keychain when available).
+The model never receives page text or addresses, and pages with suggestions turned off by a site rule are never sent. If the model is unreachable or answers badly, NODE uses its normal keyword queries and shows a note. The Grok key is stored like the search keys (encrypted with the system keychain when available).
 
 ## Search sources
 
@@ -171,7 +173,7 @@ Open **Settings** in the sidebar to turn sources on or off. **Test** runs one se
 | SearXNG | URL of an instance you run or trust, with the `json` format enabled in its `settings.yml` | No key; you control the engines |
 | DuckDuckGo | Nothing | Fallback only. Reads the HTML results page, so it can break or be rate-limited |
 
-API keys are stored in Scout's `settings.json`, encrypted with the system keychain when one is available.
+API keys are stored in NODE's `settings.json`, encrypted with the system keychain when one is available.
 
 ## What this is not
 

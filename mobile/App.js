@@ -33,12 +33,12 @@ function newTab(url) {
 export default function App() {
   return (
     <SafeAreaProvider>
-      <Scout />
+      <NodeApp />
     </SafeAreaProvider>
   );
 }
 
-function Scout() {
+function NodeApp() {
   const [services, setServices] = useState(null);
   const [error, setError] = useState("");
   useEffect(() => {

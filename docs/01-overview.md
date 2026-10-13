@@ -1,10 +1,10 @@
-# Scout Browser: Overview and Status
+# NODE Browser: Overview and Status
 
-Last updated: 2026-10-12
+Last updated: 2026-10-13
 
-## What Scout is
+## What NODE is
 
-Scout is a desktop web browser for niche research. While you browse, it reads the page you are looking at, picks out keywords, and suggests the next pages to visit in a sidebar. It keeps a trail of what you read in a research session, lets several videos play at once in a tiled view (Mosaic), and saves screenshots, page notes and media into a local library.
+NODE is a desktop web browser for niche research. While you browse, it reads the page you are looking at, picks out keywords, and suggests the next pages to visit in a sidebar. It keeps a trail of what you read in a research session, lets several videos play at once in a tiled view (Mosaic), and saves screenshots, page notes and media into a local library.
 
 The long-term goal is a "shell for behaviours": the browser's actions (what to read from a page, what to autoplay, where to search) are modules that can be switched on, off or replaced per site. Phase 3 delivered the first version of this: per-site rules in a JSON file.
 
@@ -39,7 +39,7 @@ The long-term goal is a "shell for behaviours": the browser's actions (what to r
 | `renderer/` | Desktop toolbar, sidebar and Library UI |
 | `mobile/` | Mobile app (React Native, Expo) walking skeleton |
 | `test/` | Unit demos (`*-demo.js`) and desktop end-to-end tests (`e2e/`) |
-| `docs/` | These documents (also in the Scout Browser project) |
+| `docs/` | These documents (also in the NODE Browser project) |
 | `src-tauri/`, `renderer/tauri-bridge.js` | Old Tauri build; does not compile; to be removed (M15) |
 
 ## How to run
@@ -119,11 +119,12 @@ Desktop: two-finger swipe for back and forward (with an arrow at the page edge),
 | 2026-10-10 | Mobile (Tauri) is on hold until the desktop app passes Phase 4 (daily use for a week with no blocking bugs). |
 | 2026-10-10 | While desktop testing waits: plan the mobile app and lay groundwork now; the full mobile build still waits for the Phase 4 gate. |
 | 2026-10-12 | Media plays in up to 4 tabs at once (desktop and mobile). A toolbar toggle lets all of them play sound (desktop and Android; iPhone and iPad allow only one video with sound at a time). |
-| 2026-10-13 | Competitor matrix made (Scout: Current Features doc). Closed the five "Close now" gaps in 0.4: installer, bookmarks, AI chat about the page, ad and tracker blocking, picture-in-picture. |
+| 2026-10-13 | Renamed from Scout to NODE (app name, window, installer, mobile app name, docs). The data folder is copied over once; saved API keys and site logins must be entered again because the system keychain entry follows the app name. |
+| 2026-10-13 | Competitor matrix made (NODE: Current Features doc). Closed the five "Close now" gaps in 0.4: installer, bookmarks, AI chat about the page, ad and tracker blocking, picture-in-picture. |
 | 2026-10-13 | Ask AI sends the page's text to the chosen model only when the user asks; AI query ideas still never send page text. |
-| 2026-10-13 | Electron upgraded from 32 to 44 (Chromium 152) and the user agent made a standard Chrome one, after Google sign-in refused Scout as "not secure". |
+| 2026-10-13 | Electron upgraded from 32 to 44 (Chromium 152) and the user agent made a standard Chrome one, after Google sign-in refused NODE as "not secure". |
 | 2026-10-12 | Clicking media centers it in the view, on by default, per-site rule `center`. |
 | 2026-10-12 | Mosaic is available on phones too (up to 4 tiles in portrait), not only tablets. |
 | 2026-10-12 | Brave Search is the default web source and address-bar search engine. |
 | 2026-10-12 | Autoplay plays only the page's main media, with sound, as soon as the page is parsed. |
-| 2026-10-10 | Recommended framework for mobile: React Native (Expo) instead of Tauri, because it supports several web pages per screen and reuses Scout's JavaScript logic. Reversible; confirm after trying the skeleton (M01). |
+| 2026-10-10 | Recommended framework for mobile: React Native (Expo) instead of Tauri, because it supports several web pages per screen and reuses NODE's JavaScript logic. Reversible; confirm after trying the skeleton (M01). |

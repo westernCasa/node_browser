@@ -1,30 +1,30 @@
-# Scout Browser: Mobile Plan
+# NODE Browser: Mobile Plan
 
 Last updated: 2026-10-10. Status: planning and groundwork done; full build waits for the desktop Phase 4 gate (daily use for a week with no blocking bugs).
 
 ## Summary
 
 - **Recommendation:** build the mobile app with React Native (Expo), not Tauri. Backlog items B21-B24 (Tauri) are replaced by M01-M15 below.
-- **Why:** a research browser needs several web pages on one screen (tabs kept loaded, Mosaic), scripts injected into each page, and the keyword, search and session logic Scout already has. React Native's WebView component supports all three, and it runs JavaScript, so Scout's existing logic is reused as-is. Tauri documents multiple windows on tablets but not several web views on one phone screen, and its existing Scout code does not compile.
+- **Why:** a research browser needs several web pages on one screen (tabs kept loaded, Mosaic), scripts injected into each page, and the keyword, search and session logic NODE already has. React Native's WebView component supports all three, and it runs JavaScript, so NODE's existing logic is reused as-is. Tauri documents multiple windows on tablets but not several web views on one phone screen, and its existing NODE code does not compile.
 - **Groundwork done:** the platform-neutral logic now lives in `core/` and the desktop app uses it (all desktop tests pass). A walking-skeleton app in `mobile/` uses the same `core/` and compiles for iOS and Android. It has not been run on a device yet (M01).
 - **Next step for Sven:** install Expo Go on a phone and run the skeleton (M01). About 10 minutes; see `mobile/README.md`.
 
 ## Constraints
 
-| Constraint | Effect on Scout |
+| Constraint | Effect on NODE |
 | --- | --- |
-| On iOS, outside the EU (and Japan, where a law requiring alternative engines was due by December 2025), browsers must use Apple's WebKit | Every option uses WKWebView on iPhone. Pages render the same as in Safari; Scout adds its features around them |
+| On iOS, outside the EU (and Japan, where a law requiring alternative engines was due by December 2025), browsers must use Apple's WebKit | Every option uses WKWebView on iPhone. Pages render the same as in Safari; NODE adds its features around them |
 | Phones have small screens | Mosaic on phones shows at most 4 tiles (stacked in one column for 2-3 tabs, 2 by 2 for 4); tablets and landscape phones show every tab |
 | A WebView has no mute switch | Background tabs are muted from inside the page by an injected script |
 | iOS plays only one video with sound at a time | WebKit (which every iOS browser must use) pauses a playing video that has sound when another one with sound starts; muted videos are not limited. So on iPhone and iPad, several tabs can play at once but only the active tab has sound. Android has no such rule, so "Sound: all" is offered there only. Found in the first phone test (2026-10-12) |
 | iOS pauses videos it considers invisible | Tabs shrunk to 1x1 off-screen counted as invisible, so their videos stopped. Tabs now stay full size, stacked behind the visible ones (fixed 2026-10-12, to confirm on the phone) |
-| iOS limits background activity | Media in tabs will likely pause when Scout is in the background. To confirm on a device (M02) |
+| iOS limits background activity | Media in tabs will likely pause when NODE is in the background. To confirm on a device (M02) |
 | Phones cannot run large AI models comfortably | "Local model" on a phone means a model server on your own network (for example Ollama on your computer), or Grok |
 | Publishing | Apple Developer Program $99 per year. Google Play $25 once; new personal accounts must run a closed test with at least 12 testers for 14 days before going public |
 
 ## Options compared
 
-| Option | Several web pages on one screen | Reuses Scout's logic | Script injection into pages | Effort | Verdict |
+| Option | Several web pages on one screen | Reuses NODE's logic | Script injection into pages | Effort | Verdict |
 | --- | --- | --- | --- | --- | --- |
 | **React Native (Expo) + react-native-webview** | Yes: any number of WebView components | Yes: `core/` runs unchanged (JavaScript) | Yes: before load, after load, and on demand, with messages back | Medium | **Recommended** |
 | Tauri 2 mobile | Multiple windows on tablets (iPad scenes, Android activity embedding); several web views on one phone screen not documented | Partly: logic would move into the web front end or be ported to Rust | Yes | High: existing Tauri code does not compile (C2-C4) | Not recommended |
@@ -120,7 +120,7 @@ Phase 5 starts building after the desktop Phase 4 gate passes. M01-M02 can run a
 | Hermes may not support every regular-expression feature used in `core/keywords.js` (Unicode letter classes) at run time, even though it compiles | Confirm in M01 (keywords appear in the Suggestions sheet); fall back to ASCII-plus-Latin classes if not |
 | Many loaded WebViews use a lot of memory on phones | M08 (unload hidden tabs) |
 | iOS may pause media in background tabs or when the app is in the background | Accept for tabs in the background of the app; check behaviour for hidden tabs in M02 |
-| App Store review for browser apps | Scout uses WebKit as required; describe the research features clearly in the listing |
+| App Store review for browser apps | NODE uses WebKit as required; describe the research features clearly in the listing |
 | Two copies of the "when to search" logic until M13 | The desktop sidebar keeps its own copy for now; `core/controller.js` is the reference |
 
 ## Test plan

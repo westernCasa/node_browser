@@ -1,4 +1,4 @@
-# Scout Browser: Architecture
+# NODE Browser: Architecture
 
 Last updated: 2026-10-10 (commit 025fb03, shared core and mobile groundwork). Describes the Electron build and the shared `core/`; the mobile app is covered in `06-mobile-plan.md` and `mobile/README.md`.
 
@@ -122,13 +122,13 @@ Result cards that already have an image (often Wikipedia and Brave) show it dire
 
 - **Bookmarks (`core/bookmarks.js`).** `BookmarkStore` over the storage adapter (`bookmarks.json`, newest first): add, remove, toggle, has, search. Desktop IPC `bookmarks:search|has|toggle|remove`; the renderer paints ☆/★ when the active tab's address changes and merges up to 4 bookmark matches ahead of history in the address-bar list. Mobile uses the same store.
 - **Picture-in-picture.** `pipScript()` picks the playing video, else the largest one, and calls `requestPictureInPicture()` (or exits). `main.js` runs it in every frame with the user-gesture flag (`WebFrameMain.executeJavaScript(code, true)`), so embedded players work; IPC `tab:pip`, menu Cmd/Ctrl+Shift+P.
-- **Ad and tracker blocking (`adblock.js`, desktop only).** Ghostery's engine (`@ghostery/adblocker-electron` 2.19) with the prebuilt ads-and-tracking lists, cached in `userData/adblock.bin` and refreshed after 7 days (the old copy is kept as a fallback when offline). Scout installs its own `session.webRequest.onBeforeRequest` listener and asks the engine per request, so the Settings switch and the site rule `adblock: false` apply at once; main-frame navigations are never blocked. Network blocking only (no cosmetic hiding). Counts per tab and in total.
+- **Ad and tracker blocking (`adblock.js`, desktop only).** Ghostery's engine (`@ghostery/adblocker-electron` 2.19) with the prebuilt ads-and-tracking lists, cached in `userData/adblock.bin` and refreshed after 7 days (the old copy is kept as a fallback when offline). NODE installs its own `session.webRequest.onBeforeRequest` listener and asks the engine per request, so the Settings switch and the site rule `adblock: false` apply at once; main-frame navigations are never blocked. Network blocking only (no cosmetic hiding). Counts per tab and in total.
 - **Ask AI (`core/chat.js`).** `askPage()` sends a system prompt, the page message (title, address, selection, readable text up to 20,000 characters from `readableTextScript()`: the article or main element without navigation, footers, forms and scripts), up to 8 earlier messages and the question to the configured OpenAI-compatible endpoint (`core/ai.js` `endpoint`). Works when a model is configured, whether or not AI query ideas are switched on. One conversation per page address in the UI. IPC `ai:ask`, `ai:chat-info`. Mobile reads the page text through the WebView bridge (`readCall`).
 - **Installer.** electron-builder 26.17 (`build` in `package.json`): mac dmg + zip, Windows NSIS, Linux AppImage; icon `build/icon.png`, rendered with the mobile icons from the logo `build/logo.svg` by `build/icon.html` (screenshot at each size; `?size=&tile=mac|full|round|none&mark=&color=grad|white`). Packaged files: main process, preloads, `core/`, `renderer/`.
 
 ## User agent
 
-`main.js` builds the user agent at startup from the computer's system and Scout's real Chromium version, in the reduced form Chrome uses (for example `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36`), and sets it as `app.userAgentFallback`, so tabs and Scout's own requests use it. It leaves out Electron's "Electron/x" and app-name parts. Before 2026-10-13 it was a fixed string claiming Windows and Chrome 128 on every computer, and Google sign-in answered "This browser or app may not be secure". On iPhone and iPad the WebView's `applicationNameForUserAgent` is set to Safari's ending (`Version/N.0 Mobile/15E148 Safari/604.1`), which WKWebView otherwise leaves out. Android keeps the system WebView's default.
+`main.js` builds the user agent at startup from the computer's system and NODE's real Chromium version, in the reduced form Chrome uses (for example `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36`), and sets it as `app.userAgentFallback`, so tabs and NODE's own requests use it. It leaves out Electron's "Electron/x" and app-name parts. Before 2026-10-13 it was a fixed string claiming Windows and Chrome 128 on every computer, and Google sign-in answered "This browser or app may not be secure". On iPhone and iPad the WebView's `applicationNameForUserAgent` is set to Safari's ending (`Version/N.0 Mobile/15E148 Safari/604.1`), which WKWebView otherwise leaves out. Android keeps the system WebView's default.
 
 ## Permissions
 
@@ -159,7 +159,7 @@ Each tab stores its resolved rule (`tab.rule`), recomputed on every navigation:
 
 ## Research sessions
 
-`core/research.js` keeps one current session and saves each as `<id>.json` (plus `current.txt`) through a storage object; on desktop that is the `sessions/` folder. The renderer records a page in the trail each time Scout actually searches for it (not on every 5-second check), with its top 5 keywords. Start pages and search-results pages are skipped. Pins are saved with the session after it has loaded at startup. "Recurring keywords" are keywords that appear on more than one page in the session. Export writes Markdown to `library/saves/` and adds it to the Library index.
+`core/research.js` keeps one current session and saves each as `<id>.json` (plus `current.txt`) through a storage object; on desktop that is the `sessions/` folder. The renderer records a page in the trail each time NODE actually searches for it (not on every 5-second check), with its top 5 keywords. Start pages and search-results pages are skipped. Pins are saved with the session after it has loaded at startup. "Recurring keywords" are keywords that appear on more than one page in the session. Export writes Markdown to `library/saves/` and adds it to the Library index.
 
 ## Find, zoom and history
 

@@ -33,10 +33,10 @@
     "@ghostery/adblocker-electron": "2.19",
     "@tauri-apps/api": "^2.8.0"
   },
-  "productName": "Scout",
+  "productName": "NODE",
   "build": {
     "appId": "app.scout.browser",
-    "productName": "Scout",
+    "productName": "NODE",
     "directories": {
       "output": "dist",
       "buildResources": "build"
@@ -65,7 +65,7 @@
       ]
     },
     "dmg": {
-      "title": "Scout"
+      "title": "NODE"
     },
     "win": {
       "icon": "build/icon.png",

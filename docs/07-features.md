@@ -1,8 +1,8 @@
-# Scout: Current Features
+# NODE: Current Features
 
-As of 2026-10-13 (Scout 0.4). The editable version is the "Scout: Current Features" doc: https://claude.ai/code/artifact/f8e89633-9036-4b9a-9726-10aede2884fd
+As of 2026-10-13 (NODE 0.4). The editable version is the "NODE: Current Features" doc: https://claude.ai/code/artifact/f8e89633-9036-4b9a-9726-10aede2884fd
 
-Scout is a research browser that reads the page you are on, picks out keywords, and suggests the next pages to read. It also plays media in several tabs at once and keeps a trail of your research.
+NODE is a research browser that reads the page you are on, picks out keywords, and suggests the next pages to read. It also plays media in several tabs at once and keeps a trail of your research.
 
 | Build | Status |
 | --- | --- |
