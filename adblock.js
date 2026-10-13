@@ -12,7 +12,12 @@
 
 const fs = require("fs");
 const path = require("path");
-const { ElectronBlocker } = require("@ghostery/adblocker-electron");
+// Loaded lazily, so a missing package (npm install not run after an update)
+// turns blocking off with a clear status instead of stopping the app.
+let ElectronBlocker = null;
+try {
+  ({ ElectronBlocker } = require("@ghostery/adblocker-electron"));
+} catch (_) {}
 
 const REFRESH_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -24,6 +29,10 @@ function createAdblock({ userData, fetch, isEnabled, isAllowedFor }) {
   let status = "loading";
 
   async function load() {
+    if (!ElectronBlocker) {
+      status = "not installed: run npm install in the NODE folder";
+      return;
+    }
     try {
       const st = fs.existsSync(cacheFile) ? fs.statSync(cacheFile) : null;
       if (st && Date.now() - st.mtimeMs > REFRESH_MS) fs.renameSync(cacheFile, cacheFile + ".old");
