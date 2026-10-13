@@ -110,6 +110,14 @@ Result cards that already have an image (often Wikipedia and Brave) show it dire
 - **Popups.** A `window.open` opens a new tab only if the user clicked or typed in that page in the last 2 s. Otherwise it is blocked and shown in the sidebar with an "Open in new tab" button.
 - **Autoplay.** At DOM ready, after load, and after in-page navigation, `autoplayScript()` plays the page's main media: the largest visible video or YouTube, Vimeo or Dailymotion embed (embeds get `autoplay=1`), or else the first audio element. It runs once per page address, so media the user pauses stays paused. If there is no player yet, a MutationObserver checks again (at most every 250 ms) for 20 s. Sound is on unless the page refuses it, then it plays muted.
 
+## Gestures
+
+- **Trackpad swipe (`view-preload.js`).** A passive capture `wheel` listener adds up horizontal movement (ignored when `ctrlKey` is set, which is a pinch, or when the movement is mostly vertical). If the element under the pointer, or one of its parents, can still scroll sideways in that direction, the swipe is left to the page. An arrow drawn in a closed shadow root at the page edge shows progress. When wheel events stop for 160 ms (fingers lifted and momentum over) and the total passed 220 px, the preload sends `tab:gesture` ("back" when the fingers moved right, negative deltaX). One navigation per swipe.
+- **Mouse side buttons.** `mouseup` with button 3 or 4 in the page (macOS and Linux); `app-command` `browser-backward` / `browser-forward` on the window (Windows).
+- **Three-finger swipe.** The window's `swipe` event (macOS, when the system setting uses three fingers).
+- **Tab bar (`renderer/app.js`).** `auxclick` with the middle button closes a tab; `dblclick` on the empty bar opens one; HTML drag and drop reorders tabs and sends the new order (`tab:order`), which rebuilds the `tabs` map, so Mosaic follows the same order.
+- **Mobile (`mobile/App.js`, `SwipeRow.js`).** `PanResponder` on the address bar row (only for clearly sideways moves of 60 pt or more, not while typing) switches tabs; tab rows in the tab list close on a left swipe past 90 pt; long press on the tab count opens a tab; `BackHandler` sends the Android back button to the page. Edge swipes and pull to refresh come from the WebView (`allowsBackForwardNavigationGestures`, `pullToRefreshEnabled`, iOS).
+
 ## Permissions
 
 | Permission | Behaviour |
@@ -165,7 +173,7 @@ The renderer stores hidden keywords and the Auto setting in local storage.
 
 | Group | Channels |
 | --- | --- |
-| Tabs | `tab:create`, `tab:close`, `tab:activate`, `tab:navigate`, `tab:back`, `tab:forward`, `tab:reload`, `tab:audio`, `tab:audio-reset`, `tab:clicked`, `tab:hotkey`, `tab:activity` |
+| Tabs | `tab:create`, `tab:close`, `tab:activate`, `tab:navigate`, `tab:back`, `tab:forward`, `tab:reload`, `tab:audio`, `tab:audio-reset`, `tab:clicked`, `tab:hotkey`, `tab:activity`, `tab:gesture`, `tab:order`, `audio:all` |
 | Layout | `layout:set`, `layout:sidebar`, `layout:library` |
 | Find, zoom, history | `find:start`, `find:stop`, `tab:zoom`, `history:search`, `history:clear`, `history:remove` |
 | Site rules | `rules:edit`, `rules:reload` |

@@ -797,6 +797,16 @@ function createWindow() {
   });
 
   win.loadFile(path.join(__dirname, "renderer", "index.html"));
+  // macOS three-finger swipe (when "Swipe between pages" uses three fingers).
+  win.on("swipe", (_e, direction) => {
+    if (direction === "right") gestureNav(tabs.get(activeId), "back");
+    if (direction === "left") gestureNav(tabs.get(activeId), "forward");
+  });
+  // Windows: mouse side buttons and keyboard Back/Forward keys.
+  win.on("app-command", (_e, cmd) => {
+    if (cmd === "browser-backward") gestureNav(tabs.get(activeId), "back");
+    if (cmd === "browser-forward") gestureNav(tabs.get(activeId), "forward");
+  });
   win.on("resize", applyLayout);
   win.webContents.on("did-finish-load", () => {
     if (!tabs.size) createTab(HOME_URL);
@@ -875,6 +885,24 @@ ipcMain.on("tab:clicked", (_e, id) => {
 });
 // Plain-key shortcuts pressed inside a web page (sent by view-preload.js only
 // when focus is not in a text field).
+// Gestures (view-preload.js): trackpad swipe and mouse side buttons.
+function gestureNav(tab, dir) {
+  const wc = tab?.view.webContents;
+  if (!wc || wc.isDestroyed()) return;
+  if (dir === "back" && wc.canGoBack()) wc.goBack();
+  if (dir === "forward" && wc.canGoForward()) wc.goForward();
+}
+// Tab order after dragging a tab in the tab bar.
+ipcMain.handle("tab:order", (_e, order) => {
+  if (!Array.isArray(order) || order.length !== tabs.size || !order.every((id) => tabs.has(String(id)))) return;
+  const moved = order.map((id) => [String(id), tabs.get(String(id))]);
+  tabs.clear();
+  for (const [id, tab] of moved) tabs.set(id, tab);
+  applyLayout();
+  emitList();
+});
+ipcMain.on("tab:gesture", (_e, id, dir) => gestureNav(tabs.get(String(id)), dir));
+
 ipcMain.on("tab:hotkey", (_e, id, key) => {
   if (key === "shot" && tabs.has(String(id))) runShotFromMain(String(id));
 });

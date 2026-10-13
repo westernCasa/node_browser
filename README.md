@@ -75,6 +75,35 @@ The old Tauri setup (`src-tauri/`, `renderer/tauri-bridge.js`) does not compile 
 13. **Previews** on result cards load only when a card scrolls into view, 3 at a time. Wikipedia and Brave results that already include an image skip the fetch.
 14. **Auto** re-searches when you open a new page, select text, or scroll to content with different keywords (at most every 20 seconds). Turn Auto off to search only when you press **Crawl**.
 
+## Gestures
+
+Desktop:
+
+| Gesture | Action |
+| --- | --- |
+| Two-finger swipe right / left on a trackpad | Back / forward. An arrow at the edge of the page fills as you swipe; let go when it turns blue. Not triggered inside areas that scroll sideways |
+| Three-finger swipe (macOS, if set in System Settings) | Back / forward |
+| Mouse side buttons | Back / forward |
+| Pinch, or Cmd/Ctrl + scroll | Zoom |
+| Middle-click or Cmd/Ctrl+click a link | Open it in a new background tab |
+| Middle-click a tab | Close it |
+| Double-click the empty part of the tab bar | New tab |
+| Drag a tab | Reorder tabs (also the Mosaic order) |
+| Click a video, image or embedded player | Scroll it to the middle of the view |
+
+Mobile:
+
+| Gesture | Action |
+| --- | --- |
+| Swipe left / right on the address bar | Next / previous tab |
+| Swipe from the screen edge (iPhone) | Back / forward |
+| Android back button | Back |
+| Pull down at the top of a page (iPhone) | Reload |
+| Press and hold the tab count | New tab |
+| Swipe a tab left in the tab list | Close it |
+| Pinch | Zoom the page |
+| Tap a video, image or embedded player | Scroll it to the middle |
+
 ## Research sessions
 
 **Trail** in the sidebar shows the current research session: every page you read (with its top keywords), keywords that recur across pages, and how many suggestions you opened or hid. Click a keyword to pin it. Pinned keywords are saved with the session.

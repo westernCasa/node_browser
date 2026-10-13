@@ -1,6 +1,11 @@
 const api = window.scout || null;
 
 const tabsEl = document.getElementById("tabs");
+// Double-click the empty part of the tab bar to open a new tab.
+tabsEl.addEventListener("dblclick", (e) => {
+  if (e.target !== tabsEl) return;
+  document.getElementById("new-tab").click();
+});
 const omni = document.getElementById("omni");
 const omniForm = document.getElementById("omni-form");
 const keysEl = document.getElementById("keys");
@@ -172,6 +177,41 @@ function renderTabs() {
     });
     el.appendChild(x);
     el.addEventListener("click", () => (api ? api.activateTab(t.id) : demoActivate(t.id)));
+    // Middle-click closes the tab (as in Chrome, Firefox and Safari).
+    el.addEventListener("auxclick", (e) => {
+      if (e.button !== 1) return;
+      e.preventDefault();
+      api ? api.closeTab(t.id) : demoClose(t.id);
+    });
+    el.addEventListener("mousedown", (e) => e.button === 1 && e.preventDefault()); // no autoscroll icon
+    // Drag a tab to reorder it.
+    el.draggable = true;
+    el.dataset.id = t.id;
+    el.addEventListener("dragstart", (e) => {
+      e.dataTransfer.setData("text/scout-tab", t.id);
+      e.dataTransfer.effectAllowed = "move";
+      el.classList.add("dragging");
+    });
+    el.addEventListener("dragend", () => el.classList.remove("dragging"));
+    el.addEventListener("dragover", (e) => {
+      if (!e.dataTransfer.types.includes("text/scout-tab")) return;
+      e.preventDefault();
+      const r = el.getBoundingClientRect();
+      el.classList.toggle("drop-before", e.clientX < r.left + r.width / 2);
+      el.classList.toggle("drop-after", e.clientX >= r.left + r.width / 2);
+    });
+    el.addEventListener("dragleave", () => el.classList.remove("drop-before", "drop-after"));
+    el.addEventListener("drop", (e) => {
+      const id = e.dataTransfer.getData("text/scout-tab");
+      el.classList.remove("drop-before", "drop-after");
+      if (!id || id === t.id) return;
+      e.preventDefault();
+      const r = el.getBoundingClientRect();
+      const order = tabs.map((x) => x.id).filter((x) => x !== id);
+      let at = order.indexOf(t.id) + (e.clientX >= r.left + r.width / 2 ? 1 : 0);
+      order.splice(at, 0, id);
+      api?.moveTabs?.(order);
+    });
     tabsEl.appendChild(el);
   }
   const current = tabs.find((t) => t.id === activeId);

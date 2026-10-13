@@ -1,7 +1,7 @@
 // Scout mobile: walking skeleton (Phase 5 groundwork).
 // Tabs of WebViews, address bar, and the shared suggestion engine from core/.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Keyboard, Platform, Pressable, Text, TextInput, View, useWindowDimensions } from "react-native";
+import { ActivityIndicator, BackHandler, Keyboard, PanResponder, Platform, Pressable, Text, TextInput, View, useWindowDimensions } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
@@ -206,6 +206,38 @@ function Browser({ services }) {
     if (tab && !tab.loading) controller.onPage(tab, "tick");
   };
 
+  // ---- Gestures ----
+  // Swipe left or right on the address bar: next or previous tab (as in Safari).
+  const switchRef = useRef(switchTo);
+  switchRef.current = switchTo;
+  const editingRef = useRef(false);
+  editingRef.current = editing;
+  const addressPan = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponderCapture: (_e, g) => !editingRef.current && Math.abs(g.dx) > 24 && Math.abs(g.dx) > Math.abs(g.dy) * 2,
+      onPanResponderRelease: (_e, g) => {
+        if (Math.abs(g.dx) < 60) return;
+        const list = tabsRef.current;
+        const i = list.findIndex((t) => t.id === activeRef.current);
+        const next = list[i + (g.dx < 0 ? 1 : -1)];
+        if (next) switchRef.current(next.id);
+      },
+    })
+  ).current;
+
+  // Android back button: go back in the page; at the first page, let the system handle it.
+  useEffect(() => {
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      const tab = tabsRef.current.find((t) => t.id === activeRef.current);
+      if (tab?.canGoBack) {
+        refs.current.get(tab.id)?.goBack();
+        return true;
+      }
+      return false;
+    });
+    return () => sub.remove();
+  }, []);
+
   const closeTab = (id) => {
     refs.current.delete(id);
     playback.closed(id);
@@ -260,7 +292,7 @@ function Browser({ services }) {
       <StatusBar style="light" />
       {/* Address bar, with suggestions from history and Wikipedia while typing */}
       <View style={{ zIndex: 20, elevation: 20 }}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, padding: 8, borderBottomWidth: 1, borderColor: colors.line }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, padding: 8, borderBottomWidth: 1, borderColor: colors.line }} {...addressPan.panHandlers}>
         <Button label="‹" small onPress={() => refs.current.get(activeId)?.goBack()} style={!active?.canGoBack && { opacity: 0.4 }} />
         <Button label="›" small onPress={() => refs.current.get(activeId)?.goForward()} style={!active?.canGoForward && { opacity: 0.4 }} />
         <TextInput
@@ -286,7 +318,8 @@ function Browser({ services }) {
           returnKeyType="go"
           selectTextOnFocus
         />
-        <Button label={String(tabs.length)} small onPress={() => setSheet("tabs")} />
+        {/* Tap: tab list. Press and hold: new tab. */}
+        <Button label={String(tabs.length)} small onPress={() => setSheet("tabs")} onLongPress={() => addTab(HOME_URL)} />
       </View>
       {editing ? (
         <AddressSuggestions

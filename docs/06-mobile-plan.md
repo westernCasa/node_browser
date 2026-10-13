@@ -101,6 +101,7 @@ Phase 5 starts building after the desktop Phase 4 gate passes. M01-M02 can run a
 | M13 | Desktop sidebar uses `core/controller.js` too, so the search logic exists once | P2 | M | Not started |
 | M14 | Automated mobile tests (for example Maestro flows on a simulator) | P2 | M | Not started |
 | M15 | Remove the old Tauri code (`src-tauri/`, `renderer/tauri-bridge.js`) once React Native is confirmed | P2 | XS | Not started |
+| M16 | Gestures: swipe on the address bar to change tabs, swipe a tab left to close it, press and hold the tab count for a new tab, Android back button (edge swipe and pull to refresh were already on for iPhone) | P2 | S | Done, to check on the phone |
 
 ## Groundwork done (2026-10-10)
 

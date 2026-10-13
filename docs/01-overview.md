@@ -15,8 +15,8 @@ The long-term goal is a "shell for behaviours": the browser's actions (what to r
 | Electron desktop build | Working. Phases 0 to 3 of the roadmap are done. Next: Phase 4, desktop release readiness. |
 | Mobile app (React Native, Expo) | Planned (`06-mobile-plan.md`). Groundwork done: shared `core/` and a walking-skeleton app in `mobile/` that compiles for iOS and Android. Not yet run on a phone (M01). Full build waits for the Phase 4 gate. |
 | Old Tauri build | Does not compile. Replaced by the React Native plan; to be removed (M15). |
-| Backlog | Desktop: 38 items, 28 done, open B26-B31 (Phase 4). B21-B24 (Tauri) replaced. Mobile: M01-M15 in `06-mobile-plan.md`. |
-| Testing | 10 end-to-end test scripts (100 checks) in `test/e2e`, run in Electron 32.3.3 with search sources and AI servers stubbed. Live results still need a check on a real machine (B26). |
+| Backlog | Desktop: 39 items, 29 done, open B26-B31 (Phase 4). B21-B24 (Tauri) replaced. Mobile: M01-M15 in `06-mobile-plan.md`. |
+| Testing | 11 end-to-end test scripts (110 checks) in `test/e2e`, run in Electron 32.3.3 with search sources and AI servers stubbed. Live results still need a check on a real machine (B26). |
 
 ## Where things are
 
@@ -84,6 +84,10 @@ The end-to-end tests are described in `test/e2e/README.md`.
 - **Find, zoom and history.** Find in page, per-tab zoom, address-bar suggestions from history, and a History shelf in the Library.
 - **Library.** Shot (or press S), Save (JSON note) and Media (downloads the main image or video) store files in a local folder.
 - **Safety.** Camera, microphone, location, notifications and similar permissions always ask first. Popups open only right after a user click. Sign-in, banking and payment pages are never read for suggestions (default rule).
+
+## Gestures
+
+Desktop: two-finger swipe for back and forward (with an arrow at the page edge), three-finger swipe on macOS, mouse side buttons, middle-click a tab to close it, double-click the tab bar for a new tab, drag tabs to reorder. Mobile: swipe on the address bar to change tabs, swipe a tab left to close it, press and hold the tab count for a new tab, edge swipe for back and forward (iPhone), Android back button. The full list is in the README.
 
 ## Keyboard shortcuts
 
