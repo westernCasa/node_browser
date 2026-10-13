@@ -52,6 +52,14 @@ NODE is a research browser that reads the page you are on, picks out keywords, a
 - Permissions always ask; sign-in, banking and payment pages never read or autoplayed; keys encrypted with the keychain; standard Chrome user agent.
 - Page re-read only after scroll, resize or selection; hidden tabs stop drawing; 30-minute result cache; requests spaced per site.
 
+## Desktop: Google window
+
+- Google sign-in and Google apps open in a separate window of a Chromium-based browser (Brave, Chromium, Edge, Vivaldi or Chrome) with its own NODE profile, because Google refuses sign-in inside Electron.
+- The NODE tab shows a placeholder; its button brings the page to the front. Pages already open there are not opened twice.
+- A NODE extension in that window adds visits to NODE's history and applies center on click and autoplay. Google Chrome 137 and later may refuse the extension; the window then works for sign-in only.
+- Settings: sign-in and apps, sign-in only, or off. Search, YouTube and Scholar searches stay in NODE.
+- Not in the Google window: Mosaic, keyword suggestions, the Ask pane and the 4-tab playback limit.
+
 ## Desktop: gestures and shortcuts
 
 | Gesture or keys | Action |

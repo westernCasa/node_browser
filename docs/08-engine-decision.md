@@ -1,6 +1,6 @@
 # 08 — Engine decision: Electron vs a Chromium-based build (B51)
 
-Date: 2026-10-13. Status: **proposed — waiting on Sven's pick.**
+Date: 2026-10-13. Status: **staged plan agreed. First step built: the Google window (B52)**, a separate Chromium-based window for Google account pages with a NODE extension. That extension is the same one step 1 below needs.
 
 ## Why this came up
 

@@ -581,7 +581,9 @@ async function crawlViewport(reason) {
           lastCrawl = { at: Date.now(), url: tab.url, terms: [], selection: "" };
           renderKeys();
           renderResults([]);
-          statusEl.textContent = "Suggestions are off for this site (site rule). Pinned keywords still work with Crawl.";
+          statusEl.textContent = res.page?.google
+            ? "This page is open in the Google window, so NODE does not suggest from it."
+            : "Suggestions are off for this site (site rule). Pinned keywords still work with Crawl.";
         }
         return;
       }
@@ -618,7 +620,7 @@ function startCrawlClock() {
 }
 
 async function afterSettle(tab) {
-  if (!tab?.url || tab.id !== activeId) return;
+  if (!tab?.url || tab.id !== activeId || tab.google) return;
   await crawlViewport("settle");
 }
 
@@ -892,6 +894,8 @@ async function runShot() {
 const noticeEl = document.getElementById("notice");
 
 // Short message in the sidebar, with optional action buttons. Replaces alert().
+let googleNoticeShown = false;
+
 function showNotice(text, actions = []) {
   noticeEl.hidden = false;
   noticeEl.innerHTML = "";
@@ -1051,6 +1055,9 @@ async function renderSources() {
   const ab = settings.adblockStats || {};
   document.getElementById("adblock-state").textContent =
     settings.adblock === false ? "Off" : ab.status === "ready" || String(ab.status).startsWith("ready") ? `On · ${ab.blocked} requests blocked since NODE started` : `On · ${ab.status}`;
+  document.getElementById("google-mode").value = settings.google?.mode || "apps";
+  document.getElementById("google-browser").value = settings.google?.browser || "";
+  fillGoogleState(settings.googleWindow);
   sourcesDraft = { providers: {} };
   sourcesList.innerHTML = "";
   for (const meta of settings.meta) {
@@ -1133,9 +1140,30 @@ async function renderSources() {
     : "Your system keychain is not available, so API keys are stored as plain text in NODE's settings file.";
 }
 
+function fillGoogleState(st) {
+  const el = document.getElementById("google-state");
+  if (!el) return;
+  if (!st) return (el.textContent = "");
+  if (!st.browser) {
+    el.className = "state bad";
+    el.textContent = "No Chromium-based browser found. Google pages will open in your default browser.";
+    return;
+  }
+  el.className = "state" + (st.link === "linked" ? " ok" : "");
+  const link =
+    st.link === "linked"
+      ? "connected to NODE"
+      : st.link === "waiting"
+      ? "started; NODE extension not connected yet (basic mode if the browser refuses it)"
+      : "starts when you open a Google account page";
+  el.textContent = `${st.browser} · ${link}${st.error ? ` · ${st.error}` : ""}`;
+}
+
 async function saveSources(rerender = true) {
   if (!sourcesDraft) return;
-  await api.setSettings({ ...sourcesDraft, ai: aiDraft(), adblock: document.getElementById("adblock-enabled").checked });
+  await api.setSettings({ ...sourcesDraft, ai: aiDraft(), adblock: document.getElementById("adblock-enabled").checked,
+    google: { mode: document.getElementById("google-mode").value, browser: document.getElementById("google-browser").value },
+  });
   if (rerender) await renderSources();
 }
 
@@ -1414,9 +1442,21 @@ if (api) {
       return;
     }
     if (payload.type === "google-signin-blocked") {
-      showNotice("Google does not allow signing in from apps built on Electron, which NODE is for now. Pages that need your Google account can be opened in your default browser.", [
+      showNotice("Google does not allow signing in inside NODE's engine. Turn on the Google window in Settings to sign in there, or use your default browser.", [
         { label: "Open in default browser", run: () => api.openExternal("https://accounts.google.com/") },
       ]);
+      return;
+    }
+    if (payload.type === "google-window") {
+      // Explain once per session; after that the placeholder tab says it.
+      if (payload.ok && googleNoticeShown) return;
+      if (payload.ok) googleNoticeShown = true;
+      showNotice(
+        payload.ok
+          ? "Opened in the Google window. Google account pages open there because Google does not allow sign-in inside NODE's engine."
+          : "No Chromium-based browser (Brave, Chromium, Edge, Vivaldi or Chrome) was found for the Google window, so this page opened in your default browser.",
+        []
+      );
       return;
     }
     if (payload.type === "popup-blocked") {
@@ -1431,6 +1471,7 @@ if (api) {
     }
   });
   api.onCommand?.((msg) => {
+    if (msg.cmd === "google-window-status") return fillGoogleState(msg);
     if (msg.cmd === "focus-omni") {
       omni.focus();
       omni.select();

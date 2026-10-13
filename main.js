@@ -45,6 +45,8 @@ const { extractionScript, autoplayScript, blockAutoplayScript, centerOnClickScri
 const { PlaybackLimiter } = require("./core/playback");
 const { fsStorage } = require("./fs-storage");
 const { normalizeUrl, hostOf } = require("./core/urls");
+const { routesToGoogleWindow, MODES: GOOGLE_MODES } = require("./core/google");
+const { createCompanion } = require("./companion");
 let research = null; // current research session store (B17), created when the app is ready
 
 const HOME_URL = "https://en.wikipedia.org/wiki/Main_Page";
@@ -207,9 +209,19 @@ function emit(payload) {
 
 function tabState(tab) {
   const wc = tab.view.webContents;
+  const raw = wc.getURL();
+  const google = isPlaceholder(raw);
+  let url = raw;
+  if (google) {
+    try {
+      url = new URL(raw).searchParams.get("u") || raw;
+    } catch (_) {}
+  }
   return {
     id: tab.id,
-    url: wc.getURL(),
+    url,
+    google, // placeholder for a page shown in the Google window
+
     title: wc.getTitle() || "New tab",
     canBack: wc.canGoBack(),
     canForward: wc.canGoForward(),
@@ -309,7 +321,7 @@ function attachListeners(tab) {
   on("did-navigate", (_e, url) => {
     playback.stopped(tab.id);
     playback.navigated(tab.id);
-    historyStore.record(url, wc.getTitle());
+    if (!isPlaceholder(url)) historyStore.record(url, wc.getTitle());
     refreshRule(tab, url);
     applyLayout();
     ping();
@@ -348,12 +360,29 @@ function attachListeners(tab) {
     if (!still.some(Boolean)) playback.stopped(tab.id);
     ping();
   });
+  // Links and redirects to Google account pages go to the Google window. A tab
+  // that has no page of its own (new, or a placeholder) shows the placeholder.
+  const toGoogle = (e, url) => {
+    if (!routesToGoogleWindow(url, googleMode())) return;
+    e.preventDefault();
+    routeGoogle(url, tab.id);
+    const here = wc.getURL();
+    if (!here || here === "about:blank" || isPlaceholder(here)) wc.loadURL(placeholderUrl(url));
+  };
+  on("will-navigate", (e) => {
+    if (e.isMainFrame !== false) toGoogle(e, e.url);
+  });
+  on("will-redirect", (e) => {
+    if (e.isMainFrame) toGoogle(e, e.url);
+  });
   // Popups (B04): only open a new tab if the user clicked or typed in this
   // page in the last 2 s. Everything else is blocked and reported to the UI.
   wc.setWindowOpenHandler(({ url, disposition }) => {
     const policy = tab.rule?.popups || "gesture";
     const allowed = policy === "allow" || (policy === "gesture" && Date.now() - tab.lastGesture < 2000);
-    if (allowed) {
+    if (allowed && routesToGoogleWindow(url, googleMode())) {
+      routeGoogle(url, tab.id);
+    } else if (allowed) {
       createTab(url, { background: disposition === "background-tab" });
     } else {
       emit({ type: "popup-blocked", tabId: tab.id, url });
@@ -365,6 +394,46 @@ function attachListeners(tab) {
   on("before-input-event", (_e, input) => {
     if (input.type === "keyDown" || input.type === "mouseDown") tab.lastGesture = Date.now();
   });
+}
+
+// ---- Google window (B52, companion.js) ----
+// Google account pages open in a separate Chromium-based browser window,
+// because Google refuses sign-in inside Electron. The NODE tab shows a
+// placeholder page with a button that brings the page to the front.
+let companion = null;
+
+function googleMode() {
+  return loadSettings().google.mode;
+}
+
+function placeholderUrl(target) {
+  const file = path.join(__dirname, "renderer", "google-tab.html");
+  return `file://${file.split(path.sep).join("/")}?u=${encodeURIComponent(target)}`;
+}
+
+function isPlaceholder(url) {
+  return /\/renderer\/google-tab\.html\?/.test(String(url || ""));
+}
+
+// Returns true when the address was sent to the Google window (or, with no
+// Chromium-based browser installed, to the default browser).
+function routeGoogle(url, tabId) {
+  if (!companion || !routesToGoogleWindow(url, googleMode())) return false;
+  companion.open(url).then((ok) => {
+    if (!ok) {
+      shell.openExternal(url);
+      emit({ type: "google-window", tabId, url, ok: false });
+    } else {
+      emit({ type: "google-window", tabId, url, ok: true });
+    }
+  });
+  return true;
+}
+
+// The address a tab should load: the placeholder for routed Google pages.
+function loadTarget(url, tabId) {
+  const target = normalizeUrl(url);
+  return routeGoogle(target, tabId) ? placeholderUrl(target) : target;
 }
 
 function createTab(url, opts = {}) {
@@ -387,7 +456,7 @@ function createTab(url, opts = {}) {
   tab.attached = true;
   attachListeners(tab);
   if (!opts.background || !activeId) activeId = id;
-  view.webContents.loadURL(normalizeUrl(url));
+  view.webContents.loadURL(loadTarget(url, id));
   applyLayout();
   emitList();
   return id;
@@ -511,6 +580,10 @@ function loadSettings() {
     grok: { model: ai.grok?.model || AI.AI_DEFAULTS.grok.model, key: decryptSecret(ai.grok?.key) },
   };
   base.adblock = raw.adblock !== false;
+  base.google = {
+    mode: GOOGLE_MODES.includes(raw.google?.mode) ? raw.google.mode : "apps",
+    browser: typeof raw.google?.browser === "string" ? raw.google.browser : "",
+  };
   settingsCache = base;
   return settingsCache;
 }
@@ -526,6 +599,10 @@ function saveSettings(next) {
     if (JSON.stringify(current.providers[id]) !== before) search.reset(id);
   }
   if (next && "adblock" in next) current.adblock = Boolean(next.adblock);
+  if (next?.google) {
+    if (GOOGLE_MODES.includes(next.google.mode)) current.google.mode = next.google.mode;
+    if (typeof next.google.browser === "string") current.google.browser = next.google.browser.trim();
+  }
   const inAi = next?.ai;
   if (inAi) {
     const a = current.ai;
@@ -538,7 +615,7 @@ function saveSettings(next) {
     if (inAi.grok?.key !== undefined) a.grok.key = String(inAi.grok.key).trim();
     if (JSON.stringify(a) !== before) aiReset();
   }
-  const disk = { version: SETTINGS_VERSION, adblock: current.adblock !== false, providers: {} };
+  const disk = { version: SETTINGS_VERSION, adblock: current.adblock !== false, google: { ...current.google }, providers: {} };
   for (const [id, conf] of Object.entries(current.providers)) {
     const copy = { ...conf };
     for (const key of secretFields(id)) {
@@ -574,6 +651,8 @@ function publicSettings() {
     aiStatus: { ...aiState },
     adblock: s.adblock !== false,
     adblockStats: adblock ? adblock.stats() : { status: "off", blocked: 0 },
+    google: { ...s.google },
+    googleWindow: companion ? companion.status() : null,
     meta: Object.values(PROVIDERS).map((p) => ({ id: p.id, label: p.label, role: p.role, fields: p.fields, setupHint: p.setupHint || "" })),
     encrypted: safeStorage.isEncryptionAvailable(),
   };
@@ -605,6 +684,8 @@ async function pageKeywords(id, banned = [], opts = {}) {
     const wc = tab.view.webContents;
     return { disabled: true, matched: tab.rule.matched, page: { url: wc.getURL(), title: wc.getTitle() }, ranked: [] };
   }
+  // The Google window placeholder has no content of its own to suggest from.
+  if (tab && isPlaceholder(tab.view.webContents.getURL())) return { disabled: true, page: tabState(tab), ranked: [] };
   const page = await extractPage(id);
   if (!page || page.error) return { page, ranked: [] };
   const ranked = rankTerms(page, { df: sessionDF, banned, limit: 12 });
@@ -912,12 +993,21 @@ app.whenReady().then(() => {
   watchRules();
   research = new ResearchStore(fsStorage(path.join(app.getPath("userData"), "sessions")));
   historyStore = new HistoryStore(fsStorage(app.getPath("userData")));
+  companion = createCompanion({
+    userData: app.getPath("userData"),
+    getSettings: () => ({ browser: loadSettings().google.browser, autoplay: ruleFor("https://www.google.com/").autoplay }),
+    getBounds: () => (win && !win.isDestroyed() ? win.getBounds() : null),
+    onVisit: (url, title) => historyStore.record(url, title),
+    onChange: (st) => sendUi("google-window-status", st),
+  });
+  global.nodeCompanion = companion; // for the e2e tests
   bookmarkStore = new BookmarkStore(fsStorage(app.getPath("userData")));
   buildMenu();
   createWindow();
 });
 
 app.on("window-all-closed", () => app.quit());
+app.on("will-quit", () => companion?.stop());
 
 ipcMain.handle("tab:create", (_e, url) => createTab(url));
 ipcMain.handle("tab:close", (_e, id) => closeTab(id));
@@ -925,7 +1015,7 @@ ipcMain.handle("tab:activate", (_e, id) => activateTab(id));
 ipcMain.handle("tab:navigate", (_e, id, url) => {
   const tab = tabs.get(id);
   if (!tab) return;
-  tab.view.webContents.loadURL(normalizeUrl(url));
+  tab.view.webContents.loadURL(loadTarget(url, id));
 });
 ipcMain.handle("tab:back", (_e, id) => {
   const t = tabs.get(id);

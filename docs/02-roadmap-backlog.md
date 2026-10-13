@@ -71,7 +71,8 @@ Effort: XS under 1 hour, S half a day, M 1-2 days, L 3+ days. Finding IDs (C1, K
 | B48 | 4 | Chrome Web Store extensions | P2 | L | Not started |
 | B49 | 4 | AI chat across tabs and cited summaries of a research session | P2 | M | Not started |
 | B50 | 4 | Sync across devices | P3 | L | Not started |
-| B51 | 5+ | Decide whether to move NODE from Electron to a Chromium-based browser build (as Brave, Vivaldi and Arc do), which Google sign-in accepts; large effort | P1 | L | To decide |
+| B51 | 5+ | Decide whether to move NODE from Electron to a Chromium-based browser build (as Brave, Vivaldi and Arc do), which Google sign-in accepts; large effort. See `08-engine-decision.md` | P1 | L | Staged plan proposed; B52 first |
+| B52 | 4 | Google window: Google sign-in and Google apps open in a separate window of a Chromium-based browser on the computer, with its own NODE profile and a NODE extension (history, center on click, autoplay, no duplicate tabs). The extension is also the first step of B51 | P0 | M | Done; to test sign-in on the Mac |
 
 ## Open checks
 

@@ -20,6 +20,7 @@
     "test:controller": "node test/controller-demo.js",
     "test:playback": "node test/playback-demo.js",
     "test:bookmarks": "node test/bookmarks-demo.js",
+    "test:google": "node test/google-demo.js",
     "dist": "electron-builder",
     "dist:mac": "electron-builder --mac",
     "dist:win": "electron-builder --win"
