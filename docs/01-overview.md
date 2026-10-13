@@ -15,8 +15,8 @@ The long-term goal is a "shell for behaviours": the browser's actions (what to r
 | Electron desktop build | Working. Phases 0 to 3 of the roadmap are done. Next: Phase 4, desktop release readiness. |
 | Mobile app (React Native, Expo) | Planned (`06-mobile-plan.md`). Groundwork done: shared `core/` and a walking-skeleton app in `mobile/` that compiles for iOS and Android. Not yet run on a phone (M01). Full build waits for the Phase 4 gate. |
 | Old Tauri build | Does not compile. Replaced by the React Native plan; to be removed (M15). |
-| Backlog | Desktop: 39 items, 29 done, open B26-B31 (Phase 4). B21-B24 (Tauri) replaced. Mobile: M01-M15 in `06-mobile-plan.md`. |
-| Testing | 11 end-to-end test scripts (110 checks) in `test/e2e`, run in Electron 32.3.3 with search sources and AI servers stubbed. Live results still need a check on a real machine (B26). |
+| Backlog | Desktop: 40 items, 30 done, open B26-B31 (Phase 4). B21-B24 (Tauri) replaced. Mobile: M01-M15 in `06-mobile-plan.md`. |
+| Testing | 11 end-to-end test scripts (111 checks) in `test/e2e`, run in Electron 44.7.0 with search sources and AI servers stubbed. Live results still need a check on a real machine (B26). |
 
 ## Where things are
 
@@ -114,6 +114,7 @@ Desktop: two-finger swipe for back and forward (with an arrow at the page edge),
 | 2026-10-10 | Mobile (Tauri) is on hold until the desktop app passes Phase 4 (daily use for a week with no blocking bugs). |
 | 2026-10-10 | While desktop testing waits: plan the mobile app and lay groundwork now; the full mobile build still waits for the Phase 4 gate. |
 | 2026-10-12 | Media plays in up to 4 tabs at once (desktop and mobile). A toolbar toggle lets all of them play sound (desktop and Android; iPhone and iPad allow only one video with sound at a time). |
+| 2026-10-13 | Electron upgraded from 32 to 44 (Chromium 152) and the user agent made a standard Chrome one, after Google sign-in refused Scout as "not secure". |
 | 2026-10-12 | Clicking media centers it in the view, on by default, per-site rule `center`. |
 | 2026-10-12 | Mosaic is available on phones too (up to 4 tiles in portrait), not only tablets. |
 | 2026-10-12 | Brave Search is the default web source and address-bar search engine. |

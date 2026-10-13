@@ -21,8 +21,17 @@ let research = null; // current research session store (B17), created when the a
 const HOME_URL = "https://en.wikipedia.org/wiki/Main_Page";
 const CHROME_TOP = 112;
 const SIDEBAR_DEFAULT = 225;
-const USER_AGENT =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36";
+// The standard Chrome user agent for this computer's system and Scout's real
+// Chromium version, without the "Electron/..." and app-name parts. Sites such as
+// Google sign-in refuse browsers that say they are embedded (Electron) or
+// whose user agent does not match the system it runs on (an earlier version
+// claimed Windows on every computer, and an old Chrome version).
+const UA_PLATFORM = {
+  darwin: "Macintosh; Intel Mac OS X 10_15_7",
+  win32: "Windows NT 10.0; Win64; x64",
+}[process.platform] || "X11; Linux x86_64";
+const USER_AGENT = `Mozilla/5.0 (${UA_PLATFORM}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${process.versions.chrome.split(".")[0]}.0.0.0 Safari/537.36`;
+app.userAgentFallback = USER_AGENT;
 
 let win;
 let sidebarWidth = SIDEBAR_DEFAULT;

@@ -65,6 +65,9 @@ const log = (...a) => console.log("•", ...a);
   await ui.press("#omni", "Enter");
   await sleep(2500);
   log("page still loading (slow image):", await loading());
+  // User agent: standard Chrome for this system, no "Electron".
+  const ua = await page("navigator.userAgent");
+  log("page user agent mentions Electron:", /Electron/.test(ua), "| Chrome version matches Chromium:", ua.includes(`Chrome/${(await app.evaluate(() => process.versions.chrome)).split(".")[0]}.0.0.0`));
   log("large video:", JSON.stringify(await state("big")), "| small video:", JSON.stringify(await state("small")));
 
   // 2. User pauses it: it stays paused, also after the page finishes loading.

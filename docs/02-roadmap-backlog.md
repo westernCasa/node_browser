@@ -12,7 +12,7 @@ Each phase ends at a gate that must pass before the next phase starts. No dates 
 | 1. Keyword engine | Keywords come from the page text, and the user's pins and hides stick | B07-B11 | Text-only articles give relevant keywords; a pinned word survives scrolling | Done |
 | 2. Network layer | Cached, rate-limited search through swappable sources | B12-B15 | An hour of browsing with no search blocks; repeat pages load previews from cache | Done (gate still needs a live check) |
 | 3. Behaviour shell | Per-site rules, research session, WebContentsView, history and find, AI query ideas | B16-B20, B25 | A new site behaviour can be added by editing a rules file, without code changes | Done. Gate passed in testing (rules edited live) |
-| 4. Desktop release readiness | Installable, stable and easy to set up on macOS and Windows | B26-B39 | Scout is your daily research browser for a week with no blocking bugs | Next |
+| 4. Desktop release readiness | Installable, stable and easy to set up on macOS and Windows | B26-B40 | Scout is your daily research browser for a week with no blocking bugs | Next |
 | 5. Mobile app | React Native (Expo) app reusing `core/`; see `06-mobile-plan.md` | M01-M15 | To be set when Phase 5 starts | Planning and groundwork done; build waits for the Phase 4 gate. M01-M02 (try it on a phone) can run now |
 
 ## Backlog
@@ -60,6 +60,7 @@ Effort: XS under 1 hour, S half a day, M 1-2 days, L 3+ days. Finding IDs (C1, K
 | B37 | 4 | Sound from all playing tabs at once: toolbar toggle and Cmd/Ctrl+Shift+A (desktop; mobile later) | P2 | XS | Done |
 | B38 | 4 | Clicking a video, image or embedded player scrolls it to the middle of the view; site rule `center` (desktop and mobile) | P2 | S | Done |
 | B39 | 4 | Standard browser gestures: trackpad swipe back/forward with an edge arrow, three-finger swipe, mouse side buttons, middle-click tab to close, double-click tab bar for a new tab, drag tabs to reorder (mobile gestures: see M16) | P2 | S | Done |
+| B40 | 4 | Google sign-in said "This browser or app may not be secure": upgrade Electron 32 to 44 (Chromium 128 to 152) and use a standard Chrome user agent for the real system; Safari user agent ending on iPhone. To confirm with a real sign-in | P0 | S | Done, to confirm |
 
 ## Open checks
 
