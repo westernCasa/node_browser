@@ -535,3 +535,6 @@ html, body {
 #suggest-pane > .rail-head { flex-direction: column; align-items: stretch; }
 #suggest-pane .rail-actions { justify-content: flex-start; flex-wrap: wrap; gap: 3px; }
 #suggest-pane .rail-actions .chip { padding: 0 6px; }
+
+/* Logo in the tab row */
+.tabrow .brand { width: 18px; height: 18px; flex: none; align-self: center; margin: 0 4px 0 2px; }

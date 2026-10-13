@@ -807,7 +807,10 @@ async function runShotFromMain(id) {
 }
 
 function createWindow() {
+  // Window icon for Linux and Windows when run from source (installers carry their own).
+  const winIcon = path.join(__dirname, "build", "icon.png");
   win = new BrowserWindow({
+    ...(process.platform !== "darwin" && fs.existsSync(winIcon) ? { icon: winIcon } : {}),
     width: 1440,
     height: 900,
     minWidth: 1100,
@@ -858,6 +861,9 @@ app.whenReady().then(() => {
       return new Response(String(err), { status: 400 });
     }
   });
+  // Dock icon when run from source on macOS (the installed app uses its own icon).
+  const dockIcon = path.join(__dirname, "build", "icon.png");
+  if (process.platform === "darwin" && !app.isPackaged && app.dock && fs.existsSync(dockIcon)) app.dock.setIcon(dockIcon);
   installPermissionHandlers(session.defaultSession);
   // Ad and tracker blocking (adblock.js): on unless turned off in Settings or by a site rule.
   adblock = createAdblock({
