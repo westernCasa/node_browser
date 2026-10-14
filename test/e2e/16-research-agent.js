@@ -19,7 +19,8 @@ const log = (...a) => console.log("•", ...a);
       prompts.push(last);
       if (slow) await sleep(slow);
       let out = "Starters fail mostly because they are kept too cold [1]. Rye flour speeds them up [1][2]. Chlorinated water can slow them [2].\n\n## What to do\n\n- Keep the starter near 26 degrees [1]\n- Use rye for part of the flour [2]";
-      if (last.includes('{"queries"')) out = '{"queries": ["sourdough starter fails", "starter temperature rye"]}';
+      if (last.includes('{"queries"')) out = last.includes("follow-up") ? '{"queries": ["starter water chlorine"]}' : '{"queries": ["sourdough starter fails", "starter temperature rye"]}';
+      else if (last.includes('{"more"')) out = '{"more": false}';
       else if (last.includes('{"pick"')) out = '{"pick": [1, 2, 3]}';
       else if (last.includes("bullet points")) out = last.includes("Starter forum") ? "- Cold kitchens are the main cause\n- Rye flour helps\n- Let tap water stand overnight" : "- Warmth between 24 and 28 degrees\n- Rye feeds the culture faster";
       res.setHeader("content-type", "application/json");
@@ -70,7 +71,17 @@ const log = (...a) => console.log("•", ...a);
   log("privacy line:", (await ui.textContent("#agent-privacy")).slice(0, 70));
   const visitsBefore = await app.evaluate(({ webContents }) => webContents.getAllWebContents().length);
   await ui.click("#agent-start");
-  for (let i = 0; i < 60 && !(await ui.isVisible("#agent-after")); i++) await sleep(500);
+  let sawView = false;
+  for (let i = 0; i < 120 && !(await ui.isVisible("#agent-after")); i++) {
+    if (!sawView && (await ui.isVisible("#agent-view"))) {
+      sawView = true;
+      const src = await ui.$eval("#agent-view-img", (e) => e.src.slice(0, 30));
+      log("live view while reading:", await ui.textContent("#agent-view-cap"), "|", src);
+      await ui.screenshot({ path: path.join(OUT, "agent-live.png") });
+    }
+    await sleep(250);
+  }
+  log("live view shown during the run:", sawView, "| hidden after:", await ui.$eval("#agent-view", (e) => e.hidden));
   log("steps:", (await ui.$$eval("#agent-steps li", (e) => e.map((x) => x.className))).join(" > "));
   log("step lines:", (await ui.$$eval("#agent-steps li", (e) => e.map((x) => x.textContent))).filter((t) => /Reading|Skipped|Not relevant/.test(t)).join(" | "));
   log("searches sent:", JSON.stringify(await app.evaluate(() => globalThis.__agentSearches)));
@@ -91,6 +102,19 @@ const log = (...a) => console.log("•", ...a);
   const session = JSON.parse(fs.readFileSync(path.join(userData, "sessions", sessionFile), "utf8"));
   log("session reports:", session.reports?.length, "| agent activity rows:", session.agent?.length);
 
+  // Follow-up: keeps the earlier sources and their numbers, reads only new pages.
+  const notesBefore = prompts.filter((p) => p.includes("bullet points")).length;
+  log("follow-up box shown:", await ui.isVisible("#agent-followup"), "| first question box hidden:", !(await ui.isVisible("#agent-input")));
+  await ui.fill("#agent-followup", "Does tap water matter?");
+  await ui.press("#agent-followup", "Enter");
+  for (let i = 0; i < 120 && (await ui.$$eval(".agent-turn", (e) => e.length)) < 2; i++) await sleep(250);
+  const turns = await ui.$$eval(".agent-turn h1", (e) => e.map((x) => x.textContent));
+  const planPrompt = prompts.filter((p) => p.includes('{"queries"')).at(-1);
+  log("reports in the thread:", turns.join(" | "));
+  log("follow-up plan knew the earlier question and sources:", /follow-up to an earlier question/.test(planPrompt), /Sources already read/.test(planPrompt));
+  log("pages read again for the follow-up:", prompts.filter((p) => p.includes("bullet points")).length - notesBefore, "(the stubbed search returns the same pages, so 0 expected)");
+  log("follow-up sources:", (await ui.$$eval(".agent-turn:last-child ol:last-of-type li", (e) => e.map((x) => x.textContent))).join(" | "));
+
   // Sources in Mosaic.
   await ui.click("#agent-mosaic");
   await sleep(3000);
@@ -99,6 +123,8 @@ const log = (...a) => console.log("•", ...a);
   // Stop.
   await ui.click("#layout-btn");
   slow = 1500;
+  await ui.click("#agent-new");
+  log("New question clears the thread:", (await ui.$$eval(".agent-turn", (e) => e.length)) === 0, "| question box back:", await ui.isVisible("#agent-input"));
   await ui.fill("#agent-input", "Another question");
   await ui.click("#agent-start");
   await sleep(1000);

@@ -1334,7 +1334,7 @@ ipcMain.handle("talk:get", async (_e, id) => {
 
 // Built-in research agent (core/agent.js): searches, reads pages logged out,
 // writes a report with sources into the Library and the research session.
-ipcMain.handle("agent:run", async (_e, goal) => {
+ipcMain.handle("agent:run", async (_e, goal, previous) => {
   if (researchRun) return { ok: false, error: "The research agent is already running." };
   const ai = loadSettings().ai;
   if (!Chat.canChat(ai)) return { ok: false, error: "Set up a model first under Settings → AI: a local model (Ollama or LM Studio) or a Grok API key." };
@@ -1342,7 +1342,7 @@ ipcMain.handle("agent:run", async (_e, goal) => {
   const note = (entry) => research?.agentActivity({ at: Date.now(), tool: "research agent", ...entry });
   try {
     const out = await runResearch(
-      { goal },
+      { goal, previous: previous && Array.isArray(previous.sources) ? previous : null },
       {
         complete: (messages, opts) => Chat.complete(messages, ai, { fetch: (...a) => globalThis.fetch(...a), ...opts }),
         search: (q) => agentTools.searchForAgent(q),

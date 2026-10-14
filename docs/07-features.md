@@ -63,7 +63,8 @@ NODE is a research browser that reads the page you are on, picks out keywords, a
 
 ## Desktop: research agent
 
-- **Agent** in the sidebar: type a question; NODE plans up to 3 searches, picks up to 6 results, reads them in the logged-out agent session, takes notes and writes a short report with numbered sources.
+- **Agent** in the sidebar: type a question; NODE plans up to 3 searches, reads the best results in the logged-out agent session, checks its notes for gaps and searches once more if needed (8 pages at most), then writes a short report with numbered sources.
+- A small live view shows the page the agent is reading. Follow-up questions keep the earlier sources and their numbers and only read new pages.
 - Each step is listed as it happens; Stop ends it between steps.
 - Reads only addresses from its own search results, so text on a page cannot send it elsewhere; page text is marked as untrusted for the model; links in the model's text are removed and the sources list is built by NODE.
 - The report is saved to the Library and listed in the research session; **Open sources in Mosaic** opens up to 4 sources side by side.

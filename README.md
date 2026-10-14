@@ -162,7 +162,7 @@ On result cards, **×** hides a result for the rest of the session, and results 
 
 ## Research agent
 
-**Agent** in the sidebar asks for a question, then runs a few searches with your sources, reads up to 6 of the results in a separate logged-out session and writes a short report with numbered sources. You see each step as it happens and can stop it. The report is saved to the Library and the research session, and **Open sources in Mosaic** opens the sources side by side. It uses the model set in Settings → AI.
+**Agent** in the sidebar asks for a question, then runs a few searches with your sources, reads the best results in a separate logged-out session, searches once more if its notes leave gaps (8 pages at most) and writes a short report with numbered sources. A small live view shows the page it is reading, and you can ask follow-up questions that build on the sources it already read. You see each step as it happens and can stop it. The report is saved to the Library and the research session, and **Open sources in Mosaic** opens the sources side by side. It uses the model set in Settings → AI.
 
 It only reads pages that came back from its own searches: the model picks results by number and never supplies an address, so hidden text on a page cannot send it somewhere else. It does not sign in, click or fill forms, and skips pages that ask for a password or card details.
 

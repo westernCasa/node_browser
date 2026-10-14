@@ -648,3 +648,10 @@ svg.brand path { fill: var(--ink); }
 .rail-actions { gap: 4px; }
 .rail-actions .chip { letter-spacing: 0.06em; padding: 0 6px; font-size: 10.5px; }
 .card-actions button { border-radius: var(--radius-sm); font-family: var(--sans); font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; font-size: 10.5px; }
+
+/* Research agent v2: live view and report thread */
+#agent-view { margin: 10px 0 0; border: 1px solid var(--line); }
+#agent-view img { display: block; width: 100%; background: var(--surface); }
+#agent-view figcaption { padding: 4px 6px; font: 10.5px/1.4 var(--mono); color: var(--ink-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent-turn + .agent-turn { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+#agent-followup-form { margin-top: 10px; }

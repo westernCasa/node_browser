@@ -131,12 +131,18 @@
             <button class="chip" type="button" id="agent-stop" hidden>Stop</button>
           </div>
         </form>
+        <figure id="agent-view" hidden><img id="agent-view-img" alt="The page the agent is reading" /><figcaption id="agent-view-cap"></figcaption></figure>
         <ol id="agent-steps"></ol>
         <div id="agent-report" hidden></div>
         <div class="actions-row" id="agent-after" hidden>
           <button class="chip" type="button" id="agent-mosaic" title="Open up to 4 of the sources as tabs in Mosaic">Open sources in Mosaic</button>
           <button class="chip" type="button" id="agent-library">Library</button>
+          <button class="chip" type="button" id="agent-new" title="Start over with a new question">New question</button>
         </div>
+        <form id="agent-followup-form" class="ask-form" hidden>
+          <textarea id="agent-followup" rows="2" placeholder="Ask a follow-up. The agent keeps the sources it has read and searches for what is missing."></textarea>
+          <div class="actions-row"><button class="chip" type="submit" id="agent-followup-send">Ask follow-up</button></div>
+        </form>
       </div>
       <div id="trail-pane" hidden>
         <div class="rail-head">

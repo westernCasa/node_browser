@@ -75,14 +75,17 @@ function createAgents({ BrowserWindow, session, userAgent, registry, research, g
   }
 
   let running = 0;
-  async function fetchPage(url) {
+  // withThumb: also return a small screenshot of the page (the research agent
+  // shows it so the user sees what the agent is reading).
+  async function fetchPage(url, { withThumb = false } = {}) {
     if (running >= 3) throw new Error("Three pages are already loading for agents. Try again in a moment.");
     running++;
     const win = new BrowserWindow({
       show: false,
       width: 1280,
       height: 900,
-      webPreferences: { session: readerSession(), sandbox: true, contextIsolation: true, javascript: true, images: false, autoplayPolicy: "document-user-activation-required" },
+      paintWhenInitiallyHidden: true,
+      webPreferences: { session: readerSession(), sandbox: true, contextIsolation: true, javascript: true, images: withThumb, backgroundThrottling: false, autoplayPolicy: "document-user-activation-required" },
     });
     const wc = win.webContents;
     wc.setAudioMuted(true);
@@ -95,7 +98,14 @@ function createAgents({ BrowserWindow, session, userAgent, registry, research, g
       });
       await new Promise((r) => setTimeout(r, 600)); // content added just after load
       checkAddress(wc.getURL(), { allowPrivate: allowPrivate() }); // after redirects
-      return await wc.executeJavaScript(markdownScript(MAX_CHARS), true);
+      const page = await wc.executeJavaScript(markdownScript(MAX_CHARS), true);
+      if (withThumb) {
+        try {
+          const img = await wc.capturePage({ x: 0, y: 0, width: 1280, height: 800 });
+          if (!img.isEmpty()) page.thumb = img.resize({ width: 400 }).toJPEG(70).toString("base64");
+        } catch (_) {}
+      }
+      return page;
     } finally {
       running--;
       if (!win.isDestroyed()) win.destroy();
@@ -205,7 +215,9 @@ function createAgents({ BrowserWindow, session, userAgent, registry, research, g
 
   // Used by the built-in research agent (core/agent.js), with the same checks.
   async function readForAgent(url) {
-    return fetchPage(checkAddress(url, { allowPrivate: allowPrivate() }));
+    const page = await fetchPage(checkAddress(url, { allowPrivate: allowPrivate() }), { withThumb: true });
+    if (page.thumb) page.thumb = `data:image/jpeg;base64,${page.thumb}`;
+    return page;
   }
   async function searchForAgent(query) {
     const [ref, web] = await Promise.all([registry.reference(query).catch(() => []), registry.web(query).catch(() => [])]);

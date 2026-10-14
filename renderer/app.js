@@ -1354,7 +1354,9 @@ document.getElementById("talk-btn").addEventListener("click", () => {
 document.getElementById("talk-back").addEventListener("click", () => showPane("suggest"));
 
 // ---- Research agent pane ----
-let agentRun = { running: false, steps: [], result: null };
+// thread: the reports of this line of questions, oldest first; a follow-up
+// builds on the last one's sources and notes.
+let agentRun = { running: false, steps: [], result: null, thread: [] };
 
 // Report Markdown to HTML. Everything is escaped first; the only links are
 // the [n] marks and the sources list, both built from the sources the app read.
@@ -1398,24 +1400,34 @@ function renderAgent() {
   const steps = document.getElementById("agent-steps");
   steps.innerHTML = "";
   for (const s of agentRun.steps) {
+    if (s.kind === "view") continue;
     const li = document.createElement("li");
     li.className = s.kind;
     li.textContent = s.text;
     steps.appendChild(li);
   }
   steps.scrollTop = steps.scrollHeight;
+  const following = agentRun.thread.length > 0;
+  document.getElementById("agent-form").hidden = following;
   document.getElementById("agent-start").hidden = agentRun.running;
   document.getElementById("agent-stop").hidden = !agentRun.running;
+  // Live view: the latest page the agent opened, while it runs.
+  const view = document.getElementById("agent-view");
+  const last = [...agentRun.steps].reverse().find((s) => s.kind === "view");
+  view.hidden = !(agentRun.running && last);
+  if (!view.hidden && /^data:image\/jpeg;base64,/.test(last.thumb || "")) {
+    document.getElementById("agent-view-img").src = last.thumb;
+    document.getElementById("agent-view-cap").textContent = last.text;
+  }
   const rep = document.getElementById("agent-report");
   const r = agentRun.result;
-  rep.hidden = !r;
-  document.getElementById("agent-after").hidden = !(r && r.ok);
-  if (!r) return;
-  if (!r.ok) {
-    rep.innerHTML = `<p class="bad">${escapeHtml(r.stopped ? "Stopped." : r.error)}</p>`;
-    return;
-  }
-  rep.innerHTML = reportHtml(r.report, r.sources);
+  rep.hidden = !r && !following;
+  document.getElementById("agent-after").hidden = !following || agentRun.running;
+  document.getElementById("agent-followup-form").hidden = !following || agentRun.running;
+  let html = agentRun.thread.map((t) => `<section class="agent-turn">${reportHtml(t.report, t.sources)}</section>`).join("");
+  if (r && !r.ok) html += `<p class="bad">${escapeHtml(r.stopped ? "Stopped." : r.error)}</p>`;
+  rep.innerHTML = html;
+  if (r?.ok) rep.lastElementChild?.scrollIntoView({ block: "start" });
 }
 
 async function openAgent() {
@@ -1429,14 +1441,20 @@ async function openAgent() {
   document.getElementById("agent-input").focus();
 }
 
-async function startAgent() {
-  const goal = document.getElementById("agent-input").value.trim();
+async function startAgent(followUp = false) {
+  const box = document.getElementById(followUp ? "agent-followup" : "agent-input");
+  const goal = box.value.trim();
   if (!goal || agentRun.running) return;
-  agentRun = { running: true, steps: [], result: null };
+  const prev = followUp ? agentRun.thread.at(-1) : null;
+  agentRun = { running: true, steps: [], result: null, thread: followUp ? agentRun.thread : [] };
   renderAgent();
-  const r = await api.runAgent(goal);
+  const r = await api.runAgent(goal, prev ? { question: prev.question, sources: prev.allSources } : null);
   agentRun.running = false;
   agentRun.result = r;
+  if (r.ok) {
+    agentRun.thread.push(r);
+    box.value = "";
+  }
   renderAgent();
 }
 
@@ -1453,13 +1471,30 @@ document.getElementById("agent-input").addEventListener("keydown", (e) => {
   }
 });
 document.getElementById("agent-stop").addEventListener("click", () => api.stopAgent());
+document.getElementById("agent-followup-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  startAgent(true);
+});
+document.getElementById("agent-followup").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    startAgent(true);
+  }
+});
+document.getElementById("agent-new").addEventListener("click", () => {
+  agentRun = { running: false, steps: [], result: null, thread: [] };
+  renderAgent();
+  document.getElementById("agent-input").focus();
+});
 document.getElementById("agent-report").addEventListener("click", (e) => {
   const a = e.target.closest("a[data-n]");
-  const src = a && agentRun.result?.sources?.find((s) => s.n === Number(a.dataset.n));
+  const turn = a?.closest(".agent-turn");
+  const idx = turn ? [...turn.parentElement.querySelectorAll(".agent-turn")].indexOf(turn) : -1;
+  const src = a && agentRun.thread[idx]?.sources?.find((s) => s.n === Number(a.dataset.n));
   if (src) api.createTab(src.url);
 });
 document.getElementById("agent-mosaic").addEventListener("click", async () => {
-  for (const s of (agentRun.result?.sources || []).slice(0, 4)) await api.createTab(s.url);
+  for (const s of (agentRun.thread.at(-1)?.sources || []).slice(0, 4)) await api.createTab(s.url);
   if (layout !== "mosaic") layoutBtn.click();
 });
 document.getElementById("agent-library").addEventListener("click", () => document.getElementById("library-btn").click());
