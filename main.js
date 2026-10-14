@@ -689,7 +689,11 @@ async function pageKeywords(id, banned = [], opts = {}) {
   const page = await extractPage(id);
   if (!page || page.error) return { page, ranked: [] };
   const ranked = rankTerms(page, { df: sessionDF, banned, limit: 12 });
-  return { page: { url: page.url, title: page.title, selection: page.selection }, ranked };
+  // The trail records the page's own topic words, without the session weighting
+  // that lowers words seen on earlier pages (that weighting suits searching for
+  // something new, but it hid the keywords that recur across a session).
+  const topic = rankTerms(page, { banned, limit: 6 }).map((r) => r.term);
+  return { page: { url: page.url, title: page.title, selection: page.selection }, ranked, topic };
 }
 
 // ---- Previews: core/preview.js ----

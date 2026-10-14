@@ -570,6 +570,7 @@ async function crawlViewport(reason) {
   if (!tab.url || (reason === "tick" && (tab.loading || !autoOn || crawlBusy))) return;
   try {
     let ranked;
+    let topic = null;
     let selection = "";
     if (api.keywords) {
       const res = await api.keywords(tab.id, banned, { ifChanged: reason === "tick" && tab.url === lastCrawl.url });
@@ -588,6 +589,7 @@ async function crawlViewport(reason) {
         return;
       }
       ranked = res.ranked || [];
+      topic = res.topic || null;
       selection = res.page?.selection || "";
     } else {
       ranked = deriveKeywords(await api.extract(tab.id)).map((term) => ({ term }));
@@ -606,7 +608,7 @@ async function crawlViewport(reason) {
     }
     auto = ranked;
     lastCrawl = { at: now, url: tab.url, terms, selection };
-    api.researchVisit?.(tab.url, tab.title, terms.slice(0, 5));
+    api.researchVisit?.(tab.url, tab.title, (topic || terms).slice(0, 6));
     renderKeys();
     await crawl();
   } catch (err) {
