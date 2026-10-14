@@ -14,7 +14,7 @@ Built with Electron and plain JavaScript, with an Expo mobile app (iPhone and An
 | **Mosaic: four tabs playing at once.** Tile tabs in a grid. Media starts on its own and up to four tabs play together; "Sound: all" lets you hear every one of them. Clicking a video scrolls it to the middle. | ![Four video tabs in Mosaic](docs/media/mosaic.png) |
 | **Research trail.** Every page read in a session, with its top keywords, the keywords that recur across pages, and an export to Markdown. | ![Research trail panel](docs/media/trail.png) |
 
-Also: per-site behaviour rules, ad and tracker blocking, bookmarks, picture in picture, trackpad and mouse gestures, Ask AI about a page with a local model, and a separate Google window for Google sign-in. The full list is in [docs/07-features.md](docs/07-features.md).
+Also: a read-only MCP server so AI agents such as Claude Code can search, read pages and read your research trails ([details](#ai-agents-mcp)), per-site behaviour rules, ad and tracker blocking, bookmarks, picture in picture, trackpad and mouse gestures, Ask AI about a page with a local model, and a separate Google window for Google sign-in. The full list is in [docs/07-features.md](docs/07-features.md).
 
 The screenshots use a fictional site made for them ([docs/media/src](docs/media/src)), so they can be rebuilt with `node docs/media/src/make-shots.js`.
 
