@@ -1,0 +1,30 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+/* Frames a raw NODE capture for the README. make-frames.js loads this page
+   with ?img=raw/<name>.png&hero=1 and saves a screenshot of #stage. */
+:root{--bg1:#1c1530;--bg2:#0e0b16;--violet:#8b5cf6;--lav:#c4b5fd}
+body{margin:0;background:#fff}
+#stage{width:1600px;padding:56px 80px 72px;box-sizing:border-box;background:radial-gradient(1200px 600px at 20% 0%,#2a1d4d 0%,var(--bg1) 45%,var(--bg2) 100%);font-family:-apple-system,"Inter","Segoe UI",sans-serif;color:#fff}
+.head{display:flex;align-items:center;gap:18px;margin-bottom:34px}
+.mark{width:56px;height:56px;border-radius:14px;background:linear-gradient(145deg,var(--violet),#6d28d9);display:grid;place-items:center;box-shadow:0 8px 30px rgba(139,92,246,.45)}
+.mark svg{width:34px;height:34px;fill:#fff}
+h1{margin:0;font-size:44px;letter-spacing:.02em;font-weight:800}
+.tag{margin:4px 0 0;font-size:20px;color:var(--lav)}
+.win{border-radius:14px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.08)}
+.bar{height:34px;background:#232027;display:flex;align-items:center;gap:8px;padding:0 14px}
+.bar i{width:12px;height:12px;border-radius:50%;display:block}
+.win img{display:block;width:100%}
+body:not(.hero) .head{display:none}
+body:not(.hero) #stage{padding:48px 64px 56px}
+</style></head><body>
+<div id="stage">
+  <div class="head">
+    <div class="mark"><svg viewBox="22.8 -0.2 24 24"><path transform="matrix(1.20193,0,0,1.20193,22.7763,-2.42319)" d="M10.004,12.998L1.067,12.998C1.035,12.67 1.018,12.337 1.018,12C1.018,11.663 1.035,11.33 1.067,11.002L8.593,11.002L3.273,5.682C3.696,5.166 4.169,4.693 4.684,4.271L10.004,9.591L10.004,2.065C10.332,2.033 10.665,2.016 11.002,2.016C11.339,2.016 11.672,2.033 12,2.065L12,11.002L20.937,11.002C20.969,11.33 20.986,11.663 20.986,12C20.986,12.337 20.969,12.67 20.937,12.998L13.411,12.998L18.731,18.318C18.309,18.834 17.836,19.307 17.32,19.729L12,14.409L12,21.935C11.672,21.967 11.339,21.984 11.002,21.984C10.665,21.984 10.332,21.967 10.004,21.935L10.004,12.998Z"/></svg></div>
+    <div><h1>NODE</h1><p class="tag">A browser for niche research: suggestions from the page you're reading, media in up to four tabs at once.</p></div>
+  </div>
+  <div class="win"><div class="bar"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></div><img id="shot" alt=""></div>
+</div>
+<script>
+const q = new URLSearchParams(location.search);
+document.getElementById("shot").src = q.get("img");
+if (q.get("hero")) document.body.classList.add("hero");
+</script></body></html>

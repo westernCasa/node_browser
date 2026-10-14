@@ -1,0 +1,10 @@
+# README screenshots
+
+The images in `docs/media` are real NODE captures of a fictional site, "Abyssal Notes", served locally. Search results are pointed at that site, so nothing comes from the web. To rebuild them (Linux, with Xvfb, ImageMagick, ffmpeg and Playwright):
+
+```bash
+node docs/media/src/make-art.js     # illustrations: art.html -> site/img/*.jpg
+node docs/media/src/make-site.js    # demo pages and short videos
+node docs/media/src/make-shots.js   # runs NODE and captures raw/*.png
+node docs/media/src/make-frames.js  # frames them with frame.html -> docs/media/*.png
+```

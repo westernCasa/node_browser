@@ -1,0 +1,52 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:0;background:#000}
+.art{width:960px;height:540px;position:relative;overflow:hidden}
+svg{display:block}
+</style></head><body>
+<script>
+// Illustrations for the demo pages used in the README screenshots.
+// Each scene is rendered here and saved as a JPG by make-shots.js.
+let seed = 7;
+const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+const scenes = {
+  deep: { top: "#0b3a5c", bottom: "#010712", glow: "#7ef9ff", dots: 90, jelly: 2, fish: 0 },
+  jelly: { top: "#123e57", bottom: "#020a14", glow: "#f0abfc", dots: 60, jelly: 5, fish: 0 },
+  squid: { top: "#1e1442", bottom: "#05030f", glow: "#a78bfa", dots: 70, jelly: 0, fish: 3 },
+  lure: { top: "#0a2540", bottom: "#000307", glow: "#fde68a", dots: 40, jelly: 0, fish: 1, lure: true },
+  plankton: { top: "#06363a", bottom: "#000a0b", glow: "#5eead4", dots: 420, jelly: 0, fish: 0 },
+  sub: { top: "#1b5b85", bottom: "#020814", glow: "#fef3c7", dots: 50, jelly: 1, fish: 0, sub: true },
+  vent: { top: "#3b1d14", bottom: "#050202", glow: "#fb923c", dots: 80, jelly: 0, fish: 0, vent: true },
+  map: { top: "#0f2a44", bottom: "#030a14", glow: "#38bdf8", dots: 30, jelly: 0, fish: 0, map: true },
+};
+for (const [name, s] of Object.entries(scenes)) {
+  let g = `<defs><linearGradient id="bg${name}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${s.top}"/><stop offset="1" stop-color="${s.bottom}"/></linearGradient>
+  <filter id="b${name}" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="6"/></filter>
+  <filter id="s${name}" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="2"/></filter>
+  <radialGradient id="r${name}"><stop offset="0" stop-color="${s.glow}" stop-opacity=".9"/><stop offset="1" stop-color="${s.glow}" stop-opacity="0"/></radialGradient></defs>
+  <rect width="960" height="540" fill="url(#bg${name})"/>`;
+  // light shafts
+  for (let i = 0; i < 4; i++) { const x = 100 + rnd() * 760; g += `<polygon points="${x},0 ${x + 60},0 ${x + 220},540 ${x + 80},540" fill="#ffffff" opacity="${0.02 + rnd() * 0.03}"/>`; }
+  for (let i = 0; i < s.dots; i++) {
+    const x = rnd() * 960, y = rnd() * 540, r = 0.6 + rnd() * (s.dots > 200 ? 1.6 : 2.6);
+    g += `<circle cx="${x}" cy="${y}" r="${r * 4}" fill="url(#r${name})" opacity="${0.3 + rnd() * 0.5}"/><circle cx="${x}" cy="${y}" r="${r * 0.6}" fill="${s.glow}"/>`;
+  }
+  for (let j = 0; j < s.jelly; j++) {
+    const cx = 200 + rnd() * 560, cy = 140 + rnd() * 220, w = 60 + rnd() * 70;
+    g += `<g opacity=".95"><ellipse cx="${cx}" cy="${cy}" rx="${w * 1.3}" ry="${w}" fill="url(#r${name})" opacity=".35"/>
+      <path d="M${cx - w / 2},${cy} Q${cx},${cy - w * 0.9} ${cx + w / 2},${cy} Q${cx},${cy - w * 0.15} ${cx - w / 2},${cy}Z" fill="${s.glow}" opacity=".55" filter="url(#s${name})"/>`;
+    for (let t = 0; t < 7; t++) { const tx = cx - w / 2.4 + (t * w) / 7.5; g += `<path d="M${tx},${cy - 4} q${-10 + rnd() * 20},${40} ${-6 + rnd() * 12},${90 + rnd() * 60}" stroke="${s.glow}" stroke-width="1.6" fill="none" opacity=".55"/>`; }
+    g += `</g>`;
+  }
+  for (let f = 0; f < s.fish; f++) {
+    const cx = 220 + rnd() * 520, cy = 160 + rnd() * 240, L = 120 + rnd() * 80;
+    g += `<g opacity=".9"><path d="M${cx - L / 2},${cy} q${L / 2},${-L / 3} ${L},0 q${-L / 2},${L / 3} ${-L},0z" fill="#0b0a1a" stroke="${s.glow}" stroke-opacity=".5"/>`;
+    for (let p = 0; p < 9; p++) g += `<circle cx="${cx - L / 2.6 + (p * L) / 11}" cy="${cy + L / 9}" r="2.4" fill="${s.glow}" filter="url(#s${name})"/>`;
+    g += `</g>`;
+  }
+  if (s.lure) g += `<path d="M380,330 q60,-120 170,-140" stroke="#334155" stroke-width="3" fill="none"/><circle cx="552" cy="190" r="40" fill="url(#r${name})"/><circle cx="552" cy="190" r="7" fill="${s.glow}"/><path d="M240,360 q140,-90 260,0 q-120,80 -260,0z" fill="#05070d" stroke="#1e293b"/>`;
+  if (s.sub) g += `<ellipse cx="560" cy="300" rx="120" ry="44" fill="#0b1220" stroke="#64748b"/><rect x="530" y="236" width="50" height="30" rx="8" fill="#0b1220" stroke="#64748b"/><polygon points="440,300 300,240 300,360" fill="${s.glow}" opacity=".12"/><circle cx="445" cy="300" r="10" fill="${s.glow}"/>`;
+  if (s.vent) for (let v = 0; v < 3; v++) { const x = 220 + v * 240; g += `<path d="M${x - 40},540 L${x - 12},380 L${x + 12},380 L${x + 40},540Z" fill="#1c1917"/><ellipse cx="${x}" cy="330" rx="50" ry="70" fill="url(#r${name})" opacity=".5"/>`; }
+  if (s.map) { for (let l = 0; l < 9; l++) g += `<path d="M0,${120 + l * 45} C240,${60 + l * 50} 520,${200 + l * 40} 960,${110 + l * 48}" stroke="${s.glow}" stroke-opacity="${0.15 + l * 0.05}" fill="none"/>`; }
+  document.body.insertAdjacentHTML("beforeend", `<div class="art" id="${name}"><svg width="960" height="540" viewBox="0 0 960 540">${g}</svg></div>`);
+}
+</script></body></html>

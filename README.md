@@ -1,8 +1,30 @@
 # NODE
 
-(Formerly Scout. Renamed to NODE on 2026-10-13. The project folder, the bundle ID `app.scout.browser` and internal names such as `scoutlib://` keep the old name.)
+![NODE, a research browser, showing an article with keyword suggestions in the side panel](docs/media/hero.png)
 
-A research browser. Multi-tab, mosaic playback so more than one video can run at once, and a side panel that proposes the next pages from keywords on the page you are viewing.
+NODE is a desktop browser for niche research. It reads the page you are on, picks out its keywords, and suggests the next pages to read in a side panel. Media plays in up to four tabs at once, side by side, and every page you read is kept in a research trail you can export.
+
+Built with Electron and plain JavaScript, with an Expo mobile app (iPhone and Android, in testing) that shares the same core logic. Status: personal project, version 0.4, in active development.
+
+## What it does
+
+| | |
+| --- | --- |
+| **Suggestions from the page you're reading.** Keywords come from the part of the page in view. Pin a keyword to keep it, × to hide it, or select text to search for it. Results come from Brave Search, Wikipedia, SearXNG or DuckDuckGo, with image previews. | ![Suggestions side panel](docs/media/suggestions.png) |
+| **Mosaic: four tabs playing at once.** Tile tabs in a grid. Media starts on its own and up to four tabs play together; "Sound: all" lets you hear every one of them. Clicking a video scrolls it to the middle. | ![Four video tabs in Mosaic](docs/media/mosaic.png) |
+| **Research trail.** Every page read in a session, with its top keywords, the keywords that recur across pages, and an export to Markdown. | ![Research trail panel](docs/media/trail.png) |
+
+Also: per-site behaviour rules, ad and tracker blocking, bookmarks, picture in picture, trackpad and mouse gestures, Ask AI about a page with a local model, and a separate Google window for Google sign-in. The full list is in [docs/07-features.md](docs/07-features.md).
+
+The screenshots use a fictional site made for them ([docs/media/src](docs/media/src)), so they can be rebuilt with `node docs/media/src/make-shots.js`.
+
+## Project docs
+
+- [Overview](docs/01-overview.md), [roadmap and backlog](docs/02-roadmap-backlog.md), [architecture](docs/03-architecture.md)
+- [Review findings](docs/04-review-findings.md), [change log](docs/05-changelog.md), [mobile plan](docs/06-mobile-plan.md)
+- [Features and competitor comparison](docs/07-features.md), [engine decision: Electron or Chromium](docs/08-engine-decision.md)
+
+NODE was called Scout until October 2026. The bundle ID `app.scout.browser` and some internal names keep the old name.
 
 ## Run
 
