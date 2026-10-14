@@ -135,6 +135,7 @@ function renderZoom() {
 
 function renderTabs() {
   renderRuleLine();
+  paintAgentButtons();
   if (typeof paintStar === "function" && (tabs.find((t) => t.id === activeId)?.url || "") !== starUrl) paintStar();
   renderZoom();
   // Find bar open while switching tabs: clear the old tab, search the new one.
@@ -147,6 +148,13 @@ function renderTabs() {
     const el = document.createElement("div");
     el.className = "tab" + (t.id === activeId ? " active" : "");
     el.innerHTML = `<span title="${escapeHtml(t.url || "")}">${escapeHtml(t.title || "New tab")}</span>`;
+    if (t.agentShared) {
+      const m = document.createElement("i");
+      m.className = "agent-mark";
+      m.textContent = "◆";
+      m.title = "Shared with AI agents";
+      el.appendChild(m);
+    }
     if (t.pausedByLimit) {
       const p = document.createElement("i");
       p.className = "limit";
@@ -1060,6 +1068,7 @@ async function renderSources() {
   document.getElementById("google-mode").value = settings.google?.mode || "apps";
   document.getElementById("google-browser").value = settings.google?.browser || "";
   fillGoogleState(settings.googleWindow);
+  fillAgents(settings.agents);
   sourcesDraft = { providers: {} };
   sourcesList.innerHTML = "";
   for (const meta of settings.meta) {
@@ -1159,6 +1168,69 @@ function fillGoogleState(st) {
       ? "started; NODE extension not connected yet (basic mode if the browser refuses it)"
       : "starts when you open a Google account page";
   el.textContent = `${st.browser} · ${link}${st.error ? ` · ${st.error}` : ""}`;
+}
+
+// ---- AI agents (MCP) ----
+var agentState = null; // var: renderTabs can run before this part of the file
+
+function paintAgentButtons() {
+  const agentShareBtn = document.getElementById("agent-share-btn");
+  const agentBtn = document.getElementById("agent-btn");
+  const on = Boolean(agentState?.running);
+  agentBtn.hidden = !on;
+  agentShareBtn.hidden = !on;
+  if (!on) return;
+  const tab = tabs.find((t) => t.id === activeId);
+  const shared = Boolean(tab?.agentShared);
+  agentShareBtn.classList.toggle("shared", shared);
+  agentShareBtn.textContent = shared ? "Shared ◆" : "Share tab";
+  agentShareBtn.title = shared ? "AI agents can read this tab. Click to stop sharing it." : "Let AI agents connected to NODE read this tab";
+  agentBtn.textContent = `Agents ● ${agentState.log?.length ? agentState.log.length : ""}`.trim();
+}
+
+function fillAgents(st) {
+  agentState = st;
+  paintAgentButtons();
+  const box = document.getElementById("agents-box");
+  if (!box || !st) return;
+  document.getElementById("agents-enabled").checked = Boolean(st.enabled);
+  const portEl = document.getElementById("agents-port");
+  if (document.activeElement !== portEl) portEl.value = st.port;
+  const state = document.getElementById("agents-state");
+  state.className = "state" + (st.running ? " ok" : st.error ? " bad" : "");
+  state.textContent = st.running
+    ? `On · ${st.url} · ${st.shared} shared tab${st.shared === 1 ? "" : "s"}`
+    : st.error
+    ? st.error
+    : "Off";
+  document.getElementById("agents-connect").hidden = !st.running;
+  document.getElementById("agents-cmd").value = st.running
+    ? `claude mcp add --transport http node ${st.url} --header "Authorization: Bearer ${st.token}"`
+    : "";
+  const log = document.getElementById("agents-log");
+  log.innerHTML = "";
+  for (const a of st.log || []) {
+    const row = document.createElement("div");
+    if (!a.ok) row.className = "bad";
+    row.innerHTML = `<b>${escapeHtml(a.tool)}</b> · ${new Date(a.at).toLocaleTimeString()}${a.detail ? ` · ${escapeHtml(a.detail)}` : ""}`;
+    log.appendChild(row);
+  }
+}
+
+if (api?.agentsStatus) {
+  api.agentsStatus().then(fillAgents);
+  document.getElementById("agent-share-btn").addEventListener("click", async () => {
+    const tab = tabs.find((t) => t.id === activeId);
+    if (tab) await api.shareTab(tab.id, !tab.agentShared);
+  });
+  document.getElementById("agent-btn").addEventListener("click", async () => fillAgents(await api.setAgents(false)));
+  document.getElementById("agents-enabled").addEventListener("change", async (e) => fillAgents(await api.setAgents(e.target.checked)));
+  document.getElementById("agents-port").addEventListener("change", async (e) => {
+    await api.setSettings({ agents: { port: Number(e.target.value) } });
+    fillAgents(await api.agentsStatus());
+  });
+  document.getElementById("agents-copy").addEventListener("click", () => navigator.clipboard.writeText(document.getElementById("agents-cmd").value));
+  document.getElementById("agents-token").addEventListener("click", async () => fillAgents(await api.agentsNewToken()));
 }
 
 async function saveSources(rerender = true) {
@@ -1474,6 +1546,7 @@ if (api) {
   });
   api.onCommand?.((msg) => {
     if (msg.cmd === "google-window-status") return fillGoogleState(msg);
+    if (msg.cmd === "agents-status") return fillAgents(msg);
     if (msg.cmd === "focus-omni") {
       omni.focus();
       omni.select();

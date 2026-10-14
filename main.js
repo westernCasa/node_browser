@@ -47,6 +47,8 @@ const { fsStorage } = require("./fs-storage");
 const { normalizeUrl, hostOf } = require("./core/urls");
 const { routesToGoogleWindow, MODES: GOOGLE_MODES } = require("./core/google");
 const { createCompanion } = require("./companion");
+const { createAgentServer } = require("./agent-server");
+const { createAgents } = require("./agents");
 let research = null; // current research session store (B17), created when the app is ready
 
 const HOME_URL = "https://en.wikipedia.org/wiki/Main_Page";
@@ -221,6 +223,7 @@ function tabState(tab) {
     id: tab.id,
     url,
     google, // placeholder for a page shown in the Google window
+    agentShared: Boolean(tab.agentShared),
 
     title: wc.getTitle() || "New tab",
     canBack: wc.canGoBack(),
@@ -319,6 +322,11 @@ function attachListeners(tab) {
   // Ctrl/Cmd + mouse wheel or trackpad pinch.
   on("zoom-changed", (_e, direction) => zoomTab(tab, direction === "in" ? 0.5 : -0.5));
   on("did-navigate", (_e, url) => {
+    // Sharing covers the site the user shared; going to another site ends it.
+    if (tab.agentShared && originOf(url) !== tab.agentOrigin) {
+      tab.agentShared = false;
+      pushAgents();
+    }
     playback.stopped(tab.id);
     playback.navigated(tab.id);
     if (!isPlaceholder(url)) historyStore.record(url, wc.getTitle());
@@ -394,6 +402,83 @@ function attachListeners(tab) {
   on("before-input-event", (_e, input) => {
     if (input.type === "keyDown" || input.type === "mouseDown") tab.lastGesture = Date.now();
   });
+}
+
+// ---- Agents (MCP server, agent-server.js and agents.js) ----
+// Off by default. When on, AI agents on this computer can search, read public
+// pages logged out, read tabs the user shares, and read research sessions.
+let agentServer = null;
+const agentLog = []; // recent calls, newest last, shown in Settings
+
+function agentsStatus() {
+  const conf = loadSettings().agents;
+  const st = agentServer ? agentServer.status() : { running: false, port: 0, error: "", url: "" };
+  return { enabled: conf.enabled, port: conf.port, token: conf.token, ...st, log: agentLog.slice(-20).reverse(), shared: [...tabs.values()].filter((t) => t.agentShared).length };
+}
+
+function pushAgents() {
+  sendUi("agents-status", agentsStatus());
+}
+
+async function setAgents(on) {
+  const conf = loadSettings().agents;
+  if (on && !conf.token) conf.token = require("crypto").randomBytes(24).toString("base64url");
+  conf.enabled = Boolean(on);
+  saveSettings({});
+  if (on) await agentServer.start();
+  else {
+    agentServer.stop();
+    // Stopping agents also takes back every shared tab.
+    for (const t of tabs.values()) t.agentShared = false;
+    emitList();
+  }
+  pushAgents();
+  return agentsStatus();
+}
+
+function initAgents() {
+  const { tools, resources } = createAgents({
+    BrowserWindow,
+    session,
+    userAgent: USER_AGENT,
+    registry: search,
+    research,
+    getTabs: () =>
+      [...tabs.values()].map((t) => ({ id: t.id, title: t.view.webContents.getTitle(), url: t.view.webContents.getURL(), shared: Boolean(t.agentShared) && !isPlaceholder(t.view.webContents.getURL()), webContents: t.view.webContents })),
+    // The tests serve their pages from 127.0.0.1 (this computer only).
+    allowPrivate: () => process.env.NODE_AGENT_ALLOW_LOCAL === "1",
+  });
+  agentServer = createAgentServer({
+    getConfig: () => loadSettings().agents,
+    tools,
+    resources,
+    version: app.getVersion(),
+    onActivity: (entry) => {
+      agentLog.push(entry);
+      if (agentLog.length > 100) agentLog.shift();
+      research?.agentActivity(entry);
+      pushAgents();
+    },
+  });
+  if (loadSettings().agents.enabled) agentServer.start().then(pushAgents);
+}
+
+function originOf(url) {
+  try {
+    return new URL(url).origin;
+  } catch (_) {
+    return "";
+  }
+}
+
+function shareTabWithAgents(id, on) {
+  const tab = tabs.get(id);
+  if (!tab) return false;
+  tab.agentShared = Boolean(on) && Boolean(agentServer?.status().running);
+  tab.agentOrigin = tab.agentShared ? originOf(tab.view.webContents.getURL()) : "";
+  emit({ type: "update", tab: tabState(tab), activeId });
+  pushAgents();
+  return tab.agentShared;
 }
 
 // ---- Google window (B52, companion.js) ----
@@ -580,6 +665,11 @@ function loadSettings() {
     grok: { model: ai.grok?.model || AI.AI_DEFAULTS.grok.model, key: decryptSecret(ai.grok?.key) },
   };
   base.adblock = raw.adblock !== false;
+  base.agents = {
+    enabled: Boolean(raw.agents?.enabled),
+    port: Number(raw.agents?.port) || 47615,
+    token: decryptSecret(raw.agents?.token),
+  };
   base.google = {
     mode: GOOGLE_MODES.includes(raw.google?.mode) ? raw.google.mode : "apps",
     browser: typeof raw.google?.browser === "string" ? raw.google.browser : "",
@@ -599,6 +689,12 @@ function saveSettings(next) {
     if (JSON.stringify(current.providers[id]) !== before) search.reset(id);
   }
   if (next && "adblock" in next) current.adblock = Boolean(next.adblock);
+  if (next?.agents) {
+    if ("port" in next.agents) {
+      const port = Math.round(Number(next.agents.port));
+      if (port >= 1024 && port <= 65535) current.agents.port = port;
+    }
+  }
   if (next?.google) {
     if (GOOGLE_MODES.includes(next.google.mode)) current.google.mode = next.google.mode;
     if (typeof next.google.browser === "string") current.google.browser = next.google.browser.trim();
@@ -615,7 +711,13 @@ function saveSettings(next) {
     if (inAi.grok?.key !== undefined) a.grok.key = String(inAi.grok.key).trim();
     if (JSON.stringify(a) !== before) aiReset();
   }
-  const disk = { version: SETTINGS_VERSION, adblock: current.adblock !== false, google: { ...current.google }, providers: {} };
+  const disk = {
+    version: SETTINGS_VERSION,
+    adblock: current.adblock !== false,
+    google: { ...current.google },
+    agents: { enabled: current.agents.enabled, port: current.agents.port, token: encryptSecret(current.agents.token) },
+    providers: {},
+  };
   for (const [id, conf] of Object.entries(current.providers)) {
     const copy = { ...conf };
     for (const key of secretFields(id)) {
@@ -653,6 +755,7 @@ function publicSettings() {
     adblockStats: adblock ? adblock.stats() : { status: "off", blocked: 0 },
     google: { ...s.google },
     googleWindow: companion ? companion.status() : null,
+    agents: agentsStatus(),
     meta: Object.values(PROVIDERS).map((p) => ({ id: p.id, label: p.label, role: p.role, fields: p.fields, setupHint: p.setupHint || "" })),
     encrypted: safeStorage.isEncryptionAvailable(),
   };
@@ -871,6 +974,9 @@ function buildMenu() {
           click: (item) => setSoundAll(item.checked),
         },
         { type: "separator" },
+        { label: "Share This Tab with Agents", click: () => activeId && shareTabWithAgents(activeId, !tabs.get(activeId)?.agentShared) },
+        { label: "Stop All Agents", click: () => setAgents(false) },
+        { type: "separator" },
         { label: "Find in Page", accelerator: "CmdOrCtrl+F", click: () => sendUi("find-open") },
         { label: "Find Next", accelerator: "CmdOrCtrl+G", click: () => sendUi("find-step", { forward: true }) },
         { label: "Find Previous", accelerator: "CmdOrCtrl+Shift+G", click: () => sendUi("find-step", { forward: false }) },
@@ -1005,13 +1111,17 @@ app.whenReady().then(() => {
     onChange: (st) => sendUi("google-window-status", st),
   });
   global.nodeCompanion = companion; // for the e2e tests
+  initAgents();
   bookmarkStore = new BookmarkStore(fsStorage(app.getPath("userData")));
   buildMenu();
   createWindow();
 });
 
 app.on("window-all-closed", () => app.quit());
-app.on("will-quit", () => companion?.stop());
+app.on("will-quit", () => {
+  companion?.stop();
+  agentServer?.stop();
+});
 
 ipcMain.handle("tab:create", (_e, url) => createTab(url));
 ipcMain.handle("tab:close", (_e, id) => closeTab(id));
@@ -1181,7 +1291,26 @@ ipcMain.handle("rules:reload", () => {
   loadRules(true);
   return { count: siteRules.length, errors: rulesErrors };
 });
-ipcMain.handle("settings:set", (_e, next) => saveSettings(next));
+ipcMain.handle("settings:set", async (_e, next) => {
+  const before = loadSettings().agents.port;
+  const out = saveSettings(next);
+  // A new port takes effect by restarting a running server.
+  if (agentServer?.status().running && loadSettings().agents.port !== before) {
+    agentServer.stop();
+    await agentServer.start();
+    pushAgents();
+  }
+  return publicSettings();
+});
+ipcMain.handle("agents:status", () => agentsStatus());
+ipcMain.handle("agents:set", (_e, on) => setAgents(on));
+ipcMain.handle("agents:new-token", () => {
+  loadSettings().agents.token = require("crypto").randomBytes(24).toString("base64url");
+  saveSettings({});
+  pushAgents();
+  return agentsStatus();
+});
+ipcMain.handle("tab:agent-share", (_e, id, on) => shareTabWithAgents(id, on));
 ipcMain.handle("search:status", () => search.status());
 ipcMain.handle("search:test", (_e, id) => (PROVIDERS[id] ? search.test(id) : { ok: false, error: "Unknown source" }));
 ipcMain.handle("page:keywords", (_e, id, banned, opts) => pageKeywords(id, banned, opts));

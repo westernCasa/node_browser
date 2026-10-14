@@ -538,3 +538,15 @@ html, body {
 
 /* Logo in the tab row */
 .tabrow .brand { width: 18px; height: 18px; flex: none; align-self: center; margin: 0 4px 0 2px; }
+
+/* Agents (MCP) */
+.chip.agent.on { border-color: #22c55e; color: #4ade80; }
+.chip.agent.shared { border-color: #a78bfa; color: #c4b5fd; }
+.tab .agent-mark { color: #a78bfa; font-style: normal; font-size: 10px; margin-left: 4px; }
+.source .field textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--line); background: var(--bg-2); color: var(--text); border-radius: 4px; font: 11px/1.4 ui-monospace, Menlo, monospace; padding: 6px; resize: vertical; }
+.source .row { display: flex; gap: 6px; margin-top: 6px; }
+.agent-log { margin-top: 8px; font-size: 11px; color: var(--mute); }
+.agent-log div { padding: 3px 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+.agent-log b { color: var(--text); font-weight: 600; }
+.agent-log .bad b { color: #f87171; }
+.source .row .chip { flex: 1; white-space: nowrap; height: 26px; font-size: 11px; }

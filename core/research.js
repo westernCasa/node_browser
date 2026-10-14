@@ -134,9 +134,9 @@ class ResearchStore {
   }
 
   // Keywords that recur across the pages of this session, most frequent first.
-  threads(limit = 10) {
+  threads(limit = 10, session = this.current) {
     const count = new Map();
-    for (const row of this.current.trail) {
+    for (const row of session.trail) {
       for (const k of row.keywords) {
         const key = k.toLowerCase();
         const c = count.get(key) || { term: k, pages: 0 };
@@ -151,13 +151,31 @@ class ResearchStore {
     return { ...this.current, threads: this.threads() };
   }
 
-  markdown() {
-    const s = this.current;
+  // A saved session by id (the current one if it matches), or null.
+  read(id) {
+    if (!id || id === this.current.id) return this.current;
+    try {
+      return JSON.parse(this.storage.read(this.file(id)));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // Calls made by AI agents through NODE's MCP server, kept with the session.
+  agentActivity(entry) {
+    const log = (this.current.agent = this.current.agent || []);
+    log.push({ at: entry.at || Date.now(), tool: String(entry.tool || ""), ok: entry.ok !== false, detail: String(entry.detail || "").slice(0, 300) });
+    if (log.length > 200) log.splice(0, log.length - 200);
+    this.saveSoon();
+  }
+
+  markdown(id) {
+    const s = this.read(id) || this.current;
     const fmt = (ms) => new Date(ms).toLocaleString();
     const md = (t) => String(t || "").replace(/([\[\]])/g, "\\$1");
     const lines = [`# ${s.name}`, "", `Started ${fmt(s.started)}. ${s.trail.length} pages read, ${s.opened.length} suggestions opened.`, ""];
     if (s.pins.length) lines.push("## Pinned keywords", "", ...s.pins.map((p) => `- ${p}`), "");
-    const threads = this.threads();
+    const threads = this.threads(10, s);
     if (threads.length) lines.push("## Recurring keywords", "", ...threads.map((t) => `- ${t.term} (${t.pages} pages)`), "");
     lines.push("## Pages read", "");
     s.trail.forEach((r, i) => {
@@ -166,6 +184,10 @@ class ResearchStore {
     if (s.opened.length) {
       lines.push("", "## Suggestions opened", "");
       for (const o of s.opened) lines.push(`- [${md(o.title)}](${o.url})${o.query ? ` — from "${o.query}"` : ""}`);
+    }
+    if (s.agent?.length) {
+      lines.push("", "## Agent activity", "");
+      for (const a of s.agent) lines.push(`- ${fmt(a.at)} · ${a.tool}${a.ok ? "" : " (refused)"}${a.detail ? ` · ${a.detail}` : ""}`);
     }
     return lines.join("\n") + "\n";
   }

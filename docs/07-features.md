@@ -52,6 +52,13 @@ NODE is a research browser that reads the page you are on, picks out keywords, a
 - Permissions always ask; sign-in, banking and payment pages never read or autoplayed; keys encrypted with the keychain; standard Chrome user agent.
 - Page re-read only after scroll, resize or selection; hidden tabs stop drawing; 30-minute result cache; requests spaced per site.
 
+## Desktop: AI agents (MCP)
+
+- Off by default. When on, agents on this computer (Claude Code, Codex, Cursor) connect over MCP with a token shown in Settings.
+- Tools: web search with NODE's sources, a logged-out page reader that returns Markdown, tabs the user shares, research sessions.
+- Read-only. Sign-in, payment and banking pages, password and card forms, and local network addresses are refused in code.
+- Every call is logged in Settings and in the research session; **Agents ●** stops the server and unshares all tabs.
+
 ## Desktop: Google window
 
 - Google sign-in and Google apps open in a separate window of a Chromium-based browser (Brave, Chromium, Edge, Vivaldi or Chrome) with its own NODE profile, because Google refuses sign-in inside Electron.

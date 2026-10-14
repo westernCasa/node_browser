@@ -21,6 +21,7 @@
     "test:playback": "node test/playback-demo.js",
     "test:bookmarks": "node test/bookmarks-demo.js",
     "test:google": "node test/google-demo.js",
+    "test:agents": "node test/agents-demo.js",
     "dist": "electron-builder",
     "dist:mac": "electron-builder --mac",
     "dist:win": "electron-builder --win"

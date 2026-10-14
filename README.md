@@ -156,6 +156,31 @@ Mobile:
 
 On result cards, **×** hides a result for the rest of the session, and results you have already opened or read are dimmed and marked "read". **New** starts a fresh session; the dropdown switches back to an older one. **Export** saves the session as Markdown notes in the Library (Saves).
 
+## AI agents (MCP)
+
+NODE can serve AI agents on your computer, such as Claude Code, Codex or Cursor, through the Model Context Protocol. It is off by default and read-only.
+
+1. Settings → **Agent access (MCP)** → tick **Let AI agents on this computer use NODE**.
+2. Copy the command shown and run it in Terminal. For Claude Code it looks like:
+
+   ```bash
+   claude mcp add --transport http node http://127.0.0.1:47615/mcp --header "Authorization: Bearer <token>"
+   ```
+
+   Other clients take the same address and header in their MCP settings.
+3. To let an agent read a page you have open, click **Share tab** in the toolbar. Sharing ends when the tab goes to another site.
+
+What agents can do:
+
+| Tool | What it does |
+| --- | --- |
+| `search_web` | Searches with your NODE sources (Brave, Wikipedia, SearXNG, DuckDuckGo) |
+| `fetch_page` | Reads a public page as Markdown in a separate, logged-out session that never sees your logins |
+| `list_shared_tabs`, `read_tab` | Lists and reads only the tabs you shared |
+| `list_research_sessions`, `get_research_session` | Your research trails as Markdown (also available as resources `node://sessions/...`) |
+
+Limits enforced by NODE, not by the agent: no clicking, typing or signing in; sign-in, account, payment and banking pages and pages with password or card fields are never read; addresses on your computer or local network are refused; only programs with the token can connect, and web pages cannot; calls are rate-limited. Every call is listed in Settings and saved in the research session. **Agents ●** in the toolbar (or View → Stop All Agents) turns the server off and takes back every shared tab.
+
 ## Site rules
 
 NODE reads `rules.json` (File → Edit Site Rules…, or Settings → Edit rules file) and reloads it when you save. Each rule has a `match` and any of these settings:

@@ -40,6 +40,8 @@
           <button class="icon" id="find-next" title="Next (Enter)">↓</button>
           <button class="icon" id="find-close" title="Close (Esc)">×</button>
         </div>
+        <button class="chip agent" id="agent-share-btn" hidden title="Let AI agents connected to NODE read this tab">Share tab</button>
+        <button class="chip agent on" id="agent-btn" hidden title="AI agents can use NODE. Click to stop them and turn the agent server off.">Agents ●</button>
         <button class="chip" id="layout-btn" title="Tile every tab so media can play together">Mosaic</button>
         <button class="chip" id="sound-btn" title="Hear every playing tab at once (up to 4), not only the current one. Shortcut: Cmd/Ctrl+Shift+A">Sound: one</button>
         <button class="chip" id="pip-btn" title="Picture in picture for this page's video. Shortcut: Cmd/Ctrl+Shift+P">PiP</button>
@@ -171,6 +173,25 @@
           </div>
           <div class="state" id="adblock-state"></div>
           <p class="help">Uses the EasyList and EasyPrivacy lists, updated weekly. To allow ads on one site, add a site rule with <code>"adblock": false</code>.</p>
+        </div>
+        <div class="rail-head rules-head">
+          <div>
+            <p class="kicker">AI agents</p>
+            <h1>Agent access (MCP)</h1>
+          </div>
+        </div>
+        <div class="source" id="agents-box">
+          <div class="top">
+            <label class="toggle"><input type="checkbox" id="agents-enabled" /> Let AI agents on this computer use NODE</label>
+          </div>
+          <div class="state" id="agents-state"></div>
+          <label class="field"><span>Port</span><input type="number" id="agents-port" min="1024" max="65535" /></label>
+          <div id="agents-connect" hidden>
+            <label class="field"><span>Add to Claude Code (run in Terminal)</span><textarea id="agents-cmd" rows="4" readonly spellcheck="false"></textarea></label>
+            <div class="row"><button class="chip" id="agents-copy">Copy command</button><button class="chip" id="agents-token">New token</button></div>
+          </div>
+          <p class="help">Agents such as Claude Code, Codex or Cursor can search with your sources, read public pages in a separate logged-out session, read tabs you share (Share tab in the toolbar) and read your research sessions. Read-only: they cannot click, type or sign in. Sign-in, payment and banking pages are never read. Only programs on this computer with the token can connect.</p>
+          <div class="agent-log" id="agents-log"></div>
         </div>
         <div class="rail-head rules-head">
           <div>
