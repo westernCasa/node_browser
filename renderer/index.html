@@ -284,7 +284,30 @@
             <h1>Site rules</h1>
           </div>
         </div>
-        <p class="help">Per-site autoplay, sound, popups, Mosaic, and what NODE reads for keywords. Rules live in a JSON file; NODE reloads it when you save.</p>
+        <p class="help">Per-site autoplay, sound, popups, Mosaic, and what NODE reads. Later rules win over earlier ones.</p>
+        <div class="actions-row">
+          <button class="chip" id="rule-this-site">Rule for this site</button>
+          <button class="chip" id="rule-add">Add rule</button>
+        </div>
+        <ol id="rules-list" class="rules-list"></ol>
+        <form id="rule-form" class="source rule-form" hidden>
+          <label class="field"><span>Name</span><input type="text" id="rf-name" placeholder="e.g. News sites: no autoplay" /></label>
+          <label class="field"><span>Sites (comma-separated: example.com, *.example.com, example.com/path, or /regex/)</span><input type="text" id="rf-match" spellcheck="false" /></label>
+          <div class="rf-grid">
+            <label class="field"><span>Autoplay</span><select id="rf-autoplay"><option value="">Same as before</option><option value="on">On</option><option value="muted">Muted</option><option value="off">Off</option></select></label>
+            <label class="field"><span>Sound</span><select id="rf-sound"><option value="">Same as before</option><option value="auto">Active tab only</option><option value="on">Always on</option><option value="off">Always off</option></select></label>
+            <label class="field"><span>Popups</span><select id="rf-popups"><option value="">Same as before</option><option value="gesture">After a click</option><option value="block">Block all</option><option value="allow">Allow all</option></select></label>
+            <label class="field"><span>Suggestions</span><select id="rf-suggest"><option value="">Same as before</option><option value="true">On</option><option value="false">Off: never read</option></select></label>
+            <label class="field"><span>Mosaic</span><select id="rf-mosaic"><option value="">Same as before</option><option value="true">In the grid</option><option value="false">Keep out</option></select></label>
+            <label class="field"><span>Center on click</span><select id="rf-center"><option value="">Same as before</option><option value="true">On</option><option value="false">Off</option></select></label>
+            <label class="field"><span>Ad blocking</span><select id="rf-adblock"><option value="">Same as before</option><option value="true">On</option><option value="false">Allow ads</option></select></label>
+            <label class="field"><span>Talk</span><select id="rf-talk"><option value="">Same as before</option><option value="true">On</option><option value="false">Off</option></select></label>
+          </div>
+          <label class="field"><span>Read first (CSS selectors, comma-separated)</span><input type="text" id="rf-include" spellcheck="false" placeholder="article, #main" /></label>
+          <label class="field"><span>Never read (CSS selectors)</span><input type="text" id="rf-skip" spellcheck="false" placeholder="#comments, .sidebar" /></label>
+          <div class="row"><button class="chip" type="submit" id="rf-save">Save rule</button><button class="chip" type="button" id="rf-cancel">Cancel</button></div>
+          <div class="state bad" id="rf-errors"></div>
+        </form>
         <div class="actions-row">
           <button class="chip" id="rules-edit">Edit rules file</button>
           <button class="chip" id="rules-reload">Reload</button>

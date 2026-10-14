@@ -675,3 +675,16 @@ svg.brand path { fill: var(--ink); }
 #firstrun .link { background: none; border: 0; color: var(--ink); text-decoration: underline; padding: 0; margin-top: 6px; cursor: pointer; font: 13px var(--sans); }
 #firstrun .fr-actions { border-top: 1px solid var(--line); padding-top: 18px; }
 #fr-done { background: var(--ink); color: var(--surface); border-color: var(--ink); height: 44px; padding: 0 24px; font-size: 12px; }
+
+/* Site rules editor (B28) */
+.rules-list { list-style: none; margin: 8px 0; padding: 0; }
+.rules-list li { border-top: 1px solid var(--line); padding: 6px 0; font-size: 12px; }
+.rules-list li:last-child { border-bottom: 1px solid var(--line); }
+.rules-list .rn { font-weight: 600; overflow-wrap: anywhere; }
+.rules-list .rm { font: 10.5px/1.4 var(--mono); color: var(--ink-muted); overflow-wrap: anywhere; }
+.rules-list .rs { color: var(--ink-muted); font-size: 11px; margin-top: 2px; }
+.rules-list .rb { display: flex; gap: 4px; margin-top: 4px; }
+.rules-list .rb button { border: 1px solid var(--line); background: none; color: var(--ink-muted); font: 600 10px var(--sans); letter-spacing: .08em; text-transform: uppercase; padding: 2px 6px; border-radius: var(--radius-sm); cursor: pointer; }
+.rules-list .rb button:hover { color: var(--ink); border-color: var(--ink); }
+.rule-form select { width: 100%; height: 26px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: var(--radius-sm); font: 12px var(--sans); }
+.rf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 8px; }

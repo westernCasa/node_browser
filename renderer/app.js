@@ -1365,6 +1365,144 @@ async function maybeFirstRun() {
 }
 maybeFirstRun();
 
+// ---- Site rules editor (B28) ----
+let rulesDraft = [];
+let editingRule = -1; // index in rulesDraft, or rulesDraft.length for a new rule
+const RF_ENUMS = ["autoplay", "sound", "popups"];
+const RF_BOOLS = ["suggest", "mosaic", "center", "adblock", "talk"];
+const RF_WORDS = {
+  autoplay: { on: "autoplay on", muted: "autoplay muted", off: "no autoplay" },
+  sound: { auto: "sound: active tab", on: "sound always on", off: "sound off" },
+  popups: { gesture: "popups after a click", block: "popups blocked", allow: "popups allowed" },
+  suggest: { true: "suggestions on", false: "never read" },
+  mosaic: { true: "in Mosaic", false: "out of Mosaic" },
+  center: { true: "center on click", false: "no centering" },
+  adblock: { true: "ads blocked", false: "ads allowed" },
+  talk: { true: "Talk on", false: "Talk off" },
+};
+
+function ruleSummary(r) {
+  const parts = [];
+  for (const k of [...RF_ENUMS, ...RF_BOOLS]) if (r[k] !== undefined) parts.push(RF_WORDS[k][String(r[k])] || `${k} ${r[k]}`);
+  if (r.extract?.include?.length) parts.push(`reads ${r.extract.include.length} area${r.extract.include.length === 1 ? "" : "s"} first`);
+  if (r.extract?.skip?.length) parts.push(`skips ${r.extract.skip.length} area${r.extract.skip.length === 1 ? "" : "s"}`);
+  return parts.join(" · ") || "no changes";
+}
+
+async function renderRulesList() {
+  if (!api?.rulesGet) return;
+  const r = await api.rulesGet();
+  rulesDraft = r.rules;
+  const list = document.getElementById("rules-list");
+  list.innerHTML = "";
+  if (r.unreadable) {
+    list.innerHTML = `<li class="bad">${escapeHtml(r.errors[0])} Fix the file with Edit rules file.</li>`;
+    return;
+  }
+  rulesDraft.forEach((rule, i) => {
+    const li = document.createElement("li");
+    const match = Array.isArray(rule.match) ? rule.match.join(", ") : String(rule.match || "");
+    li.innerHTML = `<div class="rn">${escapeHtml(rule.name || match)}</div><div class="rm">${escapeHtml(match === "*" ? "every site" : match)}</div><div class="rs">${escapeHtml(ruleSummary(rule))}</div>`;
+    const bar = document.createElement("div");
+    bar.className = "rb";
+    const btn = (label, run, title) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = label;
+      if (title) b.title = title;
+      b.addEventListener("click", run);
+      bar.appendChild(b);
+    };
+    btn("Edit", () => openRuleForm(i));
+    if (i > 0) btn("↑", () => moveRule(i, -1), "Move up (earlier rules lose to later ones)");
+    if (i < rulesDraft.length - 1) btn("↓", () => moveRule(i, 1), "Move down");
+    btn("Delete", () => deleteRule(i));
+    li.appendChild(bar);
+    list.appendChild(li);
+  });
+  document.getElementById("rules-msg").textContent = r.errors.length ? "Problems: " + r.errors.join(" ") : `${rulesDraft.length} rules in use.`;
+}
+
+function openRuleForm(index, preset = {}) {
+  editingRule = index;
+  const rule = index < rulesDraft.length ? rulesDraft[index] : { name: "", match: "", ...preset };
+  const form = document.getElementById("rule-form");
+  form.hidden = false;
+  document.getElementById("rf-name").value = rule.name || "";
+  document.getElementById("rf-match").value = Array.isArray(rule.match) ? rule.match.join(", ") : rule.match || "";
+  for (const k of [...RF_ENUMS, ...RF_BOOLS]) document.getElementById(`rf-${k}`).value = rule[k] === undefined ? "" : String(rule[k]);
+  document.getElementById("rf-include").value = (rule.extract?.include || []).join(", ");
+  document.getElementById("rf-skip").value = (rule.extract?.skip || []).join(", ");
+  document.getElementById("rf-errors").textContent = "";
+  form.scrollIntoView({ block: "nearest" });
+  document.getElementById(preset.match ? "rf-autoplay" : "rf-name").focus();
+}
+
+function ruleFromForm(old = {}) {
+  const split = (v) => v.split(",").map((x) => x.trim()).filter(Boolean);
+  const match = split(document.getElementById("rf-match").value);
+  // Keep fields the form does not show (written by hand in the file).
+  const rule = { ...old, name: document.getElementById("rf-name").value.trim(), match: match.length === 1 ? match[0] : match };
+  for (const k of RF_ENUMS) {
+    const v = document.getElementById(`rf-${k}`).value;
+    if (v) rule[k] = v;
+    else delete rule[k];
+  }
+  for (const k of RF_BOOLS) {
+    const v = document.getElementById(`rf-${k}`).value;
+    if (v) rule[k] = v === "true";
+    else delete rule[k];
+  }
+  const include = split(document.getElementById("rf-include").value);
+  const skip = split(document.getElementById("rf-skip").value);
+  if (include.length || skip.length) rule.extract = { ...(include.length ? { include } : {}), ...(skip.length ? { skip } : {}) };
+  else delete rule.extract;
+  if (!rule.name) delete rule.name;
+  return rule;
+}
+
+async function saveRules(list) {
+  const r = await api.rulesSave(list);
+  if (!r.ok) {
+    document.getElementById("rf-errors").textContent = r.errors.join(" ");
+    return false;
+  }
+  await renderRulesList();
+  return true;
+}
+
+async function moveRule(i, dir) {
+  const list = rulesDraft.slice();
+  [list[i], list[i + dir]] = [list[i + dir], list[i]];
+  await saveRules(list);
+}
+
+async function deleteRule(i) {
+  const list = rulesDraft.slice();
+  list.splice(i, 1);
+  await saveRules(list);
+}
+
+if (api?.rulesGet) {
+  document.getElementById("rule-add").addEventListener("click", () => openRuleForm(rulesDraft.length));
+  document.getElementById("rule-this-site").addEventListener("click", async () => {
+    const host = await api.rulesHost();
+    if (!host) return (document.getElementById("rules-msg").textContent = "Open a web page first.");
+    const existing = rulesDraft.findIndex((r) => r.match === host);
+    if (existing >= 0) openRuleForm(existing);
+    else openRuleForm(rulesDraft.length, { name: host, match: host });
+  });
+  document.getElementById("rf-cancel").addEventListener("click", () => (document.getElementById("rule-form").hidden = true));
+  document.getElementById("rule-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const list = rulesDraft.slice();
+    const rule = ruleFromForm(editingRule < list.length ? list[editingRule] : {});
+    if (editingRule < list.length) list[editingRule] = rule;
+    else list.push(rule);
+    if (await saveRules(list)) document.getElementById("rule-form").hidden = true;
+  });
+}
+
 async function saveSources(rerender = true) {
   if (!sourcesDraft) return;
   await api.setSettings({ ...sourcesDraft, ai: aiDraft(), adblock: document.getElementById("adblock-enabled").checked,
@@ -1376,6 +1514,7 @@ async function saveSources(rerender = true) {
 }
 
 async function openSources() {
+  renderRulesList();
   if (!api?.getSettings) {
     showNotice("Search sources can only be changed in the desktop app.");
     return;
@@ -1948,6 +2087,7 @@ if (api) {
       document.querySelectorAll("#shelf-filters .chip").forEach((c) => c.classList.toggle("active", c.dataset.folder === "history"));
       openLibrary();
     } else if (msg.cmd === "rules-reloaded") {
+      if (!sourcesPane.hidden) renderRulesList();
       const text = `Site rules: ${msg.count} rules in use.` + (msg.errors?.length ? " Problems: " + msg.errors.join(" ") : "");
       if (msg.errors?.length) showNotice(text);
       const m = document.getElementById("rules-msg");

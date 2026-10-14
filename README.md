@@ -193,6 +193,9 @@ Limits enforced by NODE, not by the agent: no clicking, typing or signing in; si
 
 ## Site rules
 
+Settings → **Site rules** lists the rules in plain words. **Rule for this site** starts one for the page you are on; every setting can be left as "Same as before" so earlier rules still apply. Rules are saved to `rules.json`, which you can still edit by hand (Edit rules file).
+
+
 NODE reads `rules.json` (File → Edit Site Rules…, or Settings → Edit rules file) and reloads it when you save. Each rule has a `match` and any of these settings:
 
 | Setting | Values | Effect |

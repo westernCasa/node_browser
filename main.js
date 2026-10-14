@@ -1685,6 +1685,33 @@ ipcMain.handle("history:remove", (_e, url) => {
   return true;
 });
 ipcMain.handle("rules:edit", () => shell.openPath(rulesFile()));
+// Visual rules editor (B28): the rules as written in the file, and saving a
+// whole new list. A list with problems is not saved; the problems come back.
+ipcMain.handle("rules:get", () => {
+  let data = null;
+  try {
+    data = JSON.parse(fs.readFileSync(rulesFile(), "utf8"));
+  } catch (err) {
+    return { rules: [], errors: [`rules.json could not be read: ${err.message}`], unreadable: true };
+  }
+  return { rules: Array.isArray(data.rules) ? data.rules : [], errors: rulesErrors };
+});
+ipcMain.handle("rules:save", (_e, list) => {
+  const { errors } = Rules.validate({ rules: list });
+  if (errors.length) return { ok: false, errors };
+  let help = Rules.DEFAULT_FILE._help;
+  try {
+    help = JSON.parse(fs.readFileSync(rulesFile(), "utf8"))._help || help;
+  } catch (_) {}
+  fs.writeFileSync(rulesFile(), JSON.stringify({ _help: help, rules: list }, null, 2));
+  loadRules(false);
+  return { ok: true, count: siteRules.length, errors: rulesErrors };
+});
+ipcMain.handle("rules:host", () => {
+  const tab = tabs.get(activeId);
+  const url = tab ? tabState(tab).url : "";
+  return /^https?:/i.test(url) ? hostOf(url).replace(/^www\./, "") : "";
+});
 ipcMain.handle("rules:reload", () => {
   loadRules(true);
   return { count: siteRules.length, errors: rulesErrors };

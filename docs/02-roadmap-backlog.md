@@ -48,7 +48,7 @@ Effort: XS under 1 hour, S half a day, M 1-2 days, L 3+ days. Finding IDs (C1, K
 | B25 | 3 | Show Wikipedia results first while web results load (web requests are spaced 2.5 s apart, so a search can take 6 s) | P1 | S | Done |
 | B26 | 4 | Check on a real machine: live Wikipedia, DuckDuckGo, Brave, Grok and local model results, and an hour of browsing (Phase 2 gate) | P0 | S | Not started |
 | B27 | 4 | Installable builds for macOS (.dmg) and Windows (.exe) with an app icon | P0 | M | Done (0.4): `npm run dist:mac` / `dist:win`; not signed; automatic updates are B46 |
-| B28 | 4 | Visual editor for site rules in Settings, so no JSON editing is needed | P1 | M | Not started |
+| B28 | 4 | Visual editor for site rules in Settings, so no JSON editing is needed | P1 | M | Done |
 | B29 | 4 | Sleep background tabs that are not playing media, to save memory with many tabs open | P1 | M | Done: after 15 minutes unused; never while playing, on screen or shared |
 | B30 | 4 | First-run setup: start page, search sources, AI option | P1 | S | Done: welcome screen (Brave key, AI choice, reopen tabs, ad blocking) and a NODE new tab page |
 | B31 | 4 | Error log and a Copy diagnostics button for bug reports | P1 | S | Done: logs/node.log, Settings → Help, Help menu with Report a Problem |
