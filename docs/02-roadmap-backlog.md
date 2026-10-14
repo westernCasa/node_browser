@@ -71,7 +71,7 @@ Effort: XS under 1 hour, S half a day, M 1-2 days, L 3+ days. Finding IDs (C1, K
 | B48 | 4 | Chrome Web Store extensions | P2 | L | Not started |
 | B49 | 4 | AI chat across tabs and cited summaries of a research session | P2 | M | Not started |
 | B50 | 4 | Sync across devices | P3 | L | Not started |
-| B51 | 5+ | Decide whether to move NODE from Electron to a Chromium-based browser build (as Brave, Vivaldi and Arc do), which Google sign-in accepts; large effort. See `08-engine-decision.md` | P1 | L | Step 1 done: NODE for Chromium extension built and tested; recommendation updated in 08 |
+| B51 | 5+ | Decide whether to move NODE from Electron to a Chromium-based browser build (as Brave, Vivaldi and Arc do), which Google sign-in accepts; large effort. See `08-engine-decision.md` | P1 | L | Decided 2026-10-14: stay on Electron and finish this build; extension dropped (see 08) |
 | B53 | 4.5 | Agent view: a page's main content as Markdown (`core/markdown.js`), for agents and later for mobile and exports | P1 | S | Done |
 | B54 | 4.5 | Read-only MCP server for AI agents: search, logged-out page reader, shared tabs, research sessions as resources; token, localhost only, hard blocks, rate limits, activity log, stop switch | P1 | M | Done |
 | B55 | 4.5 | Trail: recurring keywords use each page's own topic words (the session weighting hid them) | P1 | S | Done |
@@ -79,7 +79,7 @@ Effort: XS under 1 hour, S half a day, M 1-2 days, L 3+ days. Finding IDs (C1, K
 | S01-S03 | 4 | Talk, stage 1 of the social layer plan: Hacker News and Bluesky discussions of the current page and a Reddit search link, looked up only while Talk is open; site rule `talk` | P1 | S | Done |
 | B57 | 6 | Research agent v2: follow-up questions on a report (earlier sources and notes kept), a second round of searching when the notes leave gaps, a live view of the page being read | P1 | M | Done |
 | B58 | 6 | Prompt-injection red-team set (12 pages) run before each release; reader leaves out text a person cannot see; agent drops search queries that look like addresses or encoded data | P1 | S | Done |
-| B60 | 5 | NODE for Chromium: finish the extension (sound for one tab, ad blocking, trail, Ask) and decide whether to publish it on the Chrome Web Store | P2 | M | Not started |
+| B60 | 5 | NODE for Chromium extension | — | — | Dropped 2026-10-14: missing must-have features |
 | B59 | 6 | Research agent v3: gated actions with confirmation (forms, downloads) | P2 | L | Not started |
 | B52 | 4 | Google window: Google sign-in and Google apps open in a separate window of a Chromium-based browser on the computer, with its own NODE profile and a NODE extension (history, center on click, autoplay, no duplicate tabs). The extension is also the first step of B51 | P0 | M | Done; to test sign-in on the Mac |
 

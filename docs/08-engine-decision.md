@@ -82,4 +82,8 @@ What this shows:
 1. NODE's research core (keywords, suggestions, autoplay, the playback limit, center on click, Talk) carries over to Chromium almost unchanged: about a day of work, because `core/` was already shared. Google Chrome 137 and later only loads unpacked extensions in developer mode; distribution would go through the Chrome Web Store or Brave, Edge and Chromium.
 2. The parts that make NODE more than an extension (Mosaic, address-bar suggestions, the MCP server, the logged-out agent reader) are exactly the parts that need a Chromium build or a helper app.
 
-Updated recommendation: keep the Electron app as NODE's main build (it has Mosaic, agents and MCP today) and the Google window for Google accounts. Ship "NODE for Chromium" as a second, lighter product for people who want NODE's research panel inside Chrome, Brave or Edge; it also reaches users who will not switch browsers. Revisit a full Chromium build only if Mosaic or the address bar become the reason people choose NODE.
+## Decision (2026-10-14)
+
+Sven: the features an extension cannot have (Mosaic, address-bar suggestions, the MCP server, the logged-out agent reader) are must-haves, so NODE does not ship as an extension. The extension code was removed from the repo (it stays in the git history, commit 9441fd3). NODE stays on Electron, with the Google window for Google accounts, and the next work is finishing this build for release. A full Chromium build stays the long-term option for Google sign-in inside NODE itself.
+
+Earlier recommendation, for the record: keep the Electron app as NODE's main build (it has Mosaic, agents and MCP today) and the Google window for Google accounts. Ship "NODE for Chromium" as a second, lighter product for people who want NODE's research panel inside Chrome, Brave or Edge; it also reaches users who will not switch browsers. Revisit a full Chromium build only if Mosaic or the address bar become the reason people choose NODE.

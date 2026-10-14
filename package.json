@@ -27,15 +27,12 @@
     "dist": "electron-builder",
     "dist:mac": "electron-builder --mac",
     "dist:win": "electron-builder --win",
-    "test:redteam": "node test/e2e/18-redteam.js",
-    "build:chromium": "node chromium/build.js",
-    "test:chromium": "node test/e2e/19-chromium-extension.js"
+    "test:redteam": "node test/e2e/18-redteam.js"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.8.0",
     "electron": "^44.7.0",
-    "electron-builder": "^26.17.0",
-    "esbuild": "0.28.2"
+    "electron-builder": "^26.17.0"
   },
   "dependencies": {
     "@ghostery/adblocker-electron": "2.19",
