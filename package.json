@@ -26,7 +26,8 @@
     "test:talk": "node test/talk-demo.js",
     "dist": "electron-builder",
     "dist:mac": "electron-builder --mac",
-    "dist:win": "electron-builder --win"
+    "dist:win": "electron-builder --win",
+    "test:redteam": "node test/e2e/18-redteam.js"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.8.0",

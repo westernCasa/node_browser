@@ -51,6 +51,17 @@ function stripLinks(md) {
 
 class Stopped extends Error {}
 
+// Search queries leave the computer, so a model that page text has misled
+// could try to hide data in them. Queries that look like addresses or long
+// encoded strings are dropped.
+function safeQuery(q) {
+  const s = String(q || "").replace(/\s+/g, " ").trim();
+  if (!s || s.length > 120) return "";
+  if (/:\/\/|www\.|[a-z0-9-]+\.[a-z]{2,}\/|%[0-9a-f]{2}|[?&][a-z_]+=/i.test(s)) return "";
+  if (s.split(" ").some((w) => w.length > 32)) return "";
+  return s;
+}
+
 const MAX_ROUNDS = 2;
 
 /**
@@ -170,7 +181,7 @@ async function runResearch({ goal, maxPages = MAX_PAGES, previous = null }, { co
     ],
     { maxTokens: 200, temperature: 0.2 }
   );
-  let queries = (parseJson(planText, {}).queries || []).map((q) => String(q).replace(/\s+/g, " ").trim()).filter((q) => q && q.length <= 120);
+  let queries = (parseJson(planText, {}).queries || []).map(safeQuery).filter(Boolean);
   queries = [...new Set(queries.map((q) => q.toLowerCase()))].slice(0, MAX_QUERIES);
   if (!queries.length) queries = [question.slice(0, 120)];
   allQueries.push(...queries);
@@ -196,7 +207,7 @@ async function runResearch({ goal, maxPages = MAX_PAGES, previous = null }, { co
       { maxTokens: 150, temperature: 0.2 }
     );
     const gap = parseJson(gapText, {});
-    let more = (gap.queries || []).map((q) => String(q).replace(/\s+/g, " ").trim()).filter((q) => q && q.length <= 120 && !allQueries.some((a) => a.toLowerCase() === q.toLowerCase()));
+    let more = (gap.queries || []).map(safeQuery).filter((q) => q && !allQueries.some((a) => a.toLowerCase() === q.toLowerCase()));
     more = [...new Set(more.map((q) => q.toLowerCase()))].slice(0, 2);
     if (!gap.more || !more.length) {
       step("gaps", "The notes cover the question");
@@ -238,4 +249,4 @@ async function runResearch({ goal, maxPages = MAX_PAGES, previous = null }, { co
   };
 }
 
-module.exports = { runResearch, stripLinks, parseJson, Stopped, MAX_PAGES, MAX_QUERIES, MAX_ROUNDS };
+module.exports = { safeQuery, runResearch, stripLinks, parseJson, Stopped, MAX_PAGES, MAX_QUERIES, MAX_ROUNDS };

@@ -78,7 +78,8 @@ Effort: XS under 1 hour, S half a day, M 1-2 days, L 3+ days. Finding IDs (C1, K
 | B56 | 6 | Built-in research agent, read-only: question in, searches, reads up to 6 pages logged out, report with numbered sources saved to the Library and the session; sources open in Mosaic | P1 | M | Done (v1) |
 | S01-S03 | 4 | Talk, stage 1 of the social layer plan: Hacker News and Bluesky discussions of the current page and a Reddit search link, looked up only while Talk is open; site rule `talk` | P1 | S | Done |
 | B57 | 6 | Research agent v2: follow-up questions on a report (earlier sources and notes kept), a second round of searching when the notes leave gaps, a live view of the page being read | P1 | M | Done |
-| B58 | 6 | Research agent v3: gated actions with confirmation (forms, downloads), a prompt-injection test page set run before each release | P2 | L | Not started |
+| B58 | 6 | Prompt-injection red-team set (12 pages) run before each release; reader leaves out text a person cannot see; agent drops search queries that look like addresses or encoded data | P1 | S | Done |
+| B59 | 6 | Research agent v3: gated actions with confirmation (forms, downloads) | P2 | L | Not started |
 | B52 | 4 | Google window: Google sign-in and Google apps open in a separate window of a Chromium-based browser on the computer, with its own NODE profile and a NODE extension (history, center on click, autoplay, no duplicate tabs). The extension is also the first step of B51 | P0 | M | Done; to test sign-in on the Mac |
 
 ## Open checks

@@ -22,10 +22,40 @@ function toMarkdown(maxChars) {
     }
     return best;
   };
+  // Text a reader cannot see is left out: it is where prompt-injection
+  // instructions are usually hidden (tiny, transparent, same colour as the
+  // background, moved off screen or clipped away).
+  const rgb = (c) => (String(c).match(/[\d.]+/g) || []).map(Number);
+  const backgroundOf = (el) => {
+    for (let n = el; n && n.nodeType === 1; n = n.parentElement) {
+      const c = rgb(getComputedStyle(n).backgroundColor);
+      if (c.length >= 3 && (c.length < 4 || c[3] > 0.5)) return c;
+    }
+    // No background set anywhere: the browser's default, dark for pages that
+    // ask for a dark colour scheme.
+    const scheme = getComputedStyle(document.documentElement).colorScheme || "";
+    return /^dark|only dark/.test(scheme.trim()) ? [18, 18, 18] : [255, 255, 255];
+  };
+  const invisible = (el, st) => {
+    if (Number(st.opacity) < 0.1) return true;
+    if (parseFloat(st.fontSize) < 4) return true;
+    const fg = rgb(st.color);
+    if (fg.length >= 4 && fg[3] < 0.1) return true;
+    const bg = backgroundOf(el);
+    if (fg.length >= 3 && Math.abs(fg[0] - bg[0]) + Math.abs(fg[1] - bg[1]) + Math.abs(fg[2] - bg[2]) < 30) return true;
+    if (st.position === "absolute" || st.position === "fixed") {
+      const r = el.getBoundingClientRect();
+      if (r.right < -100 || r.bottom < -100 || r.left > innerWidth + 2000) return true;
+      if (r.width <= 2 && r.height <= 2) return true;
+    }
+    if (/rect\(0(px)?,? 0(px)?,? 0(px)?,? 0(px)?\)/.test(st.clip) || st.clipPath === "inset(50%)") return true;
+    return false;
+  };
   const hidden = (el) => {
     if (el.matches && el.matches(SKIP)) return true;
     const st = el.ownerDocument.defaultView.getComputedStyle(el);
-    return st.display === "none" || st.visibility === "hidden";
+    if (st.display === "none" || st.visibility === "hidden") return true;
+    return invisible(el, st);
   };
   const abs = (href) => {
     try {
