@@ -244,6 +244,9 @@
           <div id="agents-connect" hidden>
             <label class="field"><span>Add to Claude Code (run in Terminal)</span><textarea id="agents-cmd" rows="4" readonly spellcheck="false"></textarea></label>
             <div class="row"><button class="chip" id="agents-copy">Copy command</button><button class="chip" id="agents-token">New token</button></div>
+            <p class="help"><b>Claude app (desktop):</b> it starts its tools as programs, so NODE adds a small bridge program to the Claude app's settings file. Restart the Claude app afterwards. NODE has to be open with Agents on while you use it.</p>
+            <div class="row"><button class="chip" id="agents-claude-add">Add to Claude app</button><button class="chip" id="agents-claude-copy">Copy config</button></div>
+            <div class="state" id="agents-claude-state"></div>
           </div>
           <p class="help">Agents such as Claude Code, Codex or Cursor can search with your sources, read public pages in a separate logged-out session, read tabs you share (Share tab in the toolbar) and read your research sessions. Read-only: they cannot click, type or sign in. Sign-in, payment and banking pages are never read. Only programs on this computer with the token can connect.</p>
           <div class="agent-log" id="agents-log"></div>

@@ -586,6 +586,46 @@ function agentsStatus() {
   return { enabled: conf.enabled, port: conf.port, token: conf.token, ...st, log: agentLog.slice(-20).reverse(), shared: [...tabs.values()].filter((t) => t.agentShared).length };
 }
 
+// The Claude desktop app only starts MCP servers as programs (stdio), so NODE
+// gives it mcp-bridge.js, run by NODE's own Electron as plain Node.
+function claudeDesktopFile() {
+  const home = app.getPath("home");
+  if (process.platform === "darwin") return path.join(home, "Library", "Application Support", "Claude", "claude_desktop_config.json");
+  if (process.platform === "win32") return path.join(app.getPath("appData"), "Claude", "claude_desktop_config.json");
+  return path.join(home, ".config", "Claude", "claude_desktop_config.json");
+}
+
+function claudeDesktopEntry() {
+  const st = agentsStatus();
+  return {
+    command: process.execPath,
+    args: [path.join(__dirname, "mcp-bridge.js")],
+    env: { ELECTRON_RUN_AS_NODE: "1", NODE_MCP_URL: `http://127.0.0.1:${st.port}/mcp`, NODE_MCP_TOKEN: st.token || "" },
+  };
+}
+
+function addToClaudeDesktop() {
+  const st = agentsStatus();
+  if (!st.enabled || !st.token) throw new Error("Turn on Agents first.");
+  const file = claudeDesktopFile();
+  let conf = {};
+  if (fs.existsSync(file)) {
+    const text = fs.readFileSync(file, "utf8");
+    try {
+      conf = text.trim() ? JSON.parse(text) : {};
+    } catch (_) {
+      throw new Error("The Claude app's settings file is not valid JSON, so NODE did not change it. Use Copy config and add it by hand.");
+    }
+    fs.writeFileSync(file + ".node-backup", text); // keep the previous version
+  } else {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+  }
+  conf.mcpServers = { ...(conf.mcpServers || {}), node: claudeDesktopEntry() };
+  fs.writeFileSync(file, JSON.stringify(conf, null, 2));
+  log().info("agents: added NODE to the Claude desktop config");
+  return { file };
+}
+
 function pushAgents() {
   sendUi("agents-status", agentsStatus());
 }
@@ -1579,7 +1619,8 @@ app.whenReady().then(() => {
     onChange: (st) => sendUi("google-window-status", st),
   });
   global.nodeCompanion = companion; // for the e2e tests
-  global.nodeTest = { sleepIdleTabs, contextMenuItems: (id, p) => contextMenuItems(tabs.get(id), p).map((i) => i.label || i.role || "-"), savePdf, closedTabs };
+  global.nodeTest = {
+  claudeDesktopEntry, sleepIdleTabs, contextMenuItems: (id, p) => contextMenuItems(tabs.get(id), p).map((i) => i.label || i.role || "-"), savePdf, closedTabs };
   initAgents();
   bookmarkStore = new BookmarkStore(fsStorage(app.getPath("userData")));
   buildMenu();
@@ -1805,6 +1846,10 @@ ipcMain.handle("settings:set", async (_e, next) => {
   return publicSettings();
 });
 ipcMain.handle("agents:status", () => agentsStatus());
+ipcMain.handle("agents:claude-desktop", (_e, mode) => {
+  if (mode === "add") return addToClaudeDesktop();
+  return { file: claudeDesktopFile(), config: JSON.stringify({ mcpServers: { node: claudeDesktopEntry() } }, null, 2) };
+});
 ipcMain.handle("diag:copy", () => {
   const text = diagnostics();
   clipboard.writeText(text);

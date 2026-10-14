@@ -114,6 +114,28 @@ const PORT = 47699;
   await ui.evaluate(() => document.getElementById("agents-box").scrollIntoView());
   await ui.screenshot({ path: path.join(OUT, "agents-settings.png") });
 
+  // 8b. The Claude desktop app's bridge (mcp-bridge.js, stdio): NODE's own
+  // Electron runs it as Node, as the config written by "Add to Claude app" does.
+  const entry = await app.evaluate(() => global.nodeTest.claudeDesktopEntry());
+  const bridged = await new Promise((resolve) => {
+    const child = require("child_process").spawn(entry.command, entry.args, { env: { ...process.env, ...entry.env } });
+    let out = "";
+    child.stdout.on("data", (c) => (out += c));
+    const msgs = [
+      { jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "claude-desktop-test", version: "1" } } },
+      { jsonrpc: "2.0", method: "notifications/initialized" },
+      { jsonrpc: "2.0", id: 2, method: "tools/list" },
+      { jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "list_research_sessions", arguments: {} } },
+    ];
+    child.stdin.write(msgs.map((m) => JSON.stringify(m)).join("\n") + "\n");
+    child.stdin.end();
+    child.on("exit", () => resolve(out.trim().split("\n").filter(Boolean).map((l) => JSON.parse(l))));
+    setTimeout(() => child.kill(), 15000);
+  });
+  log("Claude app bridge:", bridged.map((m) => (m.id === 1 ? `initialize ${m.result?.serverInfo?.name}` : m.id === 2 ? `${m.result?.tools?.length} tools` : m.id === 3 ? `call ok ${!m.result?.isError}` : "?")).join(" | "));
+  const cfg = await ui.evaluate(() => window.scout.claudeDesktop("config"));
+  log("Claude app config file:", cfg.file.replace(require("os").homedir(), "~"), "| entry runs NODE as Node:", JSON.parse(cfg.config).mcpServers.node.env.ELECTRON_RUN_AS_NODE === "1");
+
   // 9. Stop switch.
   await ui.click("#agent-btn");
   await sleep(500);

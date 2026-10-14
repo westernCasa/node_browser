@@ -58,6 +58,7 @@
       "companion.js",
       "agents.js",
       "agent-server.js",
+      "mcp-bridge.js",
       "log.js",
       "updater.js",
       "core/**",

@@ -35,6 +35,7 @@ contextBridge.exposeInMainWorld("scout", {
   zoom: (id, step) => ipcRenderer.invoke("tab:zoom", id, step),
   historySearch: (q, limit) => ipcRenderer.invoke("history:search", q, limit),
   historyClear: () => ipcRenderer.invoke("history:clear"),
+  claudeDesktop: (mode) => ipcRenderer.invoke("agents:claude-desktop", mode),
   historyRemove: (url) => ipcRenderer.invoke("history:remove", url),
   reloadRules: () => ipcRenderer.invoke("rules:reload"),
   setSettings: (next) => ipcRenderer.invoke("settings:set", next),

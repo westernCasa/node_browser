@@ -1371,6 +1371,23 @@ if (api?.agentsStatus) {
     if (tab) await api.shareTab(tab.id, !tab.agentShared);
   });
   document.getElementById("agent-btn").addEventListener("click", async () => fillAgents(await api.setAgents(false)));
+  const claudeState = document.getElementById("agents-claude-state");
+  document.getElementById("agents-claude-add").addEventListener("click", async () => {
+    try {
+      const r = await api.claudeDesktop("add");
+      claudeState.className = "state ok";
+      claudeState.textContent = `Added to ${r.file}. Quit and reopen the Claude app to load NODE's tools.`;
+    } catch (err) {
+      claudeState.className = "state bad";
+      claudeState.textContent = errText(err);
+    }
+  });
+  document.getElementById("agents-claude-copy").addEventListener("click", async () => {
+    const r = await api.claudeDesktop("config");
+    await navigator.clipboard.writeText(r.config).catch(() => {});
+    claudeState.className = "state";
+    claudeState.textContent = `Copied. Paste the "node" entry under "mcpServers" in ${r.file}.`;
+  });
   document.getElementById("agents-enabled").addEventListener("change", async (e) => fillAgents(await api.setAgents(e.target.checked)));
   document.getElementById("agents-port").addEventListener("change", async (e) => {
     await api.setSettings({ agents: { port: Number(e.target.value) } });
