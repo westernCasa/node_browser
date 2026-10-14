@@ -16,7 +16,7 @@ Built with Electron and plain JavaScript, with an Expo mobile app (iPhone and An
 
 Also: a read-only MCP server so AI agents such as Claude Code can search, read pages and read your research trails ([details](#ai-agents-mcp)), per-site behaviour rules, ad and tracker blocking, bookmarks, picture in picture, trackpad and mouse gestures, Ask AI about a page with a local model, and a separate Google window for Google sign-in. The full list is in [docs/07-features.md](docs/07-features.md).
 
-The screenshots use a fictional site made for them ([docs/media/src](docs/media/src)), so they can be rebuilt with `node docs/media/src/make-shots.js`.
+The interface follows the NODE brand guideline (black ground, Barlow and JetBrains Mono, one violet accent). The screenshots use a fictional site made for them ([docs/media/src](docs/media/src)), so they can be rebuilt with `node docs/media/src/make-shots.js`.
 
 ## Project docs
 

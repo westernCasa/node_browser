@@ -6,10 +6,10 @@ const OUT = path.join(__dirname, "..", "social");
 // The "-zoom" captures are crops of the right side of the window (ImageMagick:
 //   convert raw/suggestions.png -crop 1000x620+440+112 +repage raw/suggestions-zoom.png).
 const posts = [
-  ["suggestions", "1-node.png", "NODE", "A browser for niche research. It reads the page you're on and suggests what to read next."],
-  ["suggestions-zoom", "2-suggestions.png", "Suggestions from the page you're reading", "Keywords come from the part of the page in view. Pin one, hide one, or select text to search."],
-  ["mosaic", "3-mosaic.png", "Mosaic: four tabs playing at once", "Media starts on its own in up to four tabs, and you can hear all of them."],
-  ["trail-zoom", "4-trail.png", "A trail of everything you read", "Each research session keeps the pages read and their keywords, ready to export as Markdown."],
+  ["suggestions", "1-node.png", "Read one page. Find the next.", "NODE reads the page you are on, picks out the keywords and suggests what to read next."],
+  ["suggestions-zoom", "2-suggestions.png", "Suggestions from the page", "Keywords come from the part of the page in view. Pin one, hide one, or select text to search."],
+  ["mosaic", "3-mosaic.png", "Four tabs. All playing.", "Mosaic tiles your tabs. Media starts on its own in up to four of them, and you can hear all four."],
+  ["trail-zoom", "4-trail.png", "A trail of what you read", "Each research session keeps the pages read and the keywords that recur across them, ready to export as Markdown."],
 ];
 (async () => {
   fs.mkdirSync(OUT, { recursive: true });

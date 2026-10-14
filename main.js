@@ -1056,6 +1056,13 @@ function createWindow() {
 
   win.loadFile(path.join(__dirname, "renderer", "index.html"));
   // macOS three-finger swipe (when "Swipe between pages" uses three fingers).
+  // Closing the window while media plays left Electron waiting forever (the
+  // same problem as closing a playing tab, B36). Blank every tab first, then close.
+  win.on("close", (e) => {
+    if (pagesReleased) return;
+    e.preventDefault();
+    releasePages().then(() => win && !win.isDestroyed() && win.close());
+  });
   win.on("swipe", (_e, direction) => {
     if (direction === "right") gestureNav(tabs.get(activeId), "back");
     if (direction === "left") gestureNav(tabs.get(activeId), "forward");
@@ -1473,11 +1480,36 @@ ipcMain.handle("research:export", () => {
   fs.writeFileSync(path.join(libraryRoot(), "saves", name), research.markdown());
   return addRecord("saves", name, "", `Session notes: ${research.current.name}`);
 });
-app.on("before-quit", () => {
+// Mutes and blanks every tab, then closes the pages (at most 1.5 s).
+let pagesReleased = false;
+async function releasePages() {
+  if (pagesReleased) return;
+  pagesReleased = true;
+  const jobs = [...tabs.values()].map((tab) => {
+    const wc = tab.view.webContents;
+    if (wc.isDestroyed()) return null;
+    try {
+      wc.setAudioMuted(true);
+    } catch (_) {}
+    return wc.loadURL("about:blank").catch(() => {});
+  });
+  await Promise.race([Promise.all(jobs), new Promise((r) => setTimeout(r, 1500))]);
+  for (const tab of tabs.values()) {
+    try {
+      if (!tab.view.webContents.isDestroyed()) tab.view.webContents.close();
+    } catch (_) {}
+  }
+}
+
+app.on("before-quit", (e) => {
   try {
     research?.saveNow();
     historyStore?.saveNow();
   } catch (_) {}
+  if (!pagesReleased && tabs.size) {
+    e.preventDefault();
+    releasePages().then(() => app.quit());
+  }
 });
 
 ipcMain.handle("library:root", () => libraryRoot());

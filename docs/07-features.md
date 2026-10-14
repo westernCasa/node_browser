@@ -52,6 +52,10 @@ NODE is a research browser that reads the page you are on, picks out keywords, a
 - Permissions always ask; sign-in, banking and payment pages never read or autoplayed; keys encrypted with the keychain; standard Chrome user agent.
 - Page re-read only after scroll, resize or selection; hidden tabs stop drawing; 30-minute result cache; requests spaced per site.
 
+## Look
+
+- Follows the NODE brand guideline: black ground, white type, one violet accent, Barlow and JetBrains Mono (bundled), uppercase labels, hairlines instead of boxes and shadows.
+
 ## Desktop: Talk
 
 - **Talk** in the sidebar: Hacker News stories and Bluesky posts that link to the page you are reading, and a Reddit search link. Clicking one opens it in a tab.
