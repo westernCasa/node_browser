@@ -169,6 +169,13 @@ class ResearchStore {
     this.saveSoon();
   }
 
+  // A report written by the built-in research agent.
+  addReport({ question, file, sources }) {
+    const list = (this.current.reports = this.current.reports || []);
+    list.push({ at: Date.now(), question: String(question || "").slice(0, 500), file: String(file || ""), sources: (sources || []).slice(0, 12) });
+    this.saveSoon();
+  }
+
   markdown(id) {
     const s = this.read(id) || this.current;
     const fmt = (ms) => new Date(ms).toLocaleString();
@@ -184,6 +191,10 @@ class ResearchStore {
     if (s.opened.length) {
       lines.push("", "## Suggestions opened", "");
       for (const o of s.opened) lines.push(`- [${md(o.title)}](${o.url})${o.query ? ` — from "${o.query}"` : ""}`);
+    }
+    if (s.reports?.length) {
+      lines.push("", "## Research agent reports", "");
+      for (const r of s.reports) lines.push(`- ${fmt(r.at)} · ${r.question}${r.file ? ` (Library: ${r.file})` : ""}`);
     }
     if (s.agent?.length) {
       lines.push("", "## Agent activity", "");

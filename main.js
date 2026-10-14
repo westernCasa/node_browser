@@ -49,6 +49,7 @@ const { routesToGoogleWindow, MODES: GOOGLE_MODES } = require("./core/google");
 const { createCompanion } = require("./companion");
 const { createAgentServer } = require("./agent-server");
 const { createAgents } = require("./agents");
+const { runResearch } = require("./core/agent");
 let research = null; // current research session store (B17), created when the app is ready
 
 const HOME_URL = "https://en.wikipedia.org/wiki/Main_Page";
@@ -436,8 +437,11 @@ async function setAgents(on) {
   return agentsStatus();
 }
 
+let agentTools = null; // reader and search shared with the research agent
+let researchRun = null; // { stop: boolean } while the research agent runs
+
 function initAgents() {
-  const { tools, resources } = createAgents({
+  agentTools = createAgents({
     BrowserWindow,
     session,
     userAgent: USER_AGENT,
@@ -448,6 +452,7 @@ function initAgents() {
     // The tests serve their pages from 127.0.0.1 (this computer only).
     allowPrivate: () => process.env.NODE_AGENT_ALLOW_LOCAL === "1",
   });
+  const { tools, resources } = agentTools;
   agentServer = createAgentServer({
     getConfig: () => loadSettings().agents,
     tools,
@@ -1303,6 +1308,45 @@ ipcMain.handle("settings:set", async (_e, next) => {
   return publicSettings();
 });
 ipcMain.handle("agents:status", () => agentsStatus());
+
+// Built-in research agent (core/agent.js): searches, reads pages logged out,
+// writes a report with sources into the Library and the research session.
+ipcMain.handle("agent:run", async (_e, goal) => {
+  if (researchRun) return { ok: false, error: "The research agent is already running." };
+  const ai = loadSettings().ai;
+  if (!Chat.canChat(ai)) return { ok: false, error: "Set up a model first under Settings → AI: a local model (Ollama or LM Studio) or a Grok API key." };
+  const run = (researchRun = { stop: false });
+  const note = (entry) => research?.agentActivity({ at: Date.now(), tool: "research agent", ...entry });
+  try {
+    const out = await runResearch(
+      { goal },
+      {
+        complete: (messages, opts) => Chat.complete(messages, ai, { fetch: (...a) => globalThis.fetch(...a), ...opts }),
+        search: (q) => agentTools.searchForAgent(q),
+        read: (url) => agentTools.readForAgent(url),
+        stopped: () => run.stop,
+        onStep: (step) => {
+          sendUi("agent-step", step);
+          if (step.kind === "read" || step.kind === "queries") note({ detail: step.kind === "read" ? step.url : `searched: ${step.text}` });
+        },
+      }
+    );
+    const name = stamp("report", "md");
+    fs.writeFileSync(path.join(libraryRoot(), "saves", name), out.report);
+    addRecord("saves", name, "", `Research agent: ${out.question}`);
+    research.addReport({ question: out.question, file: name, sources: out.sources });
+    return { ok: true, ...out, file: name };
+  } catch (err) {
+    note({ ok: false, detail: String(err.message || err) });
+    return { ok: false, error: String(err.message || err), stopped: run.stop };
+  } finally {
+    researchRun = null;
+  }
+});
+ipcMain.handle("agent:stop", () => {
+  if (researchRun) researchRun.stop = true;
+  return true;
+});
 ipcMain.handle("agents:set", (_e, on) => setAgents(on));
 ipcMain.handle("agents:new-token", () => {
   loadSettings().agents.token = require("crypto").randomBytes(24).toString("base64url");

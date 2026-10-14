@@ -63,6 +63,7 @@
             <button class="chip active" id="auto-btn" title="Re-search when the visible page changes">Auto</button>
             <button class="chip" id="refresh-suggest" title="Search now">Crawl</button>
             <button class="chip" id="ask-btn" title="Ask AI about this page">Ask</button>
+            <button class="chip" id="agent-run-btn" title="Research agent: give it a question, it searches, reads and writes a report with sources">Agent</button>
             <button class="chip" id="trail-btn" title="This research session: pages read, recurring keywords">Trail</button>
             <button class="chip" id="sources-btn" title="Search sources and site rules">Settings</button>
           </div>
@@ -100,6 +101,29 @@
             <button class="chip" type="button" id="ask-clear">Clear</button>
           </div>
         </form>
+      </div>
+      <div id="agent-pane" hidden>
+        <div class="rail-head">
+          <div>
+            <p class="kicker">Research agent</p>
+            <h1>Ask a question</h1>
+          </div>
+          <button class="chip" id="agent-back">Back</button>
+        </div>
+        <p class="help" id="agent-privacy"></p>
+        <form id="agent-form" class="ask-form">
+          <textarea id="agent-input" rows="3" placeholder="What do you want to find out? The agent runs a few searches, reads up to 6 pages and writes a report with sources."></textarea>
+          <div class="actions-row">
+            <button class="chip" type="submit" id="agent-start">Start</button>
+            <button class="chip" type="button" id="agent-stop" hidden>Stop</button>
+          </div>
+        </form>
+        <ol id="agent-steps"></ol>
+        <div id="agent-report" hidden></div>
+        <div class="actions-row" id="agent-after" hidden>
+          <button class="chip" type="button" id="agent-mosaic" title="Open up to 4 of the sources as tabs in Mosaic">Open sources in Mosaic</button>
+          <button class="chip" type="button" id="agent-library">Library</button>
+        </div>
       </div>
       <div id="trail-pane" hidden>
         <div class="rail-head">

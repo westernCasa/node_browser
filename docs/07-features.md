@@ -52,6 +52,14 @@ NODE is a research browser that reads the page you are on, picks out keywords, a
 - Permissions always ask; sign-in, banking and payment pages never read or autoplayed; keys encrypted with the keychain; standard Chrome user agent.
 - Page re-read only after scroll, resize or selection; hidden tabs stop drawing; 30-minute result cache; requests spaced per site.
 
+## Desktop: research agent
+
+- **Agent** in the sidebar: type a question; NODE plans up to 3 searches, picks up to 6 results, reads them in the logged-out agent session, takes notes and writes a short report with numbered sources.
+- Each step is listed as it happens; Stop ends it between steps.
+- Reads only addresses from its own search results, so text on a page cannot send it elsewhere; page text is marked as untrusted for the model; links in the model's text are removed and the sources list is built by NODE.
+- The report is saved to the Library and listed in the research session; **Open sources in Mosaic** opens up to 4 sources side by side.
+- Uses the model set in Settings → AI (local model or Grok).
+
 ## Desktop: AI agents (MCP)
 
 - Off by default. When on, agents on this computer (Claude Code, Codex, Cursor) connect over MCP with a token shown in Settings.

@@ -38,6 +38,39 @@ function pageMessage(page) {
 }
 
 /**
+ * One chat completion with the configured model (local or Grok).
+ * @returns {Promise<string>} the model's reply
+ */
+async function complete(messages, settings, { fetch: doFetch = fetch, timeout, maxTokens = 700, temperature = 0.3 } = {}) {
+  if (!canChat(settings)) throw new AIError("Set up a model first: Settings → AI (a local model or a Grok key).");
+  const e = endpoint(settings);
+  const headers = { "Content-Type": "application/json" };
+  if (e.key) headers.Authorization = `Bearer ${e.key}`;
+  let res;
+  try {
+    res = await doFetch(`${e.base}/chat/completions`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ model: e.model, temperature, max_tokens: maxTokens, stream: false, messages }),
+      signal: timeoutSignal(timeout || (settings.provider === "grok" ? 60000 : 120000)),
+    });
+  } catch (err) {
+    if (err?.name === "TimeoutError") throw new AIError("The AI server took too long to answer.");
+    throw new AIError(settings.provider === "grok" ? "Could not reach Grok." : `Could not reach the local model at ${e.base}. Is Ollama or LM Studio running?`);
+  }
+  if (!res.ok) {
+    if (res.status === 401 || res.status === 403) throw new AIError(settings.provider === "grok" ? "Grok rejected the API key." : "The local server refused the request.");
+    if (res.status === 404) throw new AIError("Model or address not found. Check the model name in Settings → AI.");
+    if (res.status === 429) throw new AIError("Rate limit reached. Try again in a minute.");
+    throw new AIError(`The AI server returned HTTP ${res.status}.`);
+  }
+  const data = await res.json().catch(() => ({}));
+  const text = String(data?.choices?.[0]?.message?.content || "").trim();
+  if (!text) throw new AIError("The model sent an empty answer.");
+  return text;
+}
+
+/**
  * Ask a question about a page.
  * @param {{question: string, page: {title, url, text, selection}, history?: {role, content}[]}} input
  *   history: earlier questions and answers about the same page, oldest first.
@@ -79,4 +112,4 @@ async function askPage({ question, page, history = [] }, settings, { fetch: doFe
   return answer;
 }
 
-module.exports = { askPage, canChat, pageMessage, PAGE_CHARS };
+module.exports = { askPage, complete, canChat, pageMessage, PAGE_CHARS };

@@ -203,7 +203,16 @@ function createAgents({ BrowserWindow, session, userAgent, registry, research, g
     },
   };
 
-  return { tools, resources };
+  // Used by the built-in research agent (core/agent.js), with the same checks.
+  async function readForAgent(url) {
+    return fetchPage(checkAddress(url, { allowPrivate: allowPrivate() }));
+  }
+  async function searchForAgent(query) {
+    const [ref, web] = await Promise.all([registry.reference(query).catch(() => []), registry.web(query).catch(() => [])]);
+    return [...web, ...ref];
+  }
+
+  return { tools, resources, readForAgent, searchForAgent };
 }
 
 module.exports = { createAgents, checkAddress, isPrivateHost, SENSITIVE };

@@ -1260,7 +1260,119 @@ function showPane(name) {
   document.getElementById("ask-pane").hidden = name !== "ask";
   sourcesPane.hidden = name !== "sources";
   document.getElementById("trail-pane").hidden = name !== "trail";
+  document.getElementById("agent-pane").hidden = name !== "agent";
 }
+
+// ---- Research agent pane ----
+let agentRun = { running: false, steps: [], result: null };
+
+// Report Markdown to HTML. Everything is escaped first; the only links are
+// the [n] marks and the sources list, both built from the sources the app read.
+function reportHtml(md, sources) {
+  const body = String(md).split(/\n## Sources\n/)[0];
+  const out = [];
+  let list = "";
+  const inline = (t) =>
+    t
+      .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
+      .replace(/\*([^*]+)\*/g, "<i>$1</i>")
+      .replace(/\[(\d{1,2})\]/g, (m, n) => (sources.some((s) => s.n === Number(n)) ? `<a class="cite" data-n="${n}">[${n}]</a>` : m));
+  const close = () => {
+    if (list) out.push(`</${list}>`);
+    list = "";
+  };
+  for (const line of escapeHtml(body).split("\n")) {
+    let m;
+    if ((m = line.match(/^(#{1,3})\s+(.*)$/))) {
+      close();
+      out.push(`<h${m[1].length}>${inline(m[2])}</h${m[1].length}>`);
+    } else if ((m = line.match(/^\s*(?:[-*]|\d+\.)\s+(.*)$/))) {
+      const kind = /^\s*\d/.test(line) ? "ol" : "ul";
+      if (list !== kind) {
+        close();
+        out.push(`<${kind}>`);
+        list = kind;
+      }
+      out.push(`<li>${inline(m[1])}</li>`);
+    } else if (line.trim()) {
+      close();
+      out.push(`<p>${inline(line)}</p>`);
+    } else close();
+  }
+  close();
+  out.push("<h2>Sources</h2><ol>" + sources.map((s) => `<li><a data-n="${s.n}">${escapeHtml(s.title)}</a></li>`).join("") + "</ol>");
+  return out.join("");
+}
+
+function renderAgent() {
+  const steps = document.getElementById("agent-steps");
+  steps.innerHTML = "";
+  for (const s of agentRun.steps) {
+    const li = document.createElement("li");
+    li.className = s.kind;
+    li.textContent = s.text;
+    steps.appendChild(li);
+  }
+  steps.scrollTop = steps.scrollHeight;
+  document.getElementById("agent-start").hidden = agentRun.running;
+  document.getElementById("agent-stop").hidden = !agentRun.running;
+  const rep = document.getElementById("agent-report");
+  const r = agentRun.result;
+  rep.hidden = !r;
+  document.getElementById("agent-after").hidden = !(r && r.ok);
+  if (!r) return;
+  if (!r.ok) {
+    rep.innerHTML = `<p class="bad">${escapeHtml(r.stopped ? "Stopped." : r.error)}</p>`;
+    return;
+  }
+  rep.innerHTML = reportHtml(r.report, r.sources);
+}
+
+async function openAgent() {
+  if (!api?.runAgent) return showNotice("The research agent needs the desktop app.");
+  showPane("agent");
+  const info = await api.chatInfo();
+  document.getElementById("agent-privacy").textContent = info.ready
+    ? `Uses ${info.provider === "grok" ? "Grok (xAI)" : "your local model"} (${info.model}) and your search sources. Pages are read in a separate logged-out session; the agent only reads search results and never signs in, clicks or fills forms.`
+    : "Set up a model first in Settings → AI: a local model (Ollama or LM Studio) or a Grok API key.";
+  renderAgent();
+  document.getElementById("agent-input").focus();
+}
+
+async function startAgent() {
+  const goal = document.getElementById("agent-input").value.trim();
+  if (!goal || agentRun.running) return;
+  agentRun = { running: true, steps: [], result: null };
+  renderAgent();
+  const r = await api.runAgent(goal);
+  agentRun.running = false;
+  agentRun.result = r;
+  renderAgent();
+}
+
+document.getElementById("agent-run-btn").addEventListener("click", openAgent);
+document.getElementById("agent-back").addEventListener("click", () => showPane("suggest"));
+document.getElementById("agent-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  startAgent();
+});
+document.getElementById("agent-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    startAgent();
+  }
+});
+document.getElementById("agent-stop").addEventListener("click", () => api.stopAgent());
+document.getElementById("agent-report").addEventListener("click", (e) => {
+  const a = e.target.closest("a[data-n]");
+  const src = a && agentRun.result?.sources?.find((s) => s.n === Number(a.dataset.n));
+  if (src) api.createTab(src.url);
+});
+document.getElementById("agent-mosaic").addEventListener("click", async () => {
+  for (const s of (agentRun.result?.sources || []).slice(0, 4)) await api.createTab(s.url);
+  if (layout !== "mosaic") layoutBtn.click();
+});
+document.getElementById("agent-library").addEventListener("click", () => document.getElementById("library-btn").click());
 
 document.getElementById("sources-btn").addEventListener("click", openSources);
 document.getElementById("rules-edit").addEventListener("click", () => api?.editRules?.());
@@ -1547,6 +1659,10 @@ if (api) {
   api.onCommand?.((msg) => {
     if (msg.cmd === "google-window-status") return fillGoogleState(msg);
     if (msg.cmd === "agents-status") return fillAgents(msg);
+    if (msg.cmd === "agent-step") {
+      agentRun.steps.push(msg);
+      return renderAgent();
+    }
     if (msg.cmd === "focus-omni") {
       omni.focus();
       omni.select();

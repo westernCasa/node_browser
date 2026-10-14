@@ -550,3 +550,17 @@ html, body {
 .agent-log b { color: var(--text); font-weight: 600; }
 .agent-log .bad b { color: #f87171; }
 .source .row .chip { flex: 1; white-space: nowrap; height: 26px; font-size: 11px; }
+
+/* Research agent pane */
+#agent-steps { margin: 10px 0; padding-left: 18px; font-size: 11.5px; color: var(--mute); max-height: 180px; overflow-y: auto; }
+#agent-steps li { margin: 2px 0; overflow-wrap: anywhere; }
+#agent-steps li.notes, #agent-steps li.done { color: var(--text); }
+#agent-steps li.skip, #agent-steps li.error { color: #f0a36b; }
+#agent-report { font-size: 13px; line-height: 1.5; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--bg-2); max-height: calc(100vh - 420px); overflow-y: auto; }
+#agent-report h1 { font-size: 15px; margin: 0 0 8px; }
+#agent-report h2, #agent-report h3 { font-size: 13px; margin: 12px 0 4px; }
+#agent-report p { margin: 0 0 8px; }
+#agent-report ul, #agent-report ol { margin: 0 0 8px; padding-left: 18px; }
+#agent-report a, #agent-report .cite { color: #c4b5fd; cursor: pointer; text-decoration: none; }
+#agent-report .cite { font-size: 11px; vertical-align: super; }
+#agent-steps { background: var(--bg-2); color-scheme: dark; border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px 6px 26px; }

@@ -156,6 +156,12 @@ Mobile:
 
 On result cards, **×** hides a result for the rest of the session, and results you have already opened or read are dimmed and marked "read". **New** starts a fresh session; the dropdown switches back to an older one. **Export** saves the session as Markdown notes in the Library (Saves).
 
+## Research agent
+
+**Agent** in the sidebar asks for a question, then runs a few searches with your sources, reads up to 6 of the results in a separate logged-out session and writes a short report with numbered sources. You see each step as it happens and can stop it. The report is saved to the Library and the research session, and **Open sources in Mosaic** opens the sources side by side. It uses the model set in Settings → AI.
+
+It only reads pages that came back from its own searches: the model picks results by number and never supplies an address, so hidden text on a page cannot send it somewhere else. It does not sign in, click or fill forms, and skips pages that ask for a password or card details.
+
 ## AI agents (MCP)
 
 NODE can serve AI agents on your computer, such as Claude Code, Codex or Cursor, through the Model Context Protocol. It is off by default and read-only.
