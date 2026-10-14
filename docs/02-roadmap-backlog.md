@@ -66,7 +66,7 @@ Effort: XS under 1 hour, S half a day, M 1-2 days, L 3+ days. Finding IDs (C1, K
 | B43 | 4 | Ad and tracker blocking (EasyList, EasyPrivacy) with a Settings switch and site rule `adblock` | P1 | M | Done (0.4, desktop; mobile needs a custom build) |
 | B44 | 4 | Ask AI about the current page (local model or Grok): sidebar pane and mobile sheet | P1 | M | Done (0.4) |
 | B45 | 4 | Competitor matrix and gap list (NODE: Current Features doc) | P1 | S | Done |
-| B46 | 4 | Code signing (Apple Developer ID, Windows) and automatic updates | P1 | M | Not started |
+| B46 | 4 | Code signing (Apple Developer ID, Windows) and automatic updates | P1 | M | Updates and release workflow done; signing waits on certificates (see 09-releasing.md) |
 | B47 | 4 | Passwords and autofill | P2 | L | Not started |
 | B48 | 4 | Chrome Web Store extensions | P2 | L | Not started |
 | B49 | 4 | AI chat across tabs and cited summaries of a research session | P2 | M | Not started |

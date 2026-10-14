@@ -50,6 +50,7 @@ const { createCompanion } = require("./companion");
 const { createAgentServer } = require("./agent-server");
 const { createAgents } = require("./agents");
 const { createLog } = require("./log");
+const { createUpdater, RELEASES } = require("./updater");
 const { runResearch } = require("./core/agent");
 const Talk = require("./core/talk");
 let research = null; // current research session store (B17), created when the app is ready
@@ -438,6 +439,15 @@ function attachListeners(tab) {
   on("before-input-event", (_e, input) => {
     if (input.type === "keyDown" || input.type === "mouseDown") tab.lastGesture = Date.now();
   });
+}
+
+// ---- Updates (B46, updater.js) ----
+let updater = null;
+async function checkForUpdatesFromMenu() {
+  const st = await updater.check(true);
+  if (st.status === "current") sendUi("notice", { message: `NODE ${app.getVersion()} is the latest version.` });
+  else if (st.status === "downloading" || st.status === "checking") sendUi("notice", { message: `Downloading NODE ${st.version || "update"} in the background. NODE will offer to restart when it is ready.` });
+  else if (st.status !== "ready") sendUi("update-error", { message: st.error || "Could not check for updates." });
 }
 
 // ---- Error log and diagnostics (B31, log.js) ----
@@ -994,6 +1004,7 @@ function loadSettings() {
   };
   base.adblock = raw.adblock !== false;
   base.restoreTabs = raw.restoreTabs !== false;
+  base.autoUpdate = raw.autoUpdate !== false;
   base.startPage = typeof raw.startPage === "string" ? raw.startPage : "";
   // First-run setup is shown once, to new users. Settings saved by an earlier
   // version count as set up. Runs with --user-data-dir (the tests) skip it
@@ -1025,6 +1036,7 @@ function saveSettings(next) {
   }
   if (next && "adblock" in next) current.adblock = Boolean(next.adblock);
   if (next && "restoreTabs" in next) current.restoreTabs = Boolean(next.restoreTabs);
+  if (next && "autoUpdate" in next) current.autoUpdate = Boolean(next.autoUpdate);
   if (next && typeof next.startPage === "string") current.startPage = /^https?:\/\//i.test(next.startPage.trim()) ? next.startPage.trim() : "";
   if (next && next.firstRunDone) current.firstRunDone = true;
   if (next?.agents) {
@@ -1054,6 +1066,7 @@ function saveSettings(next) {
     adblock: current.adblock !== false,
     google: { ...current.google },
     restoreTabs: current.restoreTabs !== false,
+    autoUpdate: current.autoUpdate !== false,
     startPage: current.startPage || "",
     firstRunDone: Boolean(current.firstRunDone),
     agents: { enabled: current.agents.enabled, port: current.agents.port, token: encryptSecret(current.agents.token) },
@@ -1096,6 +1109,8 @@ function publicSettings() {
     adblockStats: adblock ? adblock.stats() : { status: "off", blocked: 0 },
     google: { ...s.google },
     restoreTabs: s.restoreTabs !== false,
+    autoUpdate: s.autoUpdate !== false,
+    update: updater ? updater.state() : null,
     startPage: s.startPage || "",
     firstRunDone: Boolean(s.firstRunDone),
     googleWindow: companion ? companion.status() : null,
@@ -1312,6 +1327,9 @@ function buildMenu() {
         },
         { label: "Open Log Folder", click: () => shell.openPath(log().dir) },
         { type: "separator" },
+        { label: "Check for Updates…", click: () => checkForUpdatesFromMenu() },
+        { label: "All Releases", click: () => createTab(RELEASES) },
+        { type: "separator" },
         { label: "NODE on GitHub", click: () => createTab("https://github.com/westernCasa/node_browser") },
       ],
     },
@@ -1491,6 +1509,8 @@ app.whenReady().then(() => {
   adblock.load();
   loadRules();
   watchRules();
+  updater = createUpdater({ app, log: log(), notify: (m) => sendUi("update-ready", m), isEnabled: () => loadSettings().autoUpdate !== false });
+  updater.start();
   log().info(`NODE ${app.getVersion()} started (Electron ${process.versions.electron}, ${process.platform} ${process.arch})`);
   research = new ResearchStore(fsStorage(path.join(app.getPath("userData"), "sessions")));
   historyStore = new HistoryStore(fsStorage(app.getPath("userData")));
@@ -1734,6 +1754,9 @@ ipcMain.handle("diag:copy", () => {
   return text;
 });
 ipcMain.handle("diag:open-folder", () => shell.openPath(log().dir));
+ipcMain.handle("update:check", () => updater.check(true));
+ipcMain.handle("update:install", () => updater.installNow());
+ipcMain.handle("update:releases", () => createTab(RELEASES));
 ipcMain.handle("downloads:list", () => downloads.slice(-50).reverse().map(downloadState));
 ipcMain.handle("downloads:cancel", (_e, id) => downloads.find((d) => d.id === id)?.item?.cancel());
 ipcMain.handle("downloads:open", (_e, id) => {

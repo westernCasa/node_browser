@@ -1157,6 +1157,8 @@ async function renderSources() {
   fillAgents(settings.agents);
   document.getElementById("restore-tabs").checked = settings.restoreTabs !== false;
   document.getElementById("start-page").value = settings.startPage || "";
+  document.getElementById("auto-update").checked = settings.autoUpdate !== false;
+  fillUpdate(settings.update);
   sourcesDraft = { providers: {} };
   sourcesList.innerHTML = "";
   for (const meta of settings.meta) {
@@ -1319,6 +1321,30 @@ if (api?.agentsStatus) {
   });
   document.getElementById("agents-copy").addEventListener("click", () => navigator.clipboard.writeText(document.getElementById("agents-cmd").value));
   document.getElementById("agents-token").addEventListener("click", async () => fillAgents(await api.agentsNewToken()));
+}
+
+// ---- Updates (B46) ----
+function fillUpdate(st) {
+  const el = document.getElementById("update-state");
+  if (!el || !st) return;
+  const words = {
+    idle: `NODE ${st.current}.`,
+    checking: "Checking for updates…",
+    current: `NODE ${st.current} is the latest version.`,
+    downloading: `Downloading NODE ${st.version}…`,
+    ready: `NODE ${st.version} is ready. Restart NODE to install it.`,
+    error: `Could not update: ${st.error}`,
+    unavailable: st.error,
+  };
+  el.className = "state" + (st.status === "error" ? " bad" : st.status === "ready" ? " ok" : "");
+  el.textContent = words[st.status] || "";
+}
+if (api?.checkUpdates) {
+  document.getElementById("update-check").addEventListener("click", async () => {
+    document.getElementById("update-state").textContent = "Checking for updates…";
+    fillUpdate(await api.checkUpdates());
+  });
+  document.getElementById("update-releases").addEventListener("click", () => api.openReleases());
 }
 
 // ---- Help: diagnostics (B31) ----
@@ -1509,6 +1535,7 @@ async function saveSources(rerender = true) {
     google: { mode: document.getElementById("google-mode").value, browser: document.getElementById("google-browser").value },
     restoreTabs: document.getElementById("restore-tabs").checked,
     startPage: document.getElementById("start-page").value,
+    autoUpdate: document.getElementById("auto-update").checked,
   });
   if (rerender) await renderSources();
 }
@@ -2096,6 +2123,10 @@ if (api) {
       showNotice(msg.message);
     } else if (msg.cmd === "notice") {
       showNotice(msg.message, msg.file ? [{ label: "Show in folder", run: () => api.revealFile(msg.file) }] : []);
+    } else if (msg.cmd === "update-ready") {
+      showNotice(`NODE ${msg.version} is ready to install.`, [{ label: "Restart now", run: () => api.installUpdate() }]);
+    } else if (msg.cmd === "update-error") {
+      showNotice(`${msg.message} You can download NODE from the releases page.`, [{ label: "Open releases", run: () => api.openReleases() }]);
     } else if (msg.cmd === "downloads") {
       paintDownloads(msg);
     } else if (msg.cmd === "pin-keyword") {

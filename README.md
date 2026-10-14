@@ -22,11 +22,15 @@ The interface follows the NODE brand guideline (black ground, Barlow and JetBrai
 
 - [Overview](docs/01-overview.md), [roadmap and backlog](docs/02-roadmap-backlog.md), [architecture](docs/03-architecture.md)
 - [Review findings](docs/04-review-findings.md), [change log](docs/05-changelog.md), [mobile plan](docs/06-mobile-plan.md)
-- [Features and competitor comparison](docs/07-features.md), [engine decision: Electron or Chromium](docs/08-engine-decision.md)
+- [Features and competitor comparison](docs/07-features.md), [engine decision: Electron or Chromium](docs/08-engine-decision.md), [releasing](docs/09-releasing.md)
 
 NODE was called Scout until October 2026. The bundle ID `app.scout.browser` and some internal names keep the old name.
 
-## Run
+## Download
+
+Installers for macOS, Windows and Linux are on the [Releases page](https://github.com/westernCasa/node_browser/releases) once a version is published. NODE updates itself from there. Until the builds are signed, macOS asks you to right-click NODE → Open the first time. How releases are made: [docs/09-releasing.md](docs/09-releasing.md).
+
+## Run from source
 
 This is a desktop browser (Electron), not a website.
 

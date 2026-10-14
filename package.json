@@ -1,9 +1,9 @@
 {
   "name": "scout",
-  "version": "0.4.0",
+  "version": "0.9.0",
   "description": "Research browser that suggests the next pages to read, plays media across tabs, and keeps a research trail.",
   "main": "main.js",
-  "author": "",
+  "author": "Sven Manzanarez",
   "license": "MIT",
   "scripts": {
     "start": "npx electron .",
@@ -27,16 +27,19 @@
     "dist": "electron-builder",
     "dist:mac": "electron-builder --mac",
     "dist:win": "electron-builder --win",
-    "test:redteam": "node test/e2e/18-redteam.js"
+    "test:redteam": "node test/e2e/18-redteam.js",
+    "test:unit": "node test/keywords-demo.js && node test/providers-demo.js && node test/rules-demo.js && node test/ai-demo.js && node test/controller-demo.js && node test/playback-demo.js && node test/bookmarks-demo.js && node test/google-demo.js && node test/agents-demo.js && node test/agent-demo.js && node test/talk-demo.js",
+    "release": "electron-builder --publish always"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.8.0",
     "electron": "^44.7.0",
-    "electron-builder": "^26.17.0"
+    "electron-builder": "^26.17.0",
+    "@tauri-apps/api": "^2.8.0"
   },
   "dependencies": {
     "@ghostery/adblocker-electron": "2.19",
-    "@tauri-apps/api": "^2.8.0"
+    "electron-updater": "6.8.9"
   },
   "productName": "NODE",
   "build": {
@@ -56,6 +59,7 @@
       "agents.js",
       "agent-server.js",
       "log.js",
+      "updater.js",
       "core/**",
       "renderer/**",
       "!renderer/tauri-bridge.js",
@@ -66,12 +70,23 @@
       "icon": "build/icon.png",
       "target": [
         {
-          "target": "dmg"
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
         },
         {
-          "target": "zip"
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
         }
-      ]
+      ],
+      "hardenedRuntime": true,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist"
     },
     "dmg": {
       "title": "NODE"
@@ -91,9 +106,25 @@
     "linux": {
       "icon": "build/icon.png",
       "target": [
-        "AppImage"
+        "AppImage",
+        "deb"
       ],
-      "category": "Network"
-    }
-  }
+      "category": "Network",
+      "maintainer": "Sven Manzanarez"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "westernCasa",
+        "repo": "node_browser",
+        "releaseType": "release"
+      }
+    ],
+    "artifactName": "NODE-${version}-${os}-${arch}.${ext}"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/westernCasa/node_browser.git"
+  },
+  "homepage": "https://github.com/westernCasa/node_browser"
 }

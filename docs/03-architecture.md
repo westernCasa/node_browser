@@ -1,6 +1,23 @@
 # NODE Browser: Architecture
 
-Last updated: 2026-10-10 (commit 025fb03, shared core and mobile groundwork). Describes the Electron build and the shared `core/`; the mobile app is covered in `06-mobile-plan.md` and `mobile/README.md`.
+Last updated: 2026-10-14 (0.9.0). Earlier sections describe the 2026-10-10 shared core; the files added since are listed under "Added since 0.4". Describes the Electron build and the shared `core/`; the mobile app is covered in `06-mobile-plan.md` and `mobile/README.md`.
+
+## Added since 0.4
+
+| File | What it does |
+| --- | --- |
+| `companion.js` | Google window: finds a Chromium-based browser, starts it with a NODE profile and extension, local link server |
+| `agent-server.js` | MCP server (Streamable HTTP, localhost, token) |
+| `agents.js` | Agent tools and resources; logged-out reader window; address and sensitive-page checks |
+| `log.js` | Error log (`logs/node.log`) |
+| `updater.js` | Automatic updates from GitHub Releases |
+| `core/markdown.js` | Page main content as Markdown, invisible text left out |
+| `core/agent.js` | Research agent: searches, reads, gap round, follow-ups, report |
+| `core/talk.js` | Talk: Hacker News and Bluesky discussions of a page |
+| `core/google.js` | Which addresses open in the Google window |
+| `renderer/start.html`, `error.html`, `google-tab.html` | New tab page, failed-load and crashed-tab page, Google window placeholder |
+| `renderer/fonts/` | Barlow and JetBrains Mono (OFL) |
+| `.github/workflows/` | Tests on push; installers on version tags |
 
 ## Files
 
