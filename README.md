@@ -156,6 +156,17 @@ Mobile:
 
 On result cards, **×** hides a result for the rest of the session, and results you have already opened or read are dimmed and marked "read". **New** starts a fresh session; the dropdown switches back to an older one. **Export** saves the session as Markdown notes in the Library (Saves).
 
+## NODE for Chromium (test build)
+
+`chromium/` holds NODE's research panel as an extension for Chrome, Brave, Edge and Chromium, built from the same `core/` code: suggestions from the page, Talk, autoplay with the 4-tab limit, and center on click. Mosaic, the agents and the address-bar suggestions stay in the desktop app.
+
+```bash
+npm install            # once, for the build tool
+npm run build:chromium # writes chromium/dist
+```
+
+Then open `chrome://extensions`, turn on Developer mode, choose **Load unpacked** and pick `chromium/dist`. Click the NODE button in the toolbar to open the side panel. Findings from this test are in [docs/08-engine-decision.md](docs/08-engine-decision.md).
+
 ## Talk
 
 **Talk** in the sidebar shows existing discussion of the page you are reading: Hacker News stories and Bluesky posts that link to it, plus a link to search Reddit. NODE looks the page up only while Talk is open, sends its address without tracking parameters, and never looks up sign-in, account, payment or banking pages or addresses on your own network. Turn it off for a site with the site rule `"talk": false`. This is stage 1 of the social layer plan; posting and accounts come later.

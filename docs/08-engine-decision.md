@@ -55,3 +55,31 @@ Move, but staged so nothing is lost:
 2. **Keep Electron NODE as the daily build** until the Chromium build reaches parity. `core/` stays shared, so work isn't duplicated.
 3. **Switch** once the spike passes and both patches work. Then build the research's MCP server on the new base.
 4. If the patches turn out too costly, fall back to A and revisit later.
+
+## Step 1 results (2026-10-13): NODE as a Chromium extension
+
+Built `chromium/` (NODE for Chromium, a Manifest V3 extension with a side panel) from the shared `core/` code and tested it in Playwright's Chromium (`npm run build:chromium`, `npm run test:chromium`, test 19). Google sign-in could not be checked here (no access to Google); a Chromium-based browser is the setup Google accepts, so this needs one check on the Mac.
+
+| Feature | In the extension | Result | Work to finish |
+| --- | --- | --- | --- |
+| Keywords from the visible page | Same `core/keywords.js` and page script | Same 8 keywords as the desktop test on the same page | None |
+| Search sources and fallback | Same `core/providers.js`, `core/suggest.js` in the side panel | Wikipedia and web results shown | Brave key setting added; SearXNG and AI query ideas not wired yet (S) |
+| Autoplay | Same autoplay page script as a content script | Plays on load | None |
+| 4-tab playback limit | Same `core/playback.js` in the service worker, across real tabs | 5 video tabs: 4 playing, the oldest paused | Resume when a paused tab is opened works through `tabs.onActivated`; check on a real profile |
+| Center on click | Same page script | Scrolled the clicked image to the middle | None |
+| Talk | Same `core/talk.js` | Hacker News row shown | None |
+| Sound: only the active tab | Not built | Chrome plays every tab's sound by default (the desktop "Sound: all") | `tabs.update({muted})` on tab switch (S) |
+| Ad blocking | Not built | — | `declarativeNetRequest` rule lists, or recommend uBlock Origin Lite (M) |
+| Research trail, Library | Not built | — | `core/research.js` with `chrome.storage` (M) |
+| Ask AI, research agent | Not built | A side panel can call a local model or Grok | The agent's logged-out reader needs its own profile; a normal extension reads with the user's cookies (M–L) |
+| MCP server for agents | Not possible in an extension | Extensions cannot open a local port | Native messaging helper app (M) |
+| Address-bar suggestions | Not possible | Extensions only get a keyword mode in the address bar | Chromium patch (L) |
+| Mosaic (4 tiles) | Not possible | Chrome's split view shows 2 tabs | Chromium patch (L), or 4 windows tiled by the extension (S, rough) |
+| Google sign-in | Works in any Chromium browser | Not testable here | Check on the Mac |
+
+What this shows:
+
+1. NODE's research core (keywords, suggestions, autoplay, the playback limit, center on click, Talk) carries over to Chromium almost unchanged: about a day of work, because `core/` was already shared. Google Chrome 137 and later only loads unpacked extensions in developer mode; distribution would go through the Chrome Web Store or Brave, Edge and Chromium.
+2. The parts that make NODE more than an extension (Mosaic, address-bar suggestions, the MCP server, the logged-out agent reader) are exactly the parts that need a Chromium build or a helper app.
+
+Updated recommendation: keep the Electron app as NODE's main build (it has Mosaic, agents and MCP today) and the Google window for Google accounts. Ship "NODE for Chromium" as a second, lighter product for people who want NODE's research panel inside Chrome, Brave or Edge; it also reaches users who will not switch browsers. Revisit a full Chromium build only if Mosaic or the address bar become the reason people choose NODE.

@@ -1,0 +1,5 @@
+/* Side panel layout on top of the desktop stylesheet (styles.css). */
+html, body { overflow: auto; height: auto; min-height: 100%; }
+.rail { width: 100%; border-left: 0; padding: 12px; }
+.card { display: block; text-decoration: none; color: var(--ink); border: 1px solid var(--line); padding: 10px; margin-bottom: 8px; }
+body { background: var(--surface-raised); } .rail { min-height: 100vh; }
