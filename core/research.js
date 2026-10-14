@@ -76,7 +76,7 @@ class ResearchStore {
       if (!f.endsWith(".json")) continue;
       try {
         const s = JSON.parse(this.storage.read(f));
-        out.push({ id: s.id, name: s.name, started: s.started, updated: s.updated, pages: s.trail.length, current: s.id === this.current.id });
+        out.push({ id: s.id, name: s.name, started: s.started, updated: s.updated, pages: s.trail.length, captures: (s.captures || []).length, current: s.id === this.current.id });
       } catch (_) {}
     }
     return out.sort((a, b) => b.updated - a.updated);
@@ -169,6 +169,17 @@ class ResearchStore {
     this.saveSoon();
   }
 
+  // A screenshot, saved page or saved media file taken during this session.
+  // The file lives in the Library; the session keeps a link to it.
+  capture({ libraryId, kind, name, url, title }) {
+    const list = (this.current.captures = this.current.captures || []);
+    list.push({ at: Date.now(), libraryId: String(libraryId || ""), kind: String(kind || "shot"), name: String(name || ""), url: String(url || ""), title: String(title || "").slice(0, 300) });
+    if (list.length > 500) list.splice(0, list.length - 500);
+    // A page captured counts as read, even if NODE had not recorded it yet.
+    if (/^https?:/i.test(url || "") && !this.current.trail.some((r) => r.url === url)) this.visit(url, title);
+    this.saveSoon();
+  }
+
   // A report written by the built-in research agent.
   addReport({ question, file, sources }) {
     const list = (this.current.reports = this.current.reports || []);
@@ -191,6 +202,11 @@ class ResearchStore {
     if (s.opened.length) {
       lines.push("", "## Suggestions opened", "");
       for (const o of s.opened) lines.push(`- [${md(o.title)}](${o.url})${o.query ? ` — from "${o.query}"` : ""}`);
+    }
+    if (s.captures?.length) {
+      const label = { shot: "Screenshot", save: "Saved page", media: "Saved media" };
+      lines.push("", "## Captures", "");
+      for (const c of s.captures) lines.push(`- ${fmt(c.at)} · ${label[c.kind] || c.kind}: ${c.name}${c.url ? ` — from [${md(c.title || c.url)}](${c.url})` : ""}`);
     }
     if (s.reports?.length) {
       lines.push("", "## Research agent reports", "");

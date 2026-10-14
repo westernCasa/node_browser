@@ -51,8 +51,15 @@ async function launch() {
   const urls = await ui.$$eval("#results .card", (cs) => cs.map((c) => ({ u: c.dataset.url, read: c.classList.contains("read") })));
   log("dismissed result stays hidden after a new search:", !urls.some((x) => x.u === firstUrl), "| cards marked read:", urls.filter((x) => x.read).length);
 
+  // A screenshot taken now goes in the trail, under the page it was taken on.
+  await ui.click("#shot-btn");
+  await sleep(1500);
+  await ui.evaluate(() => closeLibrary?.()).catch(() => {});
+  await sleep(500);
   await ui.click("#trail-btn");
   await sleep(1000);
+  const caps = await ui.$$eval("#trail-list .cap img", (e) => e.map((x) => x.naturalWidth));
+  log("captures in the trail:", caps.length, "| image loads:", caps.every((w) => w > 0));
   log("trail pages:", (await ui.$$eval("#trail-list .trail-row .t", (e) => e.map((x) => x.textContent))).join(" | "));
   log("recurring keywords:", (await ui.$$eval("#threads .key", (e) => e.map((x) => x.textContent))).join(" | "));
   log("session meta:", await ui.textContent("#session-meta"));
@@ -62,6 +69,7 @@ async function launch() {
   await sleep(800);
   const saves = fs.readdirSync(path.join(userData, "library", "saves")).filter((f) => f.endsWith(".md"));
   log("exported:", saves.join(", "));
+  log("export lists the capture:", /## Captures[\s\S]*Screenshot: shot-/.test(fs.readFileSync(path.join(userData, "library", "saves", saves[0]), "utf8")));
   log("export first lines:", fs.readFileSync(path.join(userData, "library", "saves", saves[0]), "utf8").split("\n").slice(0, 3).join(" / "));
   await ui.screenshot({ path: path.join(OUT, "trail.png") });
   await app.evaluate(({ app }) => app.quit());

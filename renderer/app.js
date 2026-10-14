@@ -1001,7 +1001,7 @@ async function openLibrary() {
     }
     const meta = document.createElement("div");
     meta.className = "meta";
-    meta.innerHTML = `<strong>${escapeHtml(item.note || item.name)}</strong><p>${escapeHtml(item.folder)}</p>`;
+    meta.innerHTML = `<strong>${escapeHtml(item.note || item.name)}</strong><p>${escapeHtml(item.folder)}${item.session?.name ? ` · trail: ${escapeHtml(item.session.name)}` : ""}</p>`;
     if (item.sourceUrl) {
       const go = document.createElement("button");
       go.className = "link";
@@ -1995,7 +1995,7 @@ async function renderTrail() {
     sessionSelect.appendChild(o);
   }
   document.getElementById("session-meta").textContent =
-    `${session.trail.length} pages read · ${session.opened.length} suggestions opened · ${session.dismissed.length} hidden` +
+    `${session.trail.length} pages read · ${session.opened.length} suggestions opened · ${(session.captures || []).length} ${(session.captures || []).length === 1 ? "capture" : "captures"} · ${session.dismissed.length} hidden` +
     (session.pins.length ? ` · pinned: ${session.pins.join(", ")}` : "");
 
   const pin = (term) => {
@@ -2037,6 +2037,27 @@ async function renderTrail() {
       ks.appendChild(span);
     }
     row.append(t, m, ks);
+    // Screenshots and saves taken on this page (files are in the Library).
+    const caps = (session.captures || []).filter((c) => c.url === r.url);
+    if (caps.length) {
+      const strip = document.createElement("div");
+      strip.className = "caps";
+      for (const c of caps.slice(-6)) {
+        const cell = document.createElement("button");
+        cell.className = "cap";
+        cell.title = `${c.kind === "shot" ? "Screenshot" : c.kind === "media" ? "Saved media" : "Saved page"} · ${new Date(c.at).toLocaleString()} · open in the Library`;
+        if (c.kind === "shot") {
+          const img = document.createElement("img");
+          img.src = `scoutlib://item/${c.libraryId}`;
+          img.alt = "Screenshot";
+          img.addEventListener("error", () => (cell.textContent = "Shot"));
+          cell.appendChild(img);
+        } else cell.textContent = c.kind === "media" ? "Media" : "Save";
+        cell.addEventListener("click", () => openLibrary());
+        strip.appendChild(cell);
+      }
+      row.appendChild(strip);
+    }
     trailList.appendChild(row);
   }
 }

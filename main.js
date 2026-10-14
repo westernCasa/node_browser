@@ -1916,9 +1916,16 @@ function addRecord(folder, name, sourceUrl, note) {
     sourceUrl: sourceUrl || "",
     note: note || "",
     created: Date.now(),
+    // The research session (trail) this was saved in.
+    session: research ? { id: research.current.id, name: research.current.name } : null,
   };
   rows.unshift(item);
   writeIndex(rows);
+  // Screenshots, saved pages and media from a page also go in the session's trail.
+  const kind = { screenshots: "shot", saves: "save", media: "media" }[folder];
+  if (research && kind && /^https?:/i.test(sourceUrl || "")) {
+    research.capture({ libraryId: item.id, kind, name, url: sourceUrl, title: folder === "media" ? "" : note });
+  }
   return item;
 }
 
