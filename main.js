@@ -415,7 +415,21 @@ function attachListeners(tab) {
     if (!here || here === "about:blank" || isPlaceholder(here)) wc.loadURL(placeholderUrl(url));
   };
   on("will-navigate", (e) => {
-    if (e.isMainFrame !== false) toGoogle(e, e.url);
+    if (e.isMainFrame === false) return;
+    // The × on a start-page tile: forget that page and show the start page again.
+    if (isStartPage(e.url)) {
+      let gone = "";
+      try {
+        gone = new URL(e.url).searchParams.get("remove") || "";
+      } catch (_) {}
+      if (gone) {
+        e.preventDefault();
+        historyStore?.remove?.(gone);
+        wc.loadURL(startPageUrl());
+      }
+      return;
+    }
+    toGoogle(e, e.url);
   });
   on("will-redirect", (e) => {
     if (e.isMainFrame) toGoogle(e, e.url);
@@ -804,7 +818,10 @@ function contextMenuItems(tab, p) {
     items.push({ label: `Open ${p.mediaType === "video" ? "Video" : "Audio"} in New Tab`, click: () => createTab(p.srcURL) }, { label: `Copy ${p.mediaType === "video" ? "Video" : "Audio"} Address`, click: () => clipboard.writeText(p.srcURL) });
     if (p.mediaType === "video") items.push({ label: "Picture in Picture", click: () => togglePip(tab.id) });
   }
-  const text = String(p.selectionText || "").trim();
+  // On a Mac, a right-click selects the word under the pointer, which can be a
+  // lone quote mark or bracket; only offer search and pin for real words.
+  const raw = String(p.selectionText || "").trim();
+  const text = /[\p{L}\p{N}]/u.test(raw) ? raw : "";
   if (p.isEditable) {
     sep();
     for (const word of (p.dictionarySuggestions || []).slice(0, 5)) items.push({ label: word, click: () => wc.replaceMisspelling(word) });

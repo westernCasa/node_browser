@@ -48,6 +48,12 @@ const log = (...a) => console.log("•", ...a);
   log("suggestions on the start page:", (await ui.textContent("#suggest-status")).slice(0, 60) || "(none)");
   const tiles = await app.evaluate(({ webContents }) => webContents.getAllWebContents().find((w) => w.getURL().includes("start.html")).executeJavaScript(`[...document.querySelectorAll(".tiles a")].map((a) => a.querySelector("b").textContent)`));
   log("start page tiles:", tiles.join(" | "));
+  // The × on the first tile removes that page from history and from the tiles.
+  await app.evaluate(({ webContents }) => webContents.getAllWebContents().find((w) => w.getURL().includes("start.html")).executeJavaScript(`document.querySelector(".tile .x").click()`));
+  await sleep(1500);
+  const after = await app.evaluate(({ webContents }) => webContents.getAllWebContents().find((w) => w.getURL().includes("start.html")).executeJavaScript(`[...document.querySelectorAll(".tiles a")].map((a) => a.querySelector("b").textContent)`));
+  const inHistory = (await ui.evaluate(() => window.scout.historySearch("", 50))).map((r) => r.title);
+  log("after × on", JSON.stringify(tiles[0]), "tiles:", after.join(" | "), "| still in history:", inHistory.includes(tiles[0]));
   const startWc = await app.evaluate(({ webContents }) => webContents.getAllWebContents().find((w) => w.getURL().includes("start.html")).id);
   // Typing a search on the start page.
   await app.evaluate(({ webContents }) => {

@@ -68,6 +68,8 @@ const log = (...a) => console.log("•", ...a);
   log("menu on an image:", (await items({ mediaType: "image", srcURL: BASE + "/img/IMG_2041.jpg", x: 1, y: 1 })).join(", "));
   log("menu on selected text:", (await items({ selectionText: "sourdough starter", x: 1, y: 1 })).join(", "));
   log("menu on the page:", (await items({ x: 1, y: 1 })).join(", "));
+  // A Mac right-click on a quote mark selects just that mark: no search or pin items.
+  log("menu on a lone quote mark:", (await items({ selectionText: '"', x: 1, y: 1 })).join(", "));
 
   // Downloads.
   await app.evaluate(({ webContents }, b) => webContents.getAllWebContents().find((w) => /\/(article|other|media)\.html/.test(w.getURL())).downloadURL(b + "/clip.webm"), BASE);
