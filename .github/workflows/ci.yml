@@ -31,8 +31,8 @@ jobs:
           mkdir -p e2e-out
           for t in 01-basics 03-rules-and-fast-results 04-find-zoom-history 05-research-session 09-playback-limit 12-pip-bookmarks-adblock 13-ask-ai 15-agents-mcp 16-research-agent 17-talk 18-redteam 19-browser-basics 20-first-run-and-help 21-rules-editor; do
             echo "::group::$t"
-            xvfb-run -a node test/e2e/$t.js e2e-out | grep -E "^•|TEST ERROR|FAIL|passed"
-            status=${PIPESTATUS[0]}
+            xvfb-run -a node test/e2e/$t.js "$PWD/e2e-out"
+            status=$?
             echo "::endgroup::"
             if [ "$status" != "0" ]; then echo "$t failed"; exit 1; fi
           done
