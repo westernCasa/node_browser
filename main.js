@@ -50,6 +50,7 @@ const { createCompanion } = require("./companion");
 const { createAgentServer } = require("./agent-server");
 const { createAgents } = require("./agents");
 const { runResearch } = require("./core/agent");
+const Talk = require("./core/talk");
 let research = null; // current research session store (B17), created when the app is ready
 
 const HOME_URL = "https://en.wikipedia.org/wiki/Main_Page";
@@ -1308,6 +1309,21 @@ ipcMain.handle("settings:set", async (_e, next) => {
   return publicSettings();
 });
 ipcMain.handle("agents:status", () => agentsStatus());
+
+// Talk (social layer stage 1, core/talk.js): existing discussion of the page.
+// Called only while the Talk pane is open.
+ipcMain.handle("talk:get", async (_e, id) => {
+  const tab = tabs.get(id || activeId);
+  if (!tab) return { off: "No page open.", hn: [], bluesky: [], errors: {} };
+  const raw = tab.view.webContents.getURL();
+  if (isPlaceholder(raw)) return { off: "This page is open in the Google window.", hn: [], bluesky: [], errors: {} };
+  const getJson = async (url) => {
+    const r = await getText(url, { headers: { Accept: "application/json" }, timeout: 8000 });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return JSON.parse(r.text);
+  };
+  return Talk.discussions(raw, { getJson, rule: ruleFor(raw) });
+});
 
 // Built-in research agent (core/agent.js): searches, reads pages logged out,
 // writes a report with sources into the Library and the research session.

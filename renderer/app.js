@@ -136,6 +136,7 @@ function renderZoom() {
 function renderTabs() {
   renderRuleLine();
   paintAgentButtons();
+  if (typeof loadTalk === "function" && talkOpen) loadTalk();
   if (typeof paintStar === "function" && (tabs.find((t) => t.id === activeId)?.url || "") !== starUrl) paintStar();
   renderZoom();
   // Find bar open while switching tabs: clear the old tab, search the new one.
@@ -1261,7 +1262,96 @@ function showPane(name) {
   sourcesPane.hidden = name !== "sources";
   document.getElementById("trail-pane").hidden = name !== "trail";
   document.getElementById("agent-pane").hidden = name !== "agent";
+  document.getElementById("talk-pane").hidden = name !== "talk";
+  talkOpen = name === "talk";
 }
+
+// ---- Talk (social layer stage 1) ----
+var talkOpen = false; // var: showPane can run before this part of the file
+let talkUrl = "";
+
+function ago(ms) {
+  if (!ms) return "";
+  const d = (Date.now() - ms) / 86400000;
+  if (d < 1) return "today";
+  if (d < 2) return "yesterday";
+  if (d < 60) return `${Math.floor(d)} days ago`;
+  if (d < 730) return `${Math.floor(d / 30)} months ago`;
+  return `${Math.floor(d / 365)} years ago`;
+}
+
+async function loadTalk(force = false) {
+  const tab = tabs.find((t) => t.id === activeId);
+  if (!tab || !talkOpen || !api?.talk) return;
+  if (!force && tab.url === talkUrl) return;
+  talkUrl = tab.url;
+  const status = document.getElementById("talk-status");
+  const list = document.getElementById("talk-list");
+  status.className = "state";
+  status.textContent = "Looking for discussions…";
+  list.innerHTML = "";
+  const r = await api.talk(tab.id);
+  if (tab.url !== talkUrl) return; // the page changed while loading
+  if (r.off) {
+    status.textContent = r.off;
+    return;
+  }
+  const count = r.hn.length + r.bluesky.length;
+  const failed = Object.keys(r.errors || {}).length;
+  status.textContent = count
+    ? `${r.hn.length} on Hacker News · ${r.bluesky.length} on Bluesky`
+    : failed
+    ? "No discussions found on the sources that answered."
+    : "No discussions found for this page.";
+  const section = (title, rows, error) => {
+    const h = document.createElement("p");
+    h.className = "kicker talk-head";
+    h.textContent = title;
+    list.appendChild(h);
+    if (error) {
+      const e = document.createElement("p");
+      e.className = "help bad";
+      e.textContent = error;
+      list.appendChild(e);
+    }
+    for (const row of rows) {
+      const el = document.createElement("a");
+      el.className = "talk-item";
+      el.href = "#";
+      el.innerHTML = row.title
+        ? `<b>${escapeHtml(row.title)}</b><span class="meta">${row.points} points · ${row.comments} comments · ${escapeHtml(row.author)} · ${ago(row.at)}</span>`
+        : `<span class="txt">${escapeHtml(row.text)}</span><span class="meta">${escapeHtml(row.author)} · ${row.likes} likes · ${row.comments} replies · ${ago(row.at)}</span>`;
+      el.addEventListener("click", (e) => {
+        e.preventDefault();
+        api.createTab(row.url);
+      });
+      list.appendChild(el);
+    }
+    if (!rows.length && !error) {
+      const n = document.createElement("p");
+      n.className = "help";
+      n.textContent = "Nothing yet.";
+      list.appendChild(n);
+    }
+  };
+  section("Hacker News", r.hn, r.errors.hn ? `Hacker News search failed: ${r.errors.hn}` : "");
+  section("Bluesky", r.bluesky, r.errors.bluesky || "");
+  const rd = document.createElement("a");
+  rd.className = "talk-item talk-reddit";
+  rd.href = "#";
+  rd.textContent = "Search Reddit for this page";
+  rd.addEventListener("click", (e) => {
+    e.preventDefault();
+    api.createTab(r.reddit);
+  });
+  list.appendChild(rd);
+}
+
+document.getElementById("talk-btn").addEventListener("click", () => {
+  showPane("talk");
+  loadTalk(true);
+});
+document.getElementById("talk-back").addEventListener("click", () => showPane("suggest"));
 
 // ---- Research agent pane ----
 let agentRun = { running: false, steps: [], result: null };

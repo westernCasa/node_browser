@@ -63,6 +63,7 @@
             <button class="chip active" id="auto-btn" title="Re-search when the visible page changes">Auto</button>
             <button class="chip" id="refresh-suggest" title="Search now">Crawl</button>
             <button class="chip" id="ask-btn" title="Ask AI about this page">Ask</button>
+            <button class="chip" id="talk-btn" title="Talk: existing discussion of this page on Hacker News and Bluesky">Talk</button>
             <button class="chip" id="agent-run-btn" title="Research agent: give it a question, it searches, reads and writes a report with sources">Agent</button>
             <button class="chip" id="trail-btn" title="This research session: pages read, recurring keywords">Trail</button>
             <button class="chip" id="sources-btn" title="Search sources and site rules">Settings</button>
@@ -101,6 +102,18 @@
             <button class="chip" type="button" id="ask-clear">Clear</button>
           </div>
         </form>
+      </div>
+      <div id="talk-pane" hidden>
+        <div class="rail-head">
+          <div>
+            <p class="kicker">This page</p>
+            <h1>Talk</h1>
+          </div>
+          <button class="chip" id="talk-back">Back</button>
+        </div>
+        <p class="help" id="talk-privacy">Opening Talk sends this page's address to Hacker News search and Bluesky search. Nothing is sent while Talk is closed.</p>
+        <div id="talk-status" class="state"></div>
+        <div id="talk-list"></div>
       </div>
       <div id="agent-pane" hidden>
         <div class="rail-head">

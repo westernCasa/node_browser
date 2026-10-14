@@ -564,3 +564,11 @@ html, body {
 #agent-report a, #agent-report .cite { color: #c4b5fd; cursor: pointer; text-decoration: none; }
 #agent-report .cite { font-size: 11px; vertical-align: super; }
 #agent-steps { background: var(--bg-2); color-scheme: dark; border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px 6px 26px; }
+
+/* Talk */
+.talk-head { margin: 14px 0 6px; }
+.talk-item { display: block; padding: 8px 0; border-top: 1px solid var(--line); color: var(--text); text-decoration: none; font-size: 13px; line-height: 1.4; }
+.talk-item:hover b, .talk-item:hover .txt { text-decoration: underline; }
+.talk-item .meta { display: block; margin-top: 3px; font-size: 11px; color: var(--mute); }
+.talk-item .txt { display: block; white-space: pre-wrap; overflow-wrap: anywhere; }
+.talk-reddit { margin-top: 12px; color: var(--mute); }

@@ -43,6 +43,7 @@ contextBridge.exposeInMainWorld("scout", {
   agentsNewToken: () => ipcRenderer.invoke("agents:new-token"),
   shareTab: (id, on) => ipcRenderer.invoke("tab:agent-share", id, on),
   runAgent: (goal) => ipcRenderer.invoke("agent:run", goal),
+  talk: (id) => ipcRenderer.invoke("talk:get", id),
   stopAgent: () => ipcRenderer.invoke("agent:stop"),
   searchStatus: () => ipcRenderer.invoke("search:status"),
   testSource: (id) => ipcRenderer.invoke("search:test", id),

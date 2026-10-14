@@ -52,6 +52,11 @@ NODE is a research browser that reads the page you are on, picks out keywords, a
 - Permissions always ask; sign-in, banking and payment pages never read or autoplayed; keys encrypted with the keychain; standard Chrome user agent.
 - Page re-read only after scroll, resize or selection; hidden tabs stop drawing; 30-minute result cache; requests spaced per site.
 
+## Desktop: Talk
+
+- **Talk** in the sidebar: Hacker News stories and Bluesky posts that link to the page you are reading, and a Reddit search link. Clicking one opens it in a tab.
+- Looked up only while Talk is open, with tracking parameters removed. Never for sign-in, account, payment or banking pages, local addresses, or sites with the rule `"talk": false` or `"suggest": false`.
+
 ## Desktop: research agent
 
 - **Agent** in the sidebar: type a question; NODE plans up to 3 searches, picks up to 6 results, reads them in the logged-out agent session, takes notes and writes a short report with numbered sources.

@@ -23,6 +23,7 @@
     "test:google": "node test/google-demo.js",
     "test:agents": "node test/agents-demo.js",
     "test:agent": "node test/agent-demo.js",
+    "test:talk": "node test/talk-demo.js",
     "dist": "electron-builder",
     "dist:mac": "electron-builder --mac",
     "dist:win": "electron-builder --win"

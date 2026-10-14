@@ -19,6 +19,7 @@ const DEFAULT_RULE = {
   mosaic: true, // false: keep this site out of the Mosaic grid unless it is the active tab
   center: true, // false: do not scroll media to the middle of the view when it is clicked
   adblock: true, // false: do not block ads and trackers on this site
+  talk: true, // false: never look up discussions of this site's pages (Talk); also off where suggest is false
   extract: { include: [], skip: [] }, // CSS selectors: extra text to read with priority, areas to ignore
 };
 
@@ -32,7 +33,7 @@ const DEFAULT_FILE = {
   _help: [
     "NODE site rules. Edit and save; NODE reloads them right away.",
     "Each rule has a 'match' and any of: autoplay (on/muted/off), sound (auto/on/off),",
-    "popups (gesture/block/allow), suggest (true/false), mosaic (true/false), center (true/false), adblock (true/false),",
+    "popups (gesture/block/allow), suggest (true/false), mosaic (true/false), center (true/false), adblock (true/false), talk (true/false),",
     "extract.include and extract.skip (lists of CSS selectors).",
     "Rules are applied in order; later matches override earlier ones.",
     "match: 'example.com' (with subdomains), '*.example.com', 'example.com/path', or '/regex/'.",
@@ -119,7 +120,7 @@ function validate(data) {
       if (allowed.includes(r[k])) clean[k] = r[k];
       else errors.push(`${label}: "${k}" must be one of ${allowed.join(", ")}.`);
     }
-    for (const k of ["suggest", "mosaic", "center", "adblock"]) {
+    for (const k of ["suggest", "mosaic", "center", "adblock", "talk"]) {
       if (r[k] === undefined) continue;
       if (typeof r[k] === "boolean") clean[k] = r[k];
       else errors.push(`${label}: "${k}" must be true or false.`);
@@ -144,7 +145,7 @@ function resolve(rules, url) {
   const eff = { ...DEFAULT_RULE, extract: { include: [], skip: [] }, matched: [] };
   for (const r of rules) {
     if (!matches(r, url)) continue;
-    for (const k of ["autoplay", "sound", "popups", "suggest", "mosaic", "center", "adblock"]) if (r[k] !== undefined) eff[k] = r[k];
+    for (const k of ["autoplay", "sound", "popups", "suggest", "mosaic", "center", "adblock", "talk"]) if (r[k] !== undefined) eff[k] = r[k];
     if (r.extract) {
       eff.extract.include = [...eff.extract.include, ...(r.extract.include || [])];
       eff.extract.skip = [...eff.extract.skip, ...(r.extract.skip || [])];
