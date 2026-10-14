@@ -49,6 +49,7 @@
         <button class="chip" id="save-btn">Save</button>
         <button class="chip" id="media-btn">Media</button>
         <button class="chip" id="library-btn">Library</button>
+        <button class="chip dl" id="dl-btn" hidden title="Downloads in progress. Click to see them.">↓ 0</button>
       </div>
     </header>
 
@@ -219,6 +220,16 @@
         </div>
         <div class="rail-head rules-head">
           <div>
+            <p class="kicker">Startup</p>
+            <h1>Tabs</h1>
+          </div>
+        </div>
+        <div class="source" id="startup-box">
+          <div class="top"><label class="toggle"><input type="checkbox" id="restore-tabs" /> Reopen the tabs from last time</label></div>
+          <p class="help">Tabs you have not opened for 15 minutes go to sleep to save memory; they load again when you click them. Tabs playing media never sleep.</p>
+        </div>
+        <div class="rail-head rules-head">
+          <div>
             <p class="kicker">AI agents</p>
             <h1>Agent access (MCP)</h1>
           </div>
@@ -284,6 +295,7 @@
         <button class="chip" data-folder="saves">Saves</button>
         <button class="chip" data-folder="bookmarks">Bookmarks</button>
         <button class="chip" data-folder="history">History</button>
+        <button class="chip" data-folder="downloads">Downloads</button>
       </div>
       <button class="chip" id="library-folder">Show folder</button>
       <button class="chip" id="library-close">Close</button>

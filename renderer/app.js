@@ -147,7 +147,8 @@ function renderTabs() {
   tabsEl.innerHTML = "";
   for (const t of tabs) {
     const el = document.createElement("div");
-    el.className = "tab" + (t.id === activeId ? " active" : "");
+    el.className = "tab" + (t.id === activeId ? " active" : "") + (t.sleeping ? " asleep" : "");
+    if (t.sleeping) el.title = "Asleep to save memory. Opens again when you click it.";
     el.innerHTML = `<span title="${escapeHtml(t.url || "")}">${escapeHtml(t.title || "New tab")}</span>`;
     if (t.agentShared) {
       const m = document.createElement("i");
@@ -685,6 +686,16 @@ omniForm.addEventListener("submit", (e) => {
   else demoNavigate(omni.value);
 });
 
+function pinKeyword(text) {
+  const v = String(text || "").trim();
+  if (!v || isPinned(v)) return;
+  pinned = [...pinned, v].slice(0, 6);
+  banned = banned.filter((b) => b !== lower(v));
+  store.set("scout.banned", banned);
+  renderKeys();
+  crawl();
+}
+
 document.getElementById("key-form").addEventListener("submit", (e) => {
   e.preventDefault();
   const v = keyInput.value.trim();
@@ -724,6 +735,63 @@ function whenText(ms) {
   const today = new Date().toDateString() === d.toDateString();
   return today ? d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : d.toLocaleDateString();
 }
+
+// ---- Downloads ----
+function sizeText(n) {
+  if (!n) return "";
+  if (n < 1024 * 1024) return `${Math.max(1, Math.round(n / 1024))} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function renderDownloadsShelf(list) {
+  libraryList.innerHTML = "";
+  const tools = document.createElement("div");
+  tools.className = "history-tools";
+  const note = document.createElement("p");
+  note.className = "help";
+  note.textContent = "Files are saved to your Downloads folder.";
+  const clear = document.createElement("button");
+  clear.className = "chip";
+  clear.textContent = "Clear list";
+  clear.addEventListener("click", async () => renderDownloadsShelf(await api.clearDownloads()));
+  tools.append(note, clear);
+  libraryList.appendChild(tools);
+  if (!list.length) {
+    libraryList.insertAdjacentHTML("beforeend", `<p class="help">No downloads yet.</p>`);
+    return;
+  }
+  for (const d of list) {
+    const row = document.createElement("div");
+    row.className = "history-row download-row";
+    const pct = d.total ? Math.round((d.received / d.total) * 100) : 0;
+    const status =
+      d.state === "completed" ? sizeText(d.total || d.received) : d.state === "progressing" ? `${pct || "…"}${pct ? "%" : ""} · ${sizeText(d.received)}${d.total ? ` of ${sizeText(d.total)}` : ""}` : d.state === "cancelled" ? "Cancelled" : d.state === "paused" ? "Paused" : "Failed";
+    row.innerHTML = `<div><div class="t">${escapeHtml(d.name)}</div><div class="u">${escapeHtml(d.url)}</div></div><span class="when">${escapeHtml(status)}</span>`;
+    const actions = [];
+    if (d.state === "completed") actions.push(["Open", () => api.openDownload(d.id)], ["Show in folder", () => api.showDownload(d.id)]);
+    if (d.state === "progressing" || d.state === "paused") actions.push(["Cancel", () => api.cancelDownload(d.id)]);
+    for (const [label, run] of actions) {
+      const b = document.createElement("button");
+      b.textContent = label;
+      b.addEventListener("click", run);
+      row.appendChild(b);
+    }
+    libraryList.appendChild(row);
+  }
+}
+
+function paintDownloads(msg) {
+  const btn = document.getElementById("dl-btn");
+  btn.hidden = !msg.active;
+  btn.textContent = `↓ ${msg.active}`;
+  if (!libraryEl.hidden && shelfFolder === "downloads") renderDownloadsShelf(msg.list);
+}
+
+document.getElementById("dl-btn").addEventListener("click", () => {
+  shelfFolder = "downloads";
+  document.querySelectorAll("#shelf-filters .chip").forEach((c) => c.classList.toggle("active", c.dataset.folder === "downloads"));
+  openLibrary();
+});
 
 async function renderHistoryShelf(filter = "") {
   libraryList.innerHTML = "";
@@ -838,6 +906,10 @@ async function openLibrary() {
   }
   if (shelfFolder === "bookmarks") {
     if (api?.bookmarkSearch) await renderBookmarksShelf();
+    return;
+  }
+  if (shelfFolder === "downloads") {
+    if (api?.downloads) renderDownloadsShelf(await api.downloads());
     return;
   }
   const rows = api?.libraryList ? await api.libraryList() : [];
@@ -1070,6 +1142,7 @@ async function renderSources() {
   document.getElementById("google-browser").value = settings.google?.browser || "";
   fillGoogleState(settings.googleWindow);
   fillAgents(settings.agents);
+  document.getElementById("restore-tabs").checked = settings.restoreTabs !== false;
   sourcesDraft = { providers: {} };
   sourcesList.innerHTML = "";
   for (const meta of settings.meta) {
@@ -1238,6 +1311,7 @@ async function saveSources(rerender = true) {
   if (!sourcesDraft) return;
   await api.setSettings({ ...sourcesDraft, ai: aiDraft(), adblock: document.getElementById("adblock-enabled").checked,
     google: { mode: document.getElementById("google-mode").value, browser: document.getElementById("google-browser").value },
+    restoreTabs: document.getElementById("restore-tabs").checked,
   });
   if (rerender) await renderSources();
 }
@@ -1821,6 +1895,13 @@ if (api) {
       if (m) m.textContent = text;
     } else if (msg.cmd === "error") {
       showNotice(msg.message);
+    } else if (msg.cmd === "notice") {
+      showNotice(msg.message, msg.file ? [{ label: "Show in folder", run: () => api.revealFile(msg.file) }] : []);
+    } else if (msg.cmd === "downloads") {
+      paintDownloads(msg);
+    } else if (msg.cmd === "pin-keyword") {
+      showPane("suggest");
+      pinKeyword(msg.text);
     }
   });
 } else {

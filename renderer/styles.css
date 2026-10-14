@@ -655,3 +655,8 @@ svg.brand path { fill: var(--ink); }
 #agent-view figcaption { padding: 4px 6px; font: 10.5px/1.4 var(--mono); color: var(--ink-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .agent-turn + .agent-turn { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
 #agent-followup-form { margin-top: 10px; }
+
+/* Downloads and sleeping tabs */
+.chip.dl { border-color: var(--live); color: var(--live); }
+.download-row button { margin-left: 6px; }
+.tab.asleep span { color: var(--ink-muted); font-style: italic; }

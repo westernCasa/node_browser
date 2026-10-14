@@ -49,7 +49,7 @@ Effort: XS under 1 hour, S half a day, M 1-2 days, L 3+ days. Finding IDs (C1, K
 | B26 | 4 | Check on a real machine: live Wikipedia, DuckDuckGo, Brave, Grok and local model results, and an hour of browsing (Phase 2 gate) | P0 | S | Not started |
 | B27 | 4 | Installable builds for macOS (.dmg) and Windows (.exe) with an app icon | P0 | M | Done (0.4): `npm run dist:mac` / `dist:win`; not signed; automatic updates are B46 |
 | B28 | 4 | Visual editor for site rules in Settings, so no JSON editing is needed | P1 | M | Not started |
-| B29 | 4 | Sleep background tabs that are not playing media, to save memory with many tabs open | P1 | M | Not started |
+| B29 | 4 | Sleep background tabs that are not playing media, to save memory with many tabs open | P1 | M | Done: after 15 minutes unused; never while playing, on screen or shared |
 | B30 | 4 | First-run setup: start page, search sources, AI option | P2 | S | Not started |
 | B31 | 4 | Error log and a Copy diagnostics button for bug reports | P2 | S | Not started |
 | B32 | 4 | Speed (feedback: "a little laggy"): read the page on the 5 s timer only after scroll, resize or selection; measure only elements near the viewport; stop drawing hidden tabs and allow background throttling | P0 | S | Done |
@@ -79,6 +79,7 @@ Effort: XS under 1 hour, S half a day, M 1-2 days, L 3+ days. Finding IDs (C1, K
 | S01-S03 | 4 | Talk, stage 1 of the social layer plan: Hacker News and Bluesky discussions of the current page and a Reddit search link, looked up only while Talk is open; site rule `talk` | P1 | S | Done |
 | B57 | 6 | Research agent v2: follow-up questions on a report (earlier sources and notes kept), a second round of searching when the notes leave gaps, a live view of the page being read | P1 | M | Done |
 | B58 | 6 | Prompt-injection red-team set (12 pages) run before each release; reader leaves out text a person cannot see; agent drops search queries that look like addresses or encoded data | P1 | S | Done |
+| B61 | 4 | Browser basics: right-click menu, downloads (Library → Downloads), reopen closed tab, tab shortcuts, print and Save as PDF, error and crashed-tab pages, reopen last session's tabs | P0 | M | Done |
 | B60 | 5 | NODE for Chromium extension | — | — | Dropped 2026-10-14: missing must-have features |
 | B59 | 6 | Research agent v3: gated actions with confirmation (forms, downloads) | P2 | L | Not started |
 | B52 | 4 | Google window: Google sign-in and Google apps open in a separate window of a Chromium-based browser on the computer, with its own NODE profile and a NODE extension (history, center on click, autoplay, no duplicate tabs). The extension is also the first step of B51 | P0 | M | Done; to test sign-in on the Mac |

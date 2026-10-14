@@ -1,4 +1,4 @@
-const { app, BrowserWindow, WebContentsView, ipcMain, session, shell, protocol, net, Menu, dialog, safeStorage } = require("electron");
+const { app, BrowserWindow, WebContentsView, ipcMain, session, shell, protocol, net, Menu, dialog, safeStorage, clipboard } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const { URL } = require("url");
@@ -44,7 +44,7 @@ const { createPreview } = require("./core/preview");
 const { extractionScript, autoplayScript, blockAutoplayScript, centerOnClickScript, pipScript, readableTextScript, pauseForLimitScript, resumeScript, anyPlayingScript } = require("./core/page-scripts");
 const { PlaybackLimiter } = require("./core/playback");
 const { fsStorage } = require("./fs-storage");
-const { normalizeUrl, hostOf } = require("./core/urls");
+const { normalizeUrl, hostOf, SEARCH_URL } = require("./core/urls");
 const { routesToGoogleWindow, MODES: GOOGLE_MODES } = require("./core/google");
 const { createCompanion } = require("./companion");
 const { createAgentServer } = require("./agent-server");
@@ -168,6 +168,11 @@ function showView(tab, bounds) {
   }
 }
 
+// Tabs shown as Mosaic tiles: every tab except those whose site rule keeps them out.
+function mosaicIds() {
+  return [...tabs.keys()].filter((id) => id === activeId || tabs.get(id).rule?.mosaic !== false);
+}
+
 function applyLayout() {
   if (!win) return;
   applyAudio();
@@ -176,7 +181,7 @@ function applyLayout() {
     return;
   }
   // Tabs whose site rule says "mosaic": false stay out of the grid unless active.
-  const ids = [...tabs.keys()].filter((id) => id === activeId || tabs.get(id).rule?.mosaic !== false);
+  const ids = mosaicIds();
   const rect = contentRect();
   for (const [id, tab] of tabs) if (!ids.includes(id)) hideView(tab);
 
@@ -188,6 +193,7 @@ function applyLayout() {
     return;
   }
 
+  for (const id of ids) wakeTab(tabs.get(id)); // a tile on screen must show its page
   const n = ids.length;
   const cols = Math.ceil(Math.sqrt(n));
   const rows = Math.ceil(n / cols);
@@ -213,10 +219,10 @@ function emit(payload) {
 
 function tabState(tab) {
   const wc = tab.view.webContents;
-  const raw = wc.getURL();
+  const raw = tab.sleeping ? tab.sleeping.url : wc.getURL();
   const google = isPlaceholder(raw);
   let url = raw;
-  if (google) {
+  if (isInternal(raw)) {
     try {
       url = new URL(raw).searchParams.get("u") || raw;
     } catch (_) {}
@@ -227,7 +233,8 @@ function tabState(tab) {
     google, // placeholder for a page shown in the Google window
     agentShared: Boolean(tab.agentShared),
 
-    title: wc.getTitle() || "New tab",
+    title: (tab.sleeping ? tab.sleeping.title : wc.getTitle()) || "New tab",
+    sleeping: Boolean(tab.sleeping),
     canBack: wc.canGoBack(),
     canForward: wc.canGoForward(),
     loading: wc.isLoading(),
@@ -241,6 +248,7 @@ function tabState(tab) {
 }
 
 function emitList() {
+  saveSessionSoon();
   emit({ type: "list", tabs: [...tabs.values()].map(tabState), activeId });
 }
 
@@ -324,6 +332,7 @@ function attachListeners(tab) {
   // Ctrl/Cmd + mouse wheel or trackpad pinch.
   on("zoom-changed", (_e, direction) => zoomTab(tab, direction === "in" ? 0.5 : -0.5));
   on("did-navigate", (_e, url) => {
+    if (/^https?:/i.test(url)) tab.lastUrl = url;
     // Sharing covers the site the user shared; going to another site ends it.
     if (tab.agentShared && originOf(url) !== tab.agentOrigin) {
       tab.agentShared = false;
@@ -331,7 +340,7 @@ function attachListeners(tab) {
     }
     playback.stopped(tab.id);
     playback.navigated(tab.id);
-    if (!isPlaceholder(url)) historyStore.record(url, wc.getTitle());
+    if (!isInternal(url)) historyStore.record(url, wc.getTitle());
     refreshRule(tab, url);
     applyLayout();
     ping();
@@ -370,6 +379,27 @@ function attachListeners(tab) {
     if (!still.some(Boolean)) playback.stopped(tab.id);
     ping();
   });
+  // A page that fails to load shows NODE's error page with Try again; a page
+  // whose process crashed shows "This page stopped".
+  on("did-start-navigation", (details) => {
+    if (details.isMainFrame && !details.isSameDocument) tab.loadingUrl = details.url;
+  });
+  on("did-fail-load", (_e, code, desc, url, isMainFrame) => {
+    if (!isMainFrame || code === -3 || !/^https?:/i.test(url || "")) return; // -3: navigation replaced
+    // A late failure of a page the user already left must not replace the new page.
+    if (tab.loadingUrl && tab.loadingUrl !== url) return;
+    wc.loadURL(errorUrl(url, { desc }));
+  });
+  wc.on("render-process-gone", (_e, details) => {
+    if (!tabs.has(tab.id) || details.reason === "clean-exit" || wc.isDestroyed()) return;
+    const url = tab.lastUrl || "";
+    playback.stopped(tab.id);
+    setTimeout(() => {
+      if (tabs.has(tab.id) && !wc.isDestroyed()) wc.loadURL(errorUrl(url, { kind: "crash", desc: details.reason }));
+    }, 50);
+  });
+  // Right-click menu.
+  on("context-menu", (_e, p) => showContextMenu(tab, p));
   // Links and redirects to Google account pages go to the Google window. A tab
   // that has no page of its own (new, or a placeholder) shows the placeholder.
   const toGoogle = (e, url) => {
@@ -404,6 +434,74 @@ function attachListeners(tab) {
   on("before-input-event", (_e, input) => {
     if (input.type === "keyDown" || input.type === "mouseDown") tab.lastGesture = Date.now();
   });
+}
+
+// ---- Sleeping tabs (B29) ----
+// A tab not used for a while, not playing and not on screen is put to sleep:
+// its page is replaced by a blank one and loads again when the tab is opened.
+const SLEEP_AFTER_MS = 15 * 60 * 1000;
+
+function sleepTab(tab) {
+  if (!tab || tab.sleeping || tab.id === activeId) return false;
+  const wc = tab.view.webContents;
+  const url = wc.getURL();
+  if (!/^https?:/i.test(url) || wc.isCurrentlyAudible() || playback.snapshot().playing.includes(tab.id) || tab.agentShared) return false;
+  tab.sleeping = { url, title: wc.getTitle() };
+  wc.loadURL("about:blank").catch(() => {});
+  emit({ type: "update", tab: tabState(tab), activeId });
+  return true;
+}
+
+function wakeTab(tab) {
+  if (!tab?.sleeping) return;
+  const { url } = tab.sleeping;
+  tab.sleeping = null;
+  tab.view.webContents.loadURL(loadTarget(url, tab.id, { restore: true }));
+}
+
+function sleepIdleTabs(now = Date.now()) {
+  const visible = layout === "mosaic" ? new Set(mosaicIds()) : new Set([activeId]);
+  let n = 0;
+  for (const tab of tabs.values()) {
+    if (visible.has(tab.id) || now - (tab.lastActive || 0) < SLEEP_AFTER_MS) continue;
+    if (sleepTab(tab)) n++;
+  }
+  return n;
+}
+setInterval(() => sleepIdleTabs(), 60 * 1000).unref?.();
+
+// ---- Session restore ----
+// The open tabs are saved to userData/tabs.json and reopened on the next start
+// (asleep, except the active one).
+let sessionTimer = null;
+function sessionFile() {
+  return path.join(app.getPath("userData"), "tabs.json");
+}
+function saveSessionSoon() {
+  clearTimeout(sessionTimer);
+  sessionTimer = setTimeout(saveSessionNow, 1000);
+}
+function saveSessionNow() {
+  clearTimeout(sessionTimer);
+  if (pagesReleased) return; // quitting: keep the last saved list
+  const list = [...tabs.values()].map((t) => tabState(t)).filter((t) => /^https?:/i.test(t.url));
+  const active = list.findIndex((t) => t.id === activeId);
+  try {
+    fs.writeFileSync(sessionFile(), JSON.stringify({ version: 1, layout, active: Math.max(0, active), tabs: list.map((t) => ({ url: t.url, title: t.title })) }));
+  } catch (_) {}
+}
+function restoreSession() {
+  let saved = null;
+  try {
+    saved = JSON.parse(fs.readFileSync(sessionFile(), "utf8"));
+  } catch (_) {}
+  const list = (saved?.tabs || []).filter((t) => /^https?:/i.test(t?.url || "")).slice(0, 100);
+  if (!list.length || loadSettings().restoreTabs === false) return false;
+  const active = Math.min(Math.max(0, saved.active || 0), list.length - 1);
+  list.forEach((t, i) => createTab(t.url, { background: i !== active, sleeping: i !== active, restore: true, title: t.title }));
+  const ids = [...tabs.keys()];
+  if (ids[active]) activateTab(ids[active]);
+  return true;
 }
 
 // ---- Agents (MCP server, agent-server.js and agents.js) ----
@@ -506,6 +604,17 @@ function isPlaceholder(url) {
   return /\/renderer\/google-tab\.html\?/.test(String(url || ""));
 }
 
+// NODE's own pages shown in a tab: the Google window placeholder and the
+// "page not loaded" / "page stopped" page. They carry the real address in ?u=.
+function isInternal(url) {
+  return /\/renderer\/(google-tab|error)\.html\?/.test(String(url || ""));
+}
+
+function errorUrl(target, { kind = "load", desc = "" } = {}) {
+  const file = path.join(__dirname, "renderer", "error.html");
+  return `file://${file.split(path.sep).join("/")}?kind=${kind}&desc=${encodeURIComponent(desc)}&u=${encodeURIComponent(target)}`;
+}
+
 // Returns true when the address was sent to the Google window (or, with no
 // Chromium-based browser installed, to the default browser).
 function routeGoogle(url, tabId) {
@@ -522,8 +631,9 @@ function routeGoogle(url, tabId) {
 }
 
 // The address a tab should load: the placeholder for routed Google pages.
-function loadTarget(url, tabId) {
+function loadTarget(url, tabId, { restore = false } = {}) {
   const target = normalizeUrl(url);
+  if (restore && routesToGoogleWindow(target, googleMode())) return placeholderUrl(target);
   return routeGoogle(target, tabId) ? placeholderUrl(target) : target;
 }
 
@@ -540,22 +650,40 @@ function createTab(url, opts = {}) {
   });
   view.setBackgroundColor("#ffffff"); // pages without their own background expect white
   view.webContents.setUserAgent(USER_AGENT);
-  const tab = { id, view, audio: "auto", audioByUser: false, lastGesture: 0 };
+  const tab = { id, view, audio: "auto", audioByUser: false, lastGesture: 0, lastActive: Date.now() };
   refreshRule(tab, normalizeUrl(url));
   tabs.set(id, tab);
   win.contentView.addChildView(view);
   tab.attached = true;
   attachListeners(tab);
   if (!opts.background || !activeId) activeId = id;
-  view.webContents.loadURL(loadTarget(url, id));
+  if (opts.sleeping && activeId !== id) {
+    // Restored tab: the page loads when the tab is first opened.
+    tab.sleeping = { url: normalizeUrl(url), title: opts.title || "" };
+    view.webContents.loadURL("about:blank");
+  } else if (opts.restore && routesToGoogleWindow(normalizeUrl(url), googleMode())) {
+    view.webContents.loadURL(placeholderUrl(normalizeUrl(url))); // do not open the Google window on start
+  } else {
+    view.webContents.loadURL(loadTarget(url, id));
+  }
   applyLayout();
   emitList();
   return id;
 }
 
+// Recently closed tabs, newest last, for Reopen Closed Tab (Cmd/Ctrl+Shift+T).
+const closedTabs = [];
+
 function closeTab(id) {
   const tab = tabs.get(id);
   if (!tab) return;
+  {
+    const st = tabState(tab);
+    if (/^https?:/i.test(st.url)) {
+      closedTabs.push({ url: st.url, title: st.title });
+      if (closedTabs.length > 25) closedTabs.shift();
+    }
+  }
   tabs.delete(id);
   if (tab.attached) win.contentView.removeChildView(tab.view);
   // WebContentsView does not free its page on removal; close it explicitly.
@@ -582,9 +710,151 @@ function closeTab(id) {
   emitList();
 }
 
+// ---- Right-click menu ----
+function showContextMenu(tab, p) {
+  Menu.buildFromTemplate(contextMenuItems(tab, p)).popup({ window: win });
+}
+
+function contextMenuItems(tab, p) {
+  const wc = tab.view.webContents;
+  const items = [];
+  const sep = () => items.length && items.at(-1).type !== "separator" && items.push({ type: "separator" });
+  const http = (u) => /^https?:\/\//i.test(u || "");
+  if (http(p.linkURL)) {
+    items.push(
+      { label: "Open Link in New Tab", click: () => createTab(p.linkURL) },
+      { label: "Open Link in Background Tab", click: () => createTab(p.linkURL, { background: true }) },
+      { label: "Copy Link Address", click: () => clipboard.writeText(p.linkURL) },
+      { label: "Save Link As…", click: () => wc.downloadURL(p.linkURL) }
+    );
+  }
+  if (p.mediaType === "image" && http(p.srcURL)) {
+    sep();
+    items.push(
+      { label: "Open Image in New Tab", click: () => createTab(p.srcURL) },
+      { label: "Copy Image", click: () => wc.copyImageAt(p.x, p.y) },
+      { label: "Copy Image Address", click: () => clipboard.writeText(p.srcURL) },
+      { label: "Save Image As…", click: () => wc.downloadURL(p.srcURL) }
+    );
+  }
+  if ((p.mediaType === "video" || p.mediaType === "audio") && http(p.srcURL)) {
+    sep();
+    items.push({ label: `Open ${p.mediaType === "video" ? "Video" : "Audio"} in New Tab`, click: () => createTab(p.srcURL) }, { label: `Copy ${p.mediaType === "video" ? "Video" : "Audio"} Address`, click: () => clipboard.writeText(p.srcURL) });
+    if (p.mediaType === "video") items.push({ label: "Picture in Picture", click: () => togglePip(tab.id) });
+  }
+  const text = String(p.selectionText || "").trim();
+  if (p.isEditable) {
+    sep();
+    for (const word of (p.dictionarySuggestions || []).slice(0, 5)) items.push({ label: word, click: () => wc.replaceMisspelling(word) });
+    if (p.misspelledWord) items.push({ label: "Add to Dictionary", click: () => wc.session.addWordToSpellCheckerDictionary(p.misspelledWord) }, { type: "separator" });
+    items.push({ role: "undo" }, { role: "redo" }, { type: "separator" }, { role: "cut" }, { role: "copy" }, { role: "paste" }, { role: "selectAll" });
+  } else if (text) {
+    sep();
+    const short = text.length > 30 ? text.slice(0, 30) + "…" : text;
+    items.push(
+      { role: "copy" },
+      { label: `Search Brave for "${short}"`, click: () => createTab(SEARCH_URL + encodeURIComponent(text.slice(0, 300))) },
+      { label: `Pin "${short}" as a keyword`, click: () => sendUi("pin-keyword", { text: text.slice(0, 80) }) }
+    );
+  }
+  if (!items.length || (!p.linkURL && !p.srcURL && !text && !p.isEditable)) {
+    sep();
+    items.push(
+      { label: "Back", enabled: wc.canGoBack(), click: () => wc.goBack() },
+      { label: "Forward", enabled: wc.canGoForward(), click: () => wc.goForward() },
+      { label: "Reload", click: () => wc.reload() },
+      { type: "separator" },
+      { label: "Save Page as PDF", click: () => savePdf(tab.id) },
+      { label: "Print…", click: () => wc.print({}, () => {}) },
+      { label: "Screenshot Tab", click: () => runShotFromMain(tab.id) }
+    );
+    if (agentServer?.status().running) items.push({ type: "separator" }, { label: tab.agentShared ? "Stop Sharing with Agents" : "Share Tab with Agents", click: () => shareTabWithAgents(tab.id, !tab.agentShared) });
+  }
+  sep();
+  items.push({ label: "Inspect", click: () => wc.inspectElement(p.x, p.y) });
+  return items;
+}
+
+// ---- Downloads ----
+// Files go straight to the system Downloads folder (as in Chrome), with a
+// number added when the name is taken. The list is shown in Library → Downloads.
+const downloads = []; // newest last
+let downloadSeq = 1;
+
+function downloadState(d) {
+  return { id: d.id, name: d.name, url: d.url, file: d.file, received: d.received, total: d.total, state: d.state, started: d.started };
+}
+
+function watchDownloads(ses) {
+  ses.on("will-download", (_e, item) => {
+    const name = item.getFilename() || "download";
+    const file = uniquePath(path.join(app.getPath("downloads"), name));
+    item.setSavePath(file);
+    const d = { id: String(downloadSeq++), name: path.basename(file), url: item.getURL(), file, received: 0, total: item.getTotalBytes(), state: "progressing", started: Date.now(), item };
+    downloads.push(d);
+    if (downloads.length > 200) downloads.shift();
+    const push = () => sendUi("downloads", { list: downloads.slice(-50).reverse().map(downloadState), active: downloads.filter((x) => x.state === "progressing").length });
+    item.on("updated", (_ev, state) => {
+      d.received = item.getReceivedBytes();
+      d.total = item.getTotalBytes();
+      d.state = state === "interrupted" ? "interrupted" : item.isPaused() ? "paused" : "progressing";
+      push();
+    });
+    item.once("done", (_ev, state) => {
+      d.state = state; // completed | cancelled | interrupted
+      d.received = item.getReceivedBytes();
+      d.item = null;
+      push();
+      if (state === "completed") sendUi("notice", { message: `Downloaded ${d.name}`, file: d.file });
+    });
+    push();
+  });
+}
+
+function stepTab(dir) {
+  const ids = [...tabs.keys()];
+  if (ids.length < 2) return;
+  const i = ids.indexOf(activeId);
+  activateTab(ids[(i + dir + ids.length) % ids.length]);
+}
+
+function pickTab(index) {
+  const ids = [...tabs.keys()];
+  const id = index < 0 ? ids.at(-1) : ids[index];
+  if (id) activateTab(id);
+}
+
+async function savePdf(id) {
+  const tab = tabs.get(id);
+  if (!tab || tab.sleeping) return;
+  const wc = tab.view.webContents;
+  try {
+    const data = await wc.printToPDF({ printBackground: true });
+    const safe = (wc.getTitle() || "page").replace(/[^\w .-]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 80) || "page";
+    const file = uniquePath(path.join(app.getPath("downloads"), `${safe}.pdf`));
+    fs.writeFileSync(file, data);
+    sendUi("notice", { message: `Saved as PDF: ${path.basename(file)} (Downloads)`, file });
+  } catch (err) {
+    sendUi("error", { message: "Could not save the page as PDF: " + String(err.message || err) });
+  }
+}
+
+function uniquePath(file) {
+  if (!fs.existsSync(file)) return file;
+  const ext = path.extname(file);
+  const base = file.slice(0, file.length - ext.length);
+  for (let i = 1; i < 1000; i++) {
+    const next = `${base} (${i})${ext}`;
+    if (!fs.existsSync(next)) return next;
+  }
+  return `${base} ${Date.now()}${ext}`;
+}
+
 function activateTab(id) {
   if (!tabs.has(id)) return;
   activeId = id;
+  wakeTab(tabs.get(id));
+  tabs.get(id).lastActive = Date.now();
   // A tab paused by the playback limit resumes when it becomes active.
   if (playback.activated(id)) inFrames(tabs.get(id).view.webContents, resumeScript());
   applyLayout();
@@ -671,6 +941,7 @@ function loadSettings() {
     grok: { model: ai.grok?.model || AI.AI_DEFAULTS.grok.model, key: decryptSecret(ai.grok?.key) },
   };
   base.adblock = raw.adblock !== false;
+  base.restoreTabs = raw.restoreTabs !== false;
   base.agents = {
     enabled: Boolean(raw.agents?.enabled),
     port: Number(raw.agents?.port) || 47615,
@@ -695,6 +966,7 @@ function saveSettings(next) {
     if (JSON.stringify(current.providers[id]) !== before) search.reset(id);
   }
   if (next && "adblock" in next) current.adblock = Boolean(next.adblock);
+  if (next && "restoreTabs" in next) current.restoreTabs = Boolean(next.restoreTabs);
   if (next?.agents) {
     if ("port" in next.agents) {
       const port = Math.round(Number(next.agents.port));
@@ -721,6 +993,7 @@ function saveSettings(next) {
     version: SETTINGS_VERSION,
     adblock: current.adblock !== false,
     google: { ...current.google },
+    restoreTabs: current.restoreTabs !== false,
     agents: { enabled: current.agents.enabled, port: current.agents.port, token: encryptSecret(current.agents.token) },
     providers: {},
   };
@@ -760,6 +1033,7 @@ function publicSettings() {
     adblock: s.adblock !== false,
     adblockStats: adblock ? adblock.stats() : { status: "off", blocked: 0 },
     google: { ...s.google },
+    restoreTabs: s.restoreTabs !== false,
     googleWindow: companion ? companion.status() : null,
     agents: agentsStatus(),
     meta: Object.values(PROVIDERS).map((p) => ({ id: p.id, label: p.label, role: p.role, fields: p.fields, setupHint: p.setupHint || "" })),
@@ -936,11 +1210,21 @@ function buildMenu() {
           },
         },
         { label: "Close Tab", accelerator: "CmdOrCtrl+W", click: () => activeId && closeTab(activeId) },
+        {
+          label: "Reopen Closed Tab",
+          accelerator: "CmdOrCtrl+Shift+T",
+          click: () => {
+            const last = closedTabs.pop();
+            if (last) createTab(last.url);
+          },
+        },
         { label: "Open Location", accelerator: "CmdOrCtrl+L", click: () => sendUi("focus-omni") },
         { label: "Bookmark This Page", accelerator: "CmdOrCtrl+D", click: () => sendUi("bookmark-toggle") },
         { label: "Bookmarks", accelerator: "CmdOrCtrl+Shift+B", click: () => sendUi("open-bookmarks") },
         { type: "separator" },
         { label: "Screenshot Tab", accelerator: "CmdOrCtrl+Shift+S", click: () => runShotFromMain(activeId) },
+        { label: "Print…", accelerator: "CmdOrCtrl+P", click: () => activeWc()?.print({}, () => {}) },
+        { label: "Save Page as PDF", click: () => savePdf(activeId) },
         { label: "Reset Site Permissions", click: resetPermissions },
         { type: "separator" },
         { label: "Edit Site Rules…", click: () => shell.openPath(rulesFile()) },
@@ -965,6 +1249,13 @@ function buildMenu() {
           click: () => activeWc()?.canGoForward() && activeWc().goForward(),
         },
         { label: "Toggle Mosaic", accelerator: "CmdOrCtrl+Shift+M", click: () => sendUi("toggle-layout") },
+        { type: "separator" },
+        { label: "Next Tab", accelerator: "Ctrl+Tab", click: () => stepTab(1) },
+        { label: "Previous Tab", accelerator: "Ctrl+Shift+Tab", click: () => stepTab(-1) },
+        { label: "Next Tab ", accelerator: "CmdOrCtrl+Alt+Right", visible: false, click: () => stepTab(1) },
+        { label: "Previous Tab ", accelerator: "CmdOrCtrl+Alt+Left", visible: false, click: () => stepTab(-1) },
+        ...[1, 2, 3, 4, 5, 6, 7, 8].map((n) => ({ label: `Tab ${n}`, accelerator: `CmdOrCtrl+${n}`, visible: false, click: () => pickTab(n - 1) })),
+        { label: "Last Tab", accelerator: "CmdOrCtrl+9", visible: false, click: () => pickTab(-1) },
         {
           label: "Picture in Picture",
           accelerator: "CmdOrCtrl+Shift+P",
@@ -1074,7 +1365,7 @@ function createWindow() {
   });
   win.on("resize", applyLayout);
   win.webContents.on("did-finish-load", () => {
-    if (!tabs.size) createTab(HOME_URL);
+    if (!tabs.size && !restoreSession()) createTab(HOME_URL);
   });
 }
 
@@ -1111,6 +1402,7 @@ app.whenReady().then(() => {
     },
   });
   adblock.install(session.defaultSession);
+  watchDownloads(session.defaultSession);
   adblock.load();
   loadRules();
   watchRules();
@@ -1124,6 +1416,7 @@ app.whenReady().then(() => {
     onChange: (st) => sendUi("google-window-status", st),
   });
   global.nodeCompanion = companion; // for the e2e tests
+  global.nodeTest = { sleepIdleTabs, contextMenuItems: (id, p) => contextMenuItems(tabs.get(id), p).map((i) => i.label || i.role || "-"), savePdf, closedTabs };
   initAgents();
   bookmarkStore = new BookmarkStore(fsStorage(app.getPath("userData")));
   buildMenu();
@@ -1142,6 +1435,7 @@ ipcMain.handle("tab:activate", (_e, id) => activateTab(id));
 ipcMain.handle("tab:navigate", (_e, id, url) => {
   const tab = tabs.get(id);
   if (!tab) return;
+  tab.sleeping = null;
   tab.view.webContents.loadURL(loadTarget(url, id));
 });
 ipcMain.handle("tab:back", (_e, id) => {
@@ -1316,6 +1610,20 @@ ipcMain.handle("settings:set", async (_e, next) => {
   return publicSettings();
 });
 ipcMain.handle("agents:status", () => agentsStatus());
+ipcMain.handle("downloads:list", () => downloads.slice(-50).reverse().map(downloadState));
+ipcMain.handle("downloads:cancel", (_e, id) => downloads.find((d) => d.id === id)?.item?.cancel());
+ipcMain.handle("downloads:open", (_e, id) => {
+  const d = downloads.find((x) => x.id === id);
+  if (d?.state === "completed" && fs.existsSync(d.file)) return shell.openPath(d.file);
+});
+ipcMain.handle("downloads:show", (_e, id) => {
+  const d = downloads.find((x) => x.id === id);
+  if (d && fs.existsSync(d.file)) shell.showItemInFolder(d.file);
+});
+ipcMain.handle("downloads:clear", () => {
+  for (let i = downloads.length - 1; i >= 0; i--) if (downloads[i].state !== "progressing") downloads.splice(i, 1);
+  return [];
+});
 
 // Talk (social layer stage 1, core/talk.js): existing discussion of the page.
 // Called only while the Talk pane is open.
@@ -1484,6 +1792,7 @@ ipcMain.handle("research:export", () => {
 let pagesReleased = false;
 async function releasePages() {
   if (pagesReleased) return;
+  saveSessionNow();
   pagesReleased = true;
   const jobs = [...tabs.values()].map((tab) => {
     const wc = tab.view.webContents;
