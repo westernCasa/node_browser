@@ -80,6 +80,7 @@ Effort: XS under 1 hour, S half a day, M 1-2 days, L 3+ days. Finding IDs (C1, K
 | B57 | 6 | Research agent v2: follow-up questions on a report (earlier sources and notes kept), a second round of searching when the notes leave gaps, a live view of the page being read | P1 | M | Done |
 | B58 | 6 | Prompt-injection red-team set (12 pages) run before each release; reader leaves out text a person cannot see; agent drops search queries that look like addresses or encoded data | P1 | S | Done |
 | B61 | 4 | Browser basics: right-click menu, downloads (Library → Downloads), reopen closed tab, tab shortcuts, print and Save as PDF, error and crashed-tab pages, reopen last session's tabs | P0 | M | Done |
+| B62 | 4 | Passkeys on macOS: Apple Developer ID signing, Apple's web-browser passkey entitlement (com.apple.developer.web-browser.public-key-credential), and a native bridge to AuthenticationServices (as electron-webauthn-mac does) | P1 | L | Not started; passkeys off on Mac until then |
 | B60 | 5 | NODE for Chromium extension | — | — | Dropped 2026-10-14: missing must-have features |
 | B59 | 6 | Research agent v3: gated actions with confirmation (forms, downloads) | P2 | L | Not started |
 | B52 | 4 | Google window: Google sign-in and Google apps open in a separate window of a Chromium-based browser on the computer, with its own NODE profile and a NODE extension (history, center on click, autoplay, no duplicate tabs). The extension is also the first step of B51 | P0 | M | Done; to test sign-in on the Mac |

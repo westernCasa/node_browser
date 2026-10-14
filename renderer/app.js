@@ -1213,6 +1213,8 @@ async function renderSources() {
   document.getElementById("restore-tabs").checked = settings.restoreTabs !== false;
   document.getElementById("start-page").value = settings.startPage || "";
   document.getElementById("auto-update").checked = settings.autoUpdate !== false;
+  document.getElementById("passkeys").checked = settings.passkeys === true;
+  document.getElementById("passkeys").closest(".top").hidden = document.getElementById("passkeys-help").hidden = !/Mac/.test(navigator.platform);
   fillUpdate(settings.update);
   sourcesDraft = { providers: {} };
   sourcesList.innerHTML = "";
@@ -1591,6 +1593,7 @@ async function saveSources(rerender = true) {
     restoreTabs: document.getElementById("restore-tabs").checked,
     startPage: document.getElementById("start-page").value,
     autoUpdate: document.getElementById("auto-update").checked,
+    passkeys: document.getElementById("passkeys").checked,
   });
   if (rerender) await renderSources();
 }

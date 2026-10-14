@@ -1035,6 +1035,7 @@ function loadSettings() {
   base.adblock = raw.adblock !== false;
   base.restoreTabs = raw.restoreTabs !== false;
   base.autoUpdate = raw.autoUpdate !== false;
+  base.passkeys = raw.passkeys === true;
   base.startPage = typeof raw.startPage === "string" ? raw.startPage : "";
   // First-run setup is shown once, to new users. Settings saved by an earlier
   // version count as set up. Runs with --user-data-dir (the tests) skip it
@@ -1067,6 +1068,7 @@ function saveSettings(next) {
   if (next && "adblock" in next) current.adblock = Boolean(next.adblock);
   if (next && "restoreTabs" in next) current.restoreTabs = Boolean(next.restoreTabs);
   if (next && "autoUpdate" in next) current.autoUpdate = Boolean(next.autoUpdate);
+  if (next && "passkeys" in next) current.passkeys = Boolean(next.passkeys);
   if (next && typeof next.startPage === "string") current.startPage = /^https?:\/\//i.test(next.startPage.trim()) ? next.startPage.trim() : "";
   if (next && next.firstRunDone) current.firstRunDone = true;
   if (next?.agents) {
@@ -1097,6 +1099,7 @@ function saveSettings(next) {
     google: { ...current.google },
     restoreTabs: current.restoreTabs !== false,
     autoUpdate: current.autoUpdate !== false,
+    passkeys: current.passkeys === true,
     startPage: current.startPage || "",
     firstRunDone: Boolean(current.firstRunDone),
     agents: { enabled: current.agents.enabled, port: current.agents.port, token: encryptSecret(current.agents.token) },
@@ -1140,6 +1143,8 @@ function publicSettings() {
     google: { ...s.google },
     restoreTabs: s.restoreTabs !== false,
     autoUpdate: s.autoUpdate !== false,
+    passkeys: s.passkeys === true,
+    passkeysActive: PASSKEYS_ON,
     update: updater ? updater.state() : null,
     startPage: s.startPage || "",
     firstRunDone: Boolean(s.firstRunDone),
@@ -1513,6 +1518,20 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
+// Passkeys on macOS: Apple only lets signed browsers with its web-browser
+// passkey entitlement use Touch ID and iCloud Keychain passkeys. Without it a
+// passkey sign-in (X, GitHub, Google) waits forever. So NODE turns the passkey
+// API off unless Settings says otherwise; sites then offer password sign-in.
+// Read straight from settings.json: this has to happen before the app is ready.
+const PASSKEYS_ON = (() => {
+  if (process.platform !== "darwin") return true;
+  try {
+    return JSON.parse(fs.readFileSync(settingsFile(), "utf8")).passkeys === true;
+  } catch (_) {
+    return false;
+  }
+})();
+if (!PASSKEYS_ON) app.commandLine.appendSwitch("disable-blink-features", "WebAuth");
 app.commandLine.appendSwitch("disable-features", "PreloadMediaEngagementData");
 
 app.whenReady().then(() => {
