@@ -226,6 +226,7 @@
         </div>
         <div class="source" id="startup-box">
           <div class="top"><label class="toggle"><input type="checkbox" id="restore-tabs" /> Reopen the tabs from last time</label></div>
+          <label class="field"><span>New tab page (leave empty for NODE's start page)</span><input type="text" id="start-page" placeholder="https://…" spellcheck="false" /></label>
           <p class="help">Tabs you have not opened for 15 minutes go to sleep to save memory; they load again when you click them. Tabs playing media never sleep.</p>
         </div>
         <div class="rail-head rules-head">
@@ -263,6 +264,17 @@
           <label class="field"><span>Browser to use (optional, full path)</span><input type="text" id="google-browser" placeholder="Found automatically" spellcheck="false" /></label>
           <div class="state" id="google-state"></div>
           <p class="help">Google does not allow signing in inside NODE's engine. These pages open in a separate window of a Chromium-based browser on your computer (Brave, Chromium, Edge, Vivaldi or Chrome), with its own NODE profile. Google Search, YouTube and Scholar searches stay in NODE.</p>
+        </div>
+        <div class="rail-head rules-head">
+          <div>
+            <p class="kicker">Help</p>
+            <h1>Problems</h1>
+          </div>
+        </div>
+        <div class="source" id="help-box">
+          <p class="help">Copy diagnostics puts NODE's version, your system, which features are on and recent errors on the clipboard, without page text, addresses you typed or keys. Paste it into a bug report.</p>
+          <div class="row"><button class="chip" id="diag-copy">Copy diagnostics</button><button class="chip" id="diag-folder">Log folder</button></div>
+          <div class="state" id="diag-state"></div>
         </div>
         <button class="chip wide" id="sources-save">Save</button>
         <p class="help" id="sources-msg"></p>
@@ -303,6 +315,33 @@
     <div class="shelf-grid" id="library-list"></div>
   </section>
   <script src="tauri-bridge.js"></script>
+  <div id="firstrun" hidden>
+    <div class="fr-card">
+      <p class="kicker">Welcome to NODE</p>
+      <h1>Set up in a minute</h1>
+      <p class="help">NODE reads the page you are on and suggests what to read next in the sidebar. Everything here can be changed later in Settings.</p>
+      <section>
+        <h2>Search</h2>
+        <p class="help">Brave Search gives the best web results. Its free plan needs a key; without one NODE uses Wikipedia and DuckDuckGo.</p>
+        <label class="field"><span>Brave Search API key (optional)</span><input type="password" id="fr-brave" placeholder="Paste a key, or leave empty" /></label>
+        <button type="button" class="link" id="fr-brave-get">Get a free key at brave.com/search/api</button>
+      </section>
+      <section>
+        <h2>AI</h2>
+        <p class="help">Used for Ask, the research agent and extra search ideas. Nothing is sent until you use one of them.</p>
+        <label class="radio"><input type="radio" name="fr-ai" value="none" checked /> No AI for now</label>
+        <label class="radio"><input type="radio" name="fr-ai" value="local" /> A model on this computer (Ollama or LM Studio)</label>
+        <label class="radio"><input type="radio" name="fr-ai" value="grok" /> Grok (xAI), with an API key</label>
+        <label class="field" id="fr-grok-row" hidden><span>Grok API key</span><input type="password" id="fr-grok" /></label>
+      </section>
+      <section>
+        <h2>Browsing</h2>
+        <label class="toggle"><input type="checkbox" id="fr-restore" checked /> Reopen my tabs when NODE starts</label>
+        <label class="toggle"><input type="checkbox" id="fr-adblock" checked /> Block ads and trackers</label>
+      </section>
+      <div class="fr-actions"><button type="button" class="chip" id="fr-done">Start browsing</button></div>
+    </div>
+  </div>
   <script src="app.js"></script>
 </body>
 </html>

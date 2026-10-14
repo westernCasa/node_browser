@@ -54,6 +54,10 @@ NODE is a research browser that reads the page you are on, picks out keywords, a
 
 ## Desktop: everyday browsing
 
+- First start: a short welcome screen for the Brave key, AI choice, reopening tabs and ad blocking.
+- New tabs open NODE's start page (search box and most visited pages), or an address set in Settings → Startup.
+- Help menu and Settings → Help: Copy diagnostics (version, system, features on, recent errors; no page text or keys), Report a Problem, Open Log Folder.
+
 - Right-click menu: open link in a new or background tab, copy or save links and images, search Brave for or pin selected text, spelling suggestions, back, forward, reload, print, Save as PDF, Inspect.
 - Downloads go to the Downloads folder (a number is added when a name is taken); progress in the toolbar, list in Library → Downloads with Open, Show in folder and Cancel.
 - Tabs from last time reopen on start (Settings → Startup); tabs unused for 15 minutes sleep to save memory and load again when clicked.

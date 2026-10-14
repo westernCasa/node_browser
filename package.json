@@ -55,6 +55,7 @@
       "companion.js",
       "agents.js",
       "agent-server.js",
+      "log.js",
       "core/**",
       "renderer/**",
       "!renderer/tauri-bridge.js",

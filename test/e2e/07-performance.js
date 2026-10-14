@@ -55,7 +55,7 @@ const log = (...a) => console.log("•", ...a);
   // 1b. Scrolling still triggers a read (suggestions follow the page).
   await app.evaluate(() => (globalThis.__reads = []));
   await app.evaluate(({ webContents }) => {
-    const wc = webContents.getAllWebContents().find((w) => w.getURL().includes("big.html"));
+    const wc = webContents.getAllWebContents().find((w) => w.getURL().startsWith("http") && w.getURL().includes("big.html"));
     return wc.executeJavaScript("scrollTo(0, 60000)");
   });
   await sleep(7000);
@@ -66,7 +66,7 @@ const log = (...a) => console.log("•", ...a);
   const { extractionScript } = require("../../core/page-scripts.js");
   const code = `(() => { const t0 = performance.now(); const r = ${extractionScript()}; return { ms: performance.now() - t0, text: r.text.length, heads: r.headings.length }; })()`;
   const t = await app.evaluate(async ({ webContents }, code) => {
-    const wc = webContents.getAllWebContents().find((w) => w.getURL().includes("big.html"));
+    const wc = webContents.getAllWebContents().find((w) => w.getURL().startsWith("http") && w.getURL().includes("big.html"));
     return wc.executeJavaScript(code);
   }, code);
   log(`one page read on a large article: ${t.ms.toFixed(0)} ms in the page (text ${t.text} chars, ${t.heads} headings)`);
@@ -75,11 +75,11 @@ const log = (...a) => console.log("•", ...a);
   await ui.click("#new-tab");
   await sleep(2500);
   const hidden = await app.evaluate(({ webContents, BaseWindow }) => {
-    const wc = webContents.getAllWebContents().find((w) => w.getURL().includes("big.html"));
+    const wc = webContents.getAllWebContents().find((w) => w.getURL().startsWith("http") && w.getURL().includes("big.html"));
     return { throttled: wc.getBackgroundThrottling ? wc.getBackgroundThrottling() : "n/a" };
   });
   const vis = await app.evaluate(({ webContents }) => {
-    const wc = webContents.getAllWebContents().find((w) => w.getURL().includes("big.html"));
+    const wc = webContents.getAllWebContents().find((w) => w.getURL().startsWith("http") && w.getURL().includes("big.html"));
     return wc.executeJavaScript("new Promise((done) => { let n = 0; const f = () => { n++; requestAnimationFrame(f); }; requestAnimationFrame(f); setTimeout(() => done({ state: document.visibilityState, frames: n }), 1000); })");
   });
   log("background tab: throttled =", hidden.throttled, "| visibility:", vis.state, "| animation frames in 1 s:", vis.frames);

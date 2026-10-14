@@ -44,6 +44,8 @@ contextBridge.exposeInMainWorld("scout", {
   shareTab: (id, on) => ipcRenderer.invoke("tab:agent-share", id, on),
   runAgent: (goal, previous) => ipcRenderer.invoke("agent:run", goal, previous),
   talk: (id) => ipcRenderer.invoke("talk:get", id),
+  copyDiagnostics: () => ipcRenderer.invoke("diag:copy"),
+  openLogFolder: () => ipcRenderer.invoke("diag:open-folder"),
   downloads: () => ipcRenderer.invoke("downloads:list"),
   cancelDownload: (id) => ipcRenderer.invoke("downloads:cancel", id),
   openDownload: (id) => ipcRenderer.invoke("downloads:open", id),

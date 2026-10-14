@@ -1,0 +1,74 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; font-src file:" />
+    <title>New tab</title>
+    <style>
+      @font-face { font-family: "Barlow"; font-weight: 400; src: url("fonts/barlow-latin-400-normal.woff2") format("woff2"); }
+      @font-face { font-family: "Barlow"; font-weight: 600; src: url("fonts/barlow-latin-600-normal.woff2") format("woff2"); }
+      @font-face { font-family: "Barlow"; font-weight: 700; src: url("fonts/barlow-latin-700-normal.woff2") format("woff2"); }
+      @font-face { font-family: "JetBrains Mono"; font-weight: 400; src: url("fonts/jetbrains-mono-latin-400-normal.woff2") format("woff2"); }
+      :root { --surface: #000; --raised: #0e0e0f; --line: #2a2a2d; --ink: #fff; --muted: #a1a1a6; --signal: #b18cff; }
+      * { box-sizing: border-box; }
+      body { margin: 0; min-height: 100vh; background: var(--surface); color: var(--ink); font: 16px/24px "Barlow", "Helvetica Neue", Arial, sans-serif; display: flex; flex-direction: column; align-items: center; padding: 14vh 24px 40px; }
+      .mark { width: 44px; height: 44px; fill: var(--ink); }
+      .eyebrow { margin: 18px 0 4px; font-weight: 600; font-size: 13px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
+      h1 { margin: 0 0 28px; font-size: 40px; line-height: 44px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+      form { width: min(640px, 100%); display: flex; border: 1px solid var(--line); border-radius: 2px; }
+      input { flex: 1; min-width: 0; background: var(--raised); color: var(--ink); border: 0; padding: 14px 16px; font: 16px "Barlow", sans-serif; outline: none; }
+      form:focus-within { border-color: var(--signal); }
+      button { background: var(--ink); color: var(--surface); border: 0; padding: 0 20px; font: 600 12px "Barlow", sans-serif; letter-spacing: .12em; text-transform: uppercase; cursor: pointer; }
+      .label { width: min(640px, 100%); margin: 40px 0 10px; font-weight: 600; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+      .tiles { width: min(640px, 100%); display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+      .tiles a { display: block; padding: 12px; border: 1px solid var(--line); color: var(--ink); text-decoration: none; min-height: 72px; overflow: hidden; }
+      .tiles a:hover, .tiles a:focus-visible { border-color: var(--ink); outline: none; }
+      .tiles b { display: block; font-size: 14px; line-height: 18px; font-weight: 600; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+      .tiles span { display: block; margin-top: 6px; font: 11px/14px "JetBrains Mono", monospace; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .empty { width: min(640px, 100%); color: var(--muted); font-size: 14px; }
+      @media (max-width: 560px) { .tiles { grid-template-columns: repeat(2, 1fr); } h1 { font-size: 28px; line-height: 32px; } }
+    </style>
+  </head>
+  <body>
+    <svg class="mark" viewBox="22.8 -0.2 24 24" aria-hidden="true"><path transform="matrix(1.20193,0,0,1.20193,22.7763,-2.42319)" d="M10.004,12.998L1.067,12.998C1.035,12.67 1.018,12.337 1.018,12C1.018,11.663 1.035,11.33 1.067,11.002L8.593,11.002L3.273,5.682C3.696,5.166 4.169,4.693 4.684,4.271L10.004,9.591L10.004,2.065C10.332,2.033 10.665,2.016 11.002,2.016C11.339,2.016 11.672,2.033 12,2.065L12,11.002L20.937,11.002C20.969,11.33 20.986,11.663 20.986,12C20.986,12.337 20.969,12.67 20.937,12.998L13.411,12.998L18.731,18.318C18.309,18.834 17.836,19.307 17.32,19.729L12,14.409L12,21.935C11.672,21.967 11.339,21.984 11.002,21.984C10.665,21.984 10.332,21.967 10.004,21.935L10.004,12.998Z"/></svg>
+    <p class="eyebrow">Research browser</p>
+    <h1>What are you looking into?</h1>
+    <form id="f" action="#">
+      <input id="q" autocomplete="off" placeholder="Search Brave or type an address" aria-label="Search or address" />
+      <button type="submit">Go</button>
+    </form>
+    <p class="label" id="top-label">Most visited</p>
+    <div class="tiles" id="tiles"></div>
+    <script>
+      // NODE's new tab page. NODE passes the most visited pages in ?top= (JSON).
+      let topSites = [];
+      try {
+        topSites = JSON.parse(new URLSearchParams(location.search).get("top") || "[]");
+      } catch (_) {}
+      const tiles = document.getElementById("tiles");
+      for (const t of topSites.slice(0, 8)) {
+        if (!/^https?:\/\//i.test(t.url || "")) continue;
+        const a = document.createElement("a");
+        a.href = t.url;
+        const b = document.createElement("b");
+        b.textContent = t.title || t.url;
+        const s = document.createElement("span");
+        try { s.textContent = new URL(t.url).hostname.replace(/^www\./, ""); } catch (_) {}
+        a.append(b, s);
+        tiles.appendChild(a);
+      }
+      if (!tiles.children.length) {
+        document.getElementById("top-label").textContent = "Start here";
+        tiles.outerHTML = '<p class="empty">Read any page and NODE suggests what to read next in the sidebar. Pages you visit often will show up here.</p>';
+      }
+      document.getElementById("f").addEventListener("submit", (e) => {
+        e.preventDefault();
+        const v = document.getElementById("q").value.trim();
+        if (!v) return;
+        const looksLikeAddress = /^https?:\/\//i.test(v) || (/^[^\s]+\.[a-z]{2,}(\/|$)/i.test(v) && !/\s/.test(v));
+        location.href = looksLikeAddress ? (/^https?:/i.test(v) ? v : "https://" + v) : "https://search.brave.com/search?q=" + encodeURIComponent(v);
+      });
+      document.getElementById("q").focus();
+    </script>
+  </body>
+</html>

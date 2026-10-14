@@ -50,8 +50,8 @@ Effort: XS under 1 hour, S half a day, M 1-2 days, L 3+ days. Finding IDs (C1, K
 | B27 | 4 | Installable builds for macOS (.dmg) and Windows (.exe) with an app icon | P0 | M | Done (0.4): `npm run dist:mac` / `dist:win`; not signed; automatic updates are B46 |
 | B28 | 4 | Visual editor for site rules in Settings, so no JSON editing is needed | P1 | M | Not started |
 | B29 | 4 | Sleep background tabs that are not playing media, to save memory with many tabs open | P1 | M | Done: after 15 minutes unused; never while playing, on screen or shared |
-| B30 | 4 | First-run setup: start page, search sources, AI option | P2 | S | Not started |
-| B31 | 4 | Error log and a Copy diagnostics button for bug reports | P2 | S | Not started |
+| B30 | 4 | First-run setup: start page, search sources, AI option | P1 | S | Done: welcome screen (Brave key, AI choice, reopen tabs, ad blocking) and a NODE new tab page |
+| B31 | 4 | Error log and a Copy diagnostics button for bug reports | P1 | S | Done: logs/node.log, Settings → Help, Help menu with Report a Problem |
 | B32 | 4 | Speed (feedback: "a little laggy"): read the page on the 5 s timer only after scroll, resize or selection; measure only elements near the viewport; stop drawing hidden tabs and allow background throttling | P0 | S | Done |
 | B33 | 4 | Brave Search as the default: on by default (also for older settings), address-bar searches open Brave Search, one-time notice to add the key | P1 | XS | Done |
 | B34 | 4 | Play media directly: start the main video or embed as soon as the page is parsed, with sound; catch late and single-page players; leave paused media paused | P1 | S | Done |

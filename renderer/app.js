@@ -577,7 +577,18 @@ async function crawlViewport(reason) {
     await crawl();
     return;
   }
-  if (!tab.url || (reason === "tick" && (tab.loading || !autoOn || crawlBusy))) return;
+  if (!tab.url) {
+    // New tab page: nothing to read yet.
+    if (lastCrawl.url !== "") {
+      lastCrawl = { at: Date.now(), url: "", terms: [], selection: "" };
+      auto = [];
+      renderKeys();
+      renderResults([]);
+      statusEl.textContent = "Open a page and NODE suggests what to read next.";
+    }
+    return;
+  }
+  if (reason === "tick" && (tab.loading || !autoOn || crawlBusy)) return;
   try {
     let ranked;
     let topic = null;
@@ -594,6 +605,8 @@ async function crawlViewport(reason) {
           renderResults([]);
           statusEl.textContent = res.page?.google
             ? "This page is open in the Google window, so NODE does not suggest from it."
+            : !res.page?.url
+            ? "Open a page and NODE suggests what to read next."
             : "Suggestions are off for this site (site rule). Pinned keywords still work with Crawl.";
         }
         return;
@@ -651,7 +664,7 @@ async function wikiFallback(q) {
 }
 
 document.getElementById("new-tab").addEventListener("click", () => {
-  api ? api.createTab("https://en.wikipedia.org/wiki/Main_Page") : demoCreate("https://en.wikipedia.org/wiki/Main_Page");
+  api ? api.createTab() : demoCreate("https://en.wikipedia.org/wiki/Main_Page");
 });
 document.getElementById("back").addEventListener("click", () => api && activeId && api.goBack(activeId));
 document.getElementById("forward").addEventListener("click", () => api && activeId && api.goForward(activeId));
@@ -1143,6 +1156,7 @@ async function renderSources() {
   fillGoogleState(settings.googleWindow);
   fillAgents(settings.agents);
   document.getElementById("restore-tabs").checked = settings.restoreTabs !== false;
+  document.getElementById("start-page").value = settings.startPage || "";
   sourcesDraft = { providers: {} };
   sourcesList.innerHTML = "";
   for (const meta of settings.meta) {
@@ -1307,11 +1321,56 @@ if (api?.agentsStatus) {
   document.getElementById("agents-token").addEventListener("click", async () => fillAgents(await api.agentsNewToken()));
 }
 
+// ---- Help: diagnostics (B31) ----
+if (api?.copyDiagnostics) {
+  document.getElementById("diag-copy").addEventListener("click", async () => {
+    const text = await api.copyDiagnostics();
+    document.getElementById("diag-state").textContent = `Copied ${text.split("\n").length} lines to the clipboard.`;
+  });
+  document.getElementById("diag-folder").addEventListener("click", () => api.openLogFolder());
+}
+
+// ---- First-run setup (B30) ----
+async function maybeFirstRun() {
+  if (!api?.getSettings) return;
+  const settings = await api.getSettings();
+  if (settings.firstRunDone) return;
+  const box = document.getElementById("firstrun");
+  box.hidden = false;
+  await api.setLibraryOpen(true); // hide the page views under the setup screen
+  document.querySelectorAll('input[name="fr-ai"]').forEach((r) =>
+    r.addEventListener("change", () => (document.getElementById("fr-grok-row").hidden = document.querySelector('input[name="fr-ai"]:checked').value !== "grok"))
+  );
+  let openKeyPage = false;
+  document.getElementById("fr-brave-get").addEventListener("click", () => {
+    openKeyPage = true;
+    document.getElementById("fr-brave-get").textContent = "The key page opens when you finish here.";
+  });
+  document.getElementById("fr-done").addEventListener("click", async () => {
+    const brave = document.getElementById("fr-brave").value.trim();
+    const ai = document.querySelector('input[name="fr-ai"]:checked').value;
+    const next = {
+      firstRunDone: true,
+      restoreTabs: document.getElementById("fr-restore").checked,
+      adblock: document.getElementById("fr-adblock").checked,
+      providers: brave ? { brave: { enabled: true, key: brave } } : {},
+    };
+    if (ai === "local") next.ai = { provider: "local" };
+    if (ai === "grok") next.ai = { provider: "grok", grok: { key: document.getElementById("fr-grok").value.trim() } };
+    await api.setSettings(next);
+    box.hidden = true;
+    await api.setLibraryOpen(false);
+    if (openKeyPage) api.createTab("https://brave.com/search/api/");
+  });
+}
+maybeFirstRun();
+
 async function saveSources(rerender = true) {
   if (!sourcesDraft) return;
   await api.setSettings({ ...sourcesDraft, ai: aiDraft(), adblock: document.getElementById("adblock-enabled").checked,
     google: { mode: document.getElementById("google-mode").value, browser: document.getElementById("google-browser").value },
     restoreTabs: document.getElementById("restore-tabs").checked,
+    startPage: document.getElementById("start-page").value,
   });
   if (rerender) await renderSources();
 }
@@ -1804,7 +1863,7 @@ if (api?.researchGet) {
 if (api?.getSettings && !store.get("scout.braveHint", false)) {
   api.getSettings().then((s) => {
     const brave = s.providers?.brave;
-    if (!brave?.enabled || brave.keySet) return;
+    if (!brave?.enabled || brave.keySet || !s.firstRunDone) return; // first-run setup asks for the key
     store.set("scout.braveHint", true);
     showNotice("Brave Search is the default web source. Add your Brave Search API key in Settings. Until then, web results come from DuckDuckGo.", [
       { label: "Open Settings", run: () => openSources() },

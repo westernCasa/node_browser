@@ -49,6 +49,7 @@ const { routesToGoogleWindow, MODES: GOOGLE_MODES } = require("./core/google");
 const { createCompanion } = require("./companion");
 const { createAgentServer } = require("./agent-server");
 const { createAgents } = require("./agents");
+const { createLog } = require("./log");
 const { runResearch } = require("./core/agent");
 const Talk = require("./core/talk");
 let research = null; // current research session store (B17), created when the app is ready
@@ -222,7 +223,8 @@ function tabState(tab) {
   const raw = tab.sleeping ? tab.sleeping.url : wc.getURL();
   const google = isPlaceholder(raw);
   let url = raw;
-  if (isInternal(raw)) {
+  if (isStartPage(raw)) url = "";
+  else if (isInternal(raw)) {
     try {
       url = new URL(raw).searchParams.get("u") || raw;
     } catch (_) {}
@@ -388,10 +390,12 @@ function attachListeners(tab) {
     if (!isMainFrame || code === -3 || !/^https?:/i.test(url || "")) return; // -3: navigation replaced
     // A late failure of a page the user already left must not replace the new page.
     if (tab.loadingUrl && tab.loadingUrl !== url) return;
+    log().warn(`load failed: ${desc} (${code}) on ${hostOf(url)}`);
     wc.loadURL(errorUrl(url, { desc }));
   });
   wc.on("render-process-gone", (_e, details) => {
     if (!tabs.has(tab.id) || details.reason === "clean-exit" || wc.isDestroyed()) return;
+    log().error(`tab ${tab.id} page stopped: ${details.reason} (exit code ${details.exitCode}) on ${hostOf(tab.lastUrl || "")}`);
     const url = tab.lastUrl || "";
     playback.stopped(tab.id);
     setTimeout(() => {
@@ -434,6 +438,35 @@ function attachListeners(tab) {
   on("before-input-event", (_e, input) => {
     if (input.type === "keyDown" || input.type === "mouseDown") tab.lastGesture = Date.now();
   });
+}
+
+// ---- Error log and diagnostics (B31, log.js) ----
+let logger = null;
+function log() {
+  if (!logger) logger = createLog(path.join(app.getPath("userData"), "logs"));
+  return logger;
+}
+// Errors in NODE's own code are logged instead of stopping the app.
+process.on("uncaughtException", (err) => log().error(`uncaught: ${err?.stack || err}`));
+process.on("unhandledRejection", (err) => log().error(`unhandled rejection: ${err?.stack || err}`));
+
+function diagnostics() {
+  const s = loadSettings();
+  const all = [...tabs.values()];
+  const os = require("os");
+  const lines = [
+    `NODE ${app.getVersion()} · Electron ${process.versions.electron} · Chromium ${process.versions.chrome} · Node ${process.versions.node}`,
+    `System: ${process.platform} ${os.release()} ${process.arch} · locale ${app.getLocale()} · memory ${Math.round(os.totalmem() / 1073741824)} GB`,
+    `Tabs: ${all.length} open, ${all.filter((t) => t.sleeping).length} asleep · layout ${layout} · sound ${soundAll ? "all" : "one"}`,
+    `Search sources on: ${Object.entries(s.providers).filter(([, c]) => c.enabled).map(([id]) => id).join(", ") || "none"}`,
+    `AI: ${s.ai.enabled ? "query ideas on" : "query ideas off"}, ${s.ai.provider}${Chat.canChat(s.ai) ? "" : " (not set up)"} · ad blocking ${s.adblock !== false ? "on" : "off"} (${adblock ? adblock.stats().status : "n/a"})`,
+    `Google window: ${s.google.mode}${companion ? ` · ${companion.status().browser || "no browser found"} · ${companion.status().link}` : ""} · agents (MCP): ${agentServer?.status().running ? "on" : "off"} · reopen tabs: ${s.restoreTabs !== false ? "on" : "off"}`,
+    `Site rules: ${siteRules.length} (${rulesErrors.length} problems)`,
+    "",
+    "Recent log lines:",
+    ...log().recent(60),
+  ];
+  return lines.join("\n");
 }
 
 // ---- Sleeping tabs (B29) ----
@@ -604,10 +637,28 @@ function isPlaceholder(url) {
   return /\/renderer\/google-tab\.html\?/.test(String(url || ""));
 }
 
-// NODE's own pages shown in a tab: the Google window placeholder and the
-// "page not loaded" / "page stopped" page. They carry the real address in ?u=.
+// NODE's own pages shown in a tab: the Google window placeholder, the
+// "page not loaded" / "page stopped" page (both carry the real address in ?u=)
+// and the new tab page.
 function isInternal(url) {
-  return /\/renderer\/(google-tab|error)\.html\?/.test(String(url || ""));
+  return /\/renderer\/(google-tab|error)\.html\?/.test(String(url || "")) || isStartPage(url);
+}
+
+function isStartPage(url) {
+  return /\/renderer\/start\.html(\?|$)/.test(String(url || ""));
+}
+
+// The new tab page, with the most visited pages from history.
+function startPageUrl() {
+  const file = path.join(__dirname, "renderer", "start.html");
+  const top = (historyStore?.top?.(8) || []).map((r) => ({ url: r.url, title: String(r.title || "").slice(0, 80) }));
+  return `file://${file.split(path.sep).join("/")}?top=${encodeURIComponent(JSON.stringify(top))}`;
+}
+
+// What a new tab opens: NODE's start page, or the address set in Settings.
+function newTabUrl() {
+  const custom = loadSettings().startPage;
+  return /^https?:\/\//i.test(custom || "") ? custom : startPageUrl();
 }
 
 function errorUrl(target, { kind = "load", desc = "" } = {}) {
@@ -632,6 +683,7 @@ function routeGoogle(url, tabId) {
 
 // The address a tab should load: the placeholder for routed Google pages.
 function loadTarget(url, tabId, { restore = false } = {}) {
+  if (isStartPage(url)) return url;
   const target = normalizeUrl(url);
   if (restore && routesToGoogleWindow(target, googleMode())) return placeholderUrl(target);
   return routeGoogle(target, tabId) ? placeholderUrl(target) : target;
@@ -705,7 +757,7 @@ function closeTab(id) {
   if (activeId === id) {
     activeId = [...tabs.keys()].at(-1) || null;
   }
-  if (!activeId) createTab(HOME_URL);
+  if (!activeId) createTab(newTabUrl());
   applyLayout();
   emitList();
 }
@@ -942,6 +994,12 @@ function loadSettings() {
   };
   base.adblock = raw.adblock !== false;
   base.restoreTabs = raw.restoreTabs !== false;
+  base.startPage = typeof raw.startPage === "string" ? raw.startPage : "";
+  // First-run setup is shown once, to new users. Settings saved by an earlier
+  // version count as set up. Runs with --user-data-dir (the tests) skip it
+  // unless NODE_FIRST_RUN=1.
+  const testRun = app.commandLine.hasSwitch("user-data-dir") && process.env.NODE_FIRST_RUN !== "1";
+  base.firstRunDone = Boolean(raw.firstRunDone) || Object.keys(raw).length > 0 || testRun;
   base.agents = {
     enabled: Boolean(raw.agents?.enabled),
     port: Number(raw.agents?.port) || 47615,
@@ -967,6 +1025,8 @@ function saveSettings(next) {
   }
   if (next && "adblock" in next) current.adblock = Boolean(next.adblock);
   if (next && "restoreTabs" in next) current.restoreTabs = Boolean(next.restoreTabs);
+  if (next && typeof next.startPage === "string") current.startPage = /^https?:\/\//i.test(next.startPage.trim()) ? next.startPage.trim() : "";
+  if (next && next.firstRunDone) current.firstRunDone = true;
   if (next?.agents) {
     if ("port" in next.agents) {
       const port = Math.round(Number(next.agents.port));
@@ -994,6 +1054,8 @@ function saveSettings(next) {
     adblock: current.adblock !== false,
     google: { ...current.google },
     restoreTabs: current.restoreTabs !== false,
+    startPage: current.startPage || "",
+    firstRunDone: Boolean(current.firstRunDone),
     agents: { enabled: current.agents.enabled, port: current.agents.port, token: encryptSecret(current.agents.token) },
     providers: {},
   };
@@ -1034,6 +1096,8 @@ function publicSettings() {
     adblockStats: adblock ? adblock.stats() : { status: "off", blocked: 0 },
     google: { ...s.google },
     restoreTabs: s.restoreTabs !== false,
+    startPage: s.startPage || "",
+    firstRunDone: Boolean(s.firstRunDone),
     googleWindow: companion ? companion.status() : null,
     agents: agentsStatus(),
     meta: Object.values(PROVIDERS).map((p) => ({ id: p.id, label: p.label, role: p.role, fields: p.fields, setupHint: p.setupHint || "" })),
@@ -1068,7 +1132,7 @@ async function pageKeywords(id, banned = [], opts = {}) {
     return { disabled: true, matched: tab.rule.matched, page: { url: wc.getURL(), title: wc.getTitle() }, ranked: [] };
   }
   // The Google window placeholder has no content of its own to suggest from.
-  if (tab && isPlaceholder(tab.view.webContents.getURL())) return { disabled: true, page: tabState(tab), ranked: [] };
+  if (tab && isInternal(tab.view.webContents.getURL())) return { disabled: true, page: tabState(tab), ranked: [] };
   const page = await extractPage(id);
   if (!page || page.error) return { page, ranked: [] };
   const ranked = rankTerms(page, { df: sessionDF, banned, limit: 12 });
@@ -1205,7 +1269,7 @@ function buildMenu() {
           label: "New Tab",
           accelerator: "CmdOrCtrl+T",
           click: () => {
-            createTab(HOME_URL);
+            createTab(newTabUrl());
             sendUi("focus-omni");
           },
         },
@@ -1234,6 +1298,23 @@ function buildMenu() {
       ],
     },
     { role: "editMenu" },
+    {
+      role: "help",
+      submenu: [
+        { label: "Copy Diagnostics", click: () => clipboard.writeText(diagnostics()) },
+        {
+          label: "Report a Problem…",
+          click: () => {
+            clipboard.writeText(diagnostics());
+            createTab("https://github.com/westernCasa/node_browser/issues/new");
+            sendUi("notice", { message: "Diagnostics copied. Paste them into the issue, with what you were doing when it went wrong." });
+          },
+        },
+        { label: "Open Log Folder", click: () => shell.openPath(log().dir) },
+        { type: "separator" },
+        { label: "NODE on GitHub", click: () => createTab("https://github.com/westernCasa/node_browser") },
+      ],
+    },
     {
       label: "View",
       submenu: [
@@ -1364,8 +1445,12 @@ function createWindow() {
     if (cmd === "browser-forward") gestureNav(tabs.get(activeId), "forward");
   });
   win.on("resize", applyLayout);
+  win.webContents.on("console-message", (details) => {
+    if (details.level === "error") log().error(`interface: ${details.message} (${details.sourceId?.split("/").pop()}:${details.lineNumber})`);
+  });
+  win.webContents.on("render-process-gone", (_e, d) => log().error(`interface stopped: ${d.reason}`));
   win.webContents.on("did-finish-load", () => {
-    if (!tabs.size && !restoreSession()) createTab(HOME_URL);
+    if (!tabs.size && !restoreSession()) createTab(newTabUrl());
   });
 }
 
@@ -1406,6 +1491,7 @@ app.whenReady().then(() => {
   adblock.load();
   loadRules();
   watchRules();
+  log().info(`NODE ${app.getVersion()} started (Electron ${process.versions.electron}, ${process.platform} ${process.arch})`);
   research = new ResearchStore(fsStorage(path.join(app.getPath("userData"), "sessions")));
   historyStore = new HistoryStore(fsStorage(app.getPath("userData")));
   companion = createCompanion({
@@ -1429,7 +1515,12 @@ app.on("will-quit", () => {
   agentServer?.stop();
 });
 
-ipcMain.handle("tab:create", (_e, url) => createTab(url));
+// No address (the + button, double-click on the tab bar): a new tab page.
+ipcMain.handle("tab:create", (_e, url) => {
+  const id = createTab(url ? url : newTabUrl());
+  if (!url) sendUi("focus-omni");
+  return id;
+});
 ipcMain.handle("tab:close", (_e, id) => closeTab(id));
 ipcMain.handle("tab:activate", (_e, id) => activateTab(id));
 ipcMain.handle("tab:navigate", (_e, id, url) => {
@@ -1610,6 +1701,12 @@ ipcMain.handle("settings:set", async (_e, next) => {
   return publicSettings();
 });
 ipcMain.handle("agents:status", () => agentsStatus());
+ipcMain.handle("diag:copy", () => {
+  const text = diagnostics();
+  clipboard.writeText(text);
+  return text;
+});
+ipcMain.handle("diag:open-folder", () => shell.openPath(log().dir));
 ipcMain.handle("downloads:list", () => downloads.slice(-50).reverse().map(downloadState));
 ipcMain.handle("downloads:cancel", (_e, id) => downloads.find((d) => d.id === id)?.item?.cancel());
 ipcMain.handle("downloads:open", (_e, id) => {

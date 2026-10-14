@@ -50,6 +50,16 @@ class HistoryStore {
 
   // Address-bar suggestions: host/URL prefix matches first, then title matches,
   // ranked by visit count and recency.
+  // Most visited pages for the new tab page: by visit count, then recency;
+  // one per address, search result pages left out.
+  top(limit = 8) {
+    return this.rows
+      .filter((r) => !/[?&](q|query|search_query)=/.test(r.url))
+      .slice()
+      .sort((a, b) => b.visits - a.visits || b.lastVisit - a.lastVisit)
+      .slice(0, limit);
+  }
+
   search(q, limit = 8) {
     const query = String(q || "").trim().toLowerCase();
     if (!query) return this.rows.slice(0, limit);

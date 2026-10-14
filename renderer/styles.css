@@ -660,3 +660,18 @@ svg.brand path { fill: var(--ink); }
 .chip.dl { border-color: var(--live); color: var(--live); }
 .download-row button { margin-left: 6px; }
 .tab.asleep span { color: var(--ink-muted); font-style: italic; }
+
+/* First-run setup (B30) */
+#firstrun { position: fixed; inset: 0; z-index: 100; background: var(--surface); overflow: auto; display: flex; justify-content: center; padding: 48px 16px; -webkit-app-region: no-drag; }
+#firstrun .fr-card { width: min(560px, 100%); }
+#firstrun h1 { font: 700 32px/36px var(--sans); letter-spacing: 0.04em; text-transform: uppercase; margin: 6px 0 10px; }
+#firstrun h2 { font: 600 15px/20px var(--sans); letter-spacing: 0.06em; text-transform: uppercase; margin: 0 0 4px; }
+#firstrun section { border-top: 1px solid var(--line); padding: 18px 0; }
+#firstrun .help { font-size: 13px; line-height: 1.5; }
+#firstrun .field { display: block; margin-top: 8px; }
+#firstrun .field span { display: block; color: var(--ink-muted); font-size: 12px; margin-bottom: 4px; }
+#firstrun .field input { width: 100%; height: 34px; border: 1px solid var(--line); background: var(--surface-raised); color: var(--ink); padding: 0 10px; font: 14px var(--sans); border-radius: var(--radius-sm); }
+#firstrun .radio, #firstrun .toggle { display: flex; gap: 8px; align-items: center; margin: 8px 0; font-size: 14px; cursor: pointer; }
+#firstrun .link { background: none; border: 0; color: var(--ink); text-decoration: underline; padding: 0; margin-top: 6px; cursor: pointer; font: 13px var(--sans); }
+#firstrun .fr-actions { border-top: 1px solid var(--line); padding-top: 18px; }
+#fr-done { background: var(--ink); color: var(--surface); border-color: var(--ink); height: 44px; padding: 0 24px; font-size: 12px; }
