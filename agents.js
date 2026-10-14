@@ -98,7 +98,7 @@ function createAgents({ BrowserWindow, session, userAgent, registry, research, g
       });
       await new Promise((r) => setTimeout(r, 600)); // content added just after load
       checkAddress(wc.getURL(), { allowPrivate: allowPrivate() }); // after redirects
-      const page = await wc.executeJavaScript(markdownScript(MAX_CHARS), true);
+      const page = await wc.executeJavaScriptInIsolatedWorld(1001, [{ code: markdownScript(MAX_CHARS) }], true);
       if (withThumb) {
         try {
           const img = await wc.capturePage({ x: 0, y: 0, width: 1280, height: 800 });
@@ -167,7 +167,7 @@ function createAgents({ BrowserWindow, session, userAgent, registry, research, g
         // A shared tab may be a local page the user opened (a dev server): only
         // the sign-in, payment and banking blocks apply.
         if (SENSITIVE.test(new URL(tab.url).hostname + new URL(tab.url).pathname)) throw new Error("NODE does not read sign-in, account, payment or banking pages for agents.");
-        const page = await tab.webContents.executeJavaScript(markdownScript(MAX_CHARS), true);
+        const page = await tab.webContents.executeJavaScriptInIsolatedWorld(1001, [{ code: markdownScript(MAX_CHARS) }], true);
         return { text: formatPage(page), detail: page.url };
       },
     },

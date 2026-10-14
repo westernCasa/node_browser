@@ -688,3 +688,7 @@ svg.brand path { fill: var(--ink); }
 .rules-list .rb button:hover { color: var(--ink); border-color: var(--ink); }
 .rule-form select { width: 100%; height: 26px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: var(--radius-sm); font: 12px var(--sans); }
 .rf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 8px; }
+
+/* Settings → Hidden keywords */
+.hidden-site { padding: 8px 0; border-bottom: 1px solid var(--line); }
+.hidden-site b { display: block; margin-bottom: 6px; font: 600 12px/16px "JetBrains Mono", monospace; color: var(--ink-muted); }

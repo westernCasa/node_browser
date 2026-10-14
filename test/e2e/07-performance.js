@@ -35,6 +35,15 @@ const log = (...a) => console.log("•", ...a);
         if (isRead) p.then(() => globalThis.__reads.push({ id: wc.id, ms: Date.now() - t0, at: Date.now() })).catch(() => {});
         return p;
       };
+      // NODE runs its page scripts in an isolated world.
+      const origIso = wc.executeJavaScriptInIsolatedWorld.bind(wc);
+      wc.executeJavaScriptInIsolatedWorld = (world, scripts, g) => {
+        const isRead = scripts.some((x) => String(x.code).includes("MEDIA_EXT"));
+        const t0 = Date.now();
+        const p = origIso(world, scripts, g);
+        if (isRead) p.then(() => globalThis.__reads.push({ id: wc.id, ms: Date.now() - t0, at: Date.now() })).catch(() => {});
+        return p;
+      };
     };
     setInterval(() => webContents.getAllWebContents().forEach(wrap), 50);
   }, userData);

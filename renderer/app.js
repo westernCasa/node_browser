@@ -42,16 +42,52 @@ const store = {
   },
 };
 let pinned = [];
-let banned = store.get("scout.banned", []);
+// Keywords hidden with ×, per site ("*" = every site: lists saved before
+// hiding became per site).
+let hiddenBySite = store.get("node.hiddenBySite", null);
+if (!hiddenBySite) {
+  const old = store.get("scout.banned", []);
+  hiddenBySite = old.length ? { "*": old } : {};
+  store.set("node.hiddenBySite", hiddenBySite);
+}
+const siteOf = (url) => {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "").toLowerCase();
+  } catch (_) {
+    return "";
+  }
+};
+const activeSite = () => siteOf(tabs.find((t) => t.id === activeId)?.url || "");
+let banned = [];
+function refreshBanned() {
+  banned = [...new Set([...(hiddenBySite["*"] || []), ...(hiddenBySite[activeSite()] || [])])];
+  return banned;
+}
+function saveHidden() {
+  for (const k of Object.keys(hiddenBySite)) if (!hiddenBySite[k]?.length) delete hiddenBySite[k];
+  store.set("node.hiddenBySite", hiddenBySite);
+  refreshBanned();
+  if (typeof renderHiddenList === "function") renderHiddenList();
+}
+function hideKeyword(term) {
+  const site = activeSite() || "*";
+  hiddenBySite[site] = [...new Set([...(hiddenBySite[site] || []), lower(term)])];
+  saveHidden();
+}
+function unhideKeyword(term, site = null) {
+  for (const k of site ? [site] : Object.keys(hiddenBySite)) hiddenBySite[k] = (hiddenBySite[k] || []).filter((b) => b !== lower(term));
+  saveHidden();
+}
 let auto = []; // ranked terms from the page: [{term, score, kind}]
 let autoOn = store.get("scout.auto", true);
+let fromTopic = false; // keywords came from the running topic (thin page)
 let lastCrawl = { at: 0, url: "", terms: [], selection: "" };
 const RECRAWL_GAP_MS = 20000; // B11: minimum time between automatic searches
 const AUTO_SHOWN = 8;
 
 const lower = (s) => String(s).toLowerCase();
 const isPinned = (t) => pinned.some((p) => lower(p) === lower(t));
-const isBanned = (t) => banned.includes(lower(t));
+const isBanned = (t) => refreshBanned().includes(lower(t));
 
 function autoTerms() {
   return auto.map((r) => r.term).filter((t) => !isPinned(t) && !isBanned(t));
@@ -265,8 +301,7 @@ function renderKeys() {
       if (isPin) {
         pinned = pinned.filter((p) => lower(p) !== lower(term));
       } else {
-        banned = [...new Set([...banned, lower(term)])];
-        store.set("scout.banned", banned);
+        hideKeyword(term);
       }
       renderKeys();
       crawl();
@@ -278,17 +313,20 @@ function renderKeys() {
   for (const t of autoTerms().slice(0, AUTO_SHOWN)) chip(t, false);
 
   const hiddenEl = document.getElementById("hidden-keys");
+  refreshBanned();
   hiddenEl.hidden = !banned.length;
   hiddenEl.innerHTML = "";
   if (banned.length) {
     const label = document.createElement("span");
-    label.textContent = "Hidden: " + banned.slice(-6).join(", ") + (banned.length > 6 ? ` +${banned.length - 6}` : "");
+    label.textContent = "Hidden on this site: " + banned.slice(-6).join(", ") + (banned.length > 6 ? ` +${banned.length - 6}` : "");
     const clear = document.createElement("button");
     clear.textContent = "Show all";
     clear.addEventListener("click", () => {
-      banned = [];
-      store.set("scout.banned", banned);
+      delete hiddenBySite[activeSite()];
+      delete hiddenBySite["*"];
+      saveHidden();
       renderKeys();
+      crawl();
     });
     hiddenEl.append(label, clear);
   }
@@ -471,7 +509,8 @@ function setCardMedia(card, preview) {
 
 async function hydratePreview(card, url, seed) {
   try {
-    if (seed?.image || seed?.video) setCardMedia(card, seed);
+    // The search source already sent an image: use it and leave the site alone.
+    if (seed?.image || seed?.video) return setCardMedia(card, seed);
     const slot = card.querySelector(".media-slot .media-fallback");
     if (slot) slot.textContent = "Fetching preview";
     if (api?.preview) {
@@ -552,7 +591,7 @@ async function crawl() {
     data.results = notDismissed(data.results);
     const aiSet = new Set(data.aiQueries || []);
     const qs = (data.queries || []).map((q) => `"${q}"` + (aiSet.has(q) ? " (AI)" : "")).join(" · ");
-    statusEl.textContent = `${data.results.length} results` + (qs ? ` for ${qs}` : "");
+    statusEl.textContent = (fromTopic ? "Not much to read on this page, so these come from your current topic. " : "") + `${data.results.length} results` + (qs ? ` for ${qs}` : "");
     if (data.notes?.length) statusEl.textContent += " — " + data.notes.join(" ");
     renderResults(data.results);
   } catch (err) {
@@ -594,7 +633,7 @@ async function crawlViewport(reason) {
     let topic = null;
     let selection = "";
     if (api.keywords) {
-      const res = await api.keywords(tab.id, banned, { ifChanged: reason === "tick" && tab.url === lastCrawl.url });
+      const res = await api.keywords(tab.id, refreshBanned(), { ifChanged: reason === "tick" && tab.url === lastCrawl.url });
       if (res.unchanged) return;
       if (res.disabled) {
         // Site rule "suggest": false. Do not read the page or search with its words.
@@ -611,6 +650,24 @@ async function crawlViewport(reason) {
         }
         return;
       }
+      if (res.thin && !res.fromTopic) {
+        // A home screen, feed, sign-in wall or bot check, and no running topic yet.
+        if (reason !== "tick" || lastCrawl.url !== tab.url) {
+          auto = [];
+          fromTopic = false;
+          lastCrawl = { at: Date.now(), url: tab.url, terms: [], selection: "" };
+          renderKeys();
+          renderResults([]);
+          statusEl.textContent = res.blocked
+            ? "This page is a bot check or an access block, so NODE does not suggest from it."
+            : "Not much to read on this page yet. Keywords appear when you open an article, video or post.";
+          // The visit still goes in the trail (without keywords); pinned keywords still search.
+          if (!res.blocked) api.researchVisit?.(tab.url, tab.title, []);
+          if (pinned.length) await crawl();
+        }
+        return;
+      }
+      fromTopic = Boolean(res.fromTopic);
       ranked = res.ranked || [];
       topic = res.topic || null;
       selection = res.page?.selection || "";
@@ -703,8 +760,7 @@ function pinKeyword(text) {
   const v = String(text || "").trim();
   if (!v || isPinned(v)) return;
   pinned = [...pinned, v].slice(0, 6);
-  banned = banned.filter((b) => b !== lower(v));
-  store.set("scout.banned", banned);
+  unhideKeyword(v);
   renderKeys();
   crawl();
 }
@@ -715,8 +771,7 @@ document.getElementById("key-form").addEventListener("submit", (e) => {
   keyInput.value = "";
   if (!v || isPinned(v)) return;
   pinned = [...pinned, v].slice(0, 6);
-  banned = banned.filter((b) => b !== lower(v));
-  store.set("scout.banned", banned);
+  unhideKeyword(v);
   renderKeys();
   crawl();
 });
@@ -2243,3 +2298,44 @@ askInput.addEventListener("keydown", (e) => {
     sendAsk(askInput.value);
   }
 });
+
+// Settings → Hidden keywords: every hidden word, grouped by site.
+function renderHiddenList() {
+  const list = document.getElementById("hidden-list");
+  if (!list) return;
+  list.innerHTML = "";
+  const sites = Object.keys(hiddenBySite).sort((a, b) => (a === "*" ? -1 : b === "*" ? 1 : a.localeCompare(b)));
+  if (!sites.length) {
+    const li = document.createElement("li");
+    li.className = "help";
+    li.textContent = "None. Hide a keyword with × in the Suggestions pane.";
+    list.appendChild(li);
+    return;
+  }
+  for (const site of sites) {
+    const li = document.createElement("li");
+    li.className = "hidden-site";
+    const name = document.createElement("b");
+    name.textContent = site === "*" ? "All sites" : site;
+    li.appendChild(name);
+    const words = document.createElement("div");
+    words.className = "keys";
+    for (const w of hiddenBySite[site]) {
+      const chip = document.createElement("span");
+      chip.className = "key";
+      chip.textContent = w;
+      const x = document.createElement("button");
+      x.textContent = "×";
+      x.title = "Allow this keyword again";
+      x.addEventListener("click", () => {
+        unhideKeyword(w, site);
+        renderKeys();
+      });
+      chip.appendChild(x);
+      words.appendChild(chip);
+    }
+    li.appendChild(words);
+    list.appendChild(li);
+  }
+}
+renderHiddenList();

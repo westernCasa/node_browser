@@ -149,7 +149,8 @@ function extractionScript(ruleExtract) {
     const RULE = ${JSON.stringify(ruleExtract || {})};
     const validSel = (sel) => { try { document.querySelector(sel); return true; } catch (_) { return false; } };
     const extraSkip = (RULE.skip || []).filter(validSel);
-    const SKIP = ["nav, footer, aside, header nav, [role=navigation], [role=contentinfo], [role=banner] nav, [aria-hidden=true], .navbox, .sidebar, .menu, .cookie, #cookie, .ad, .ads", ...extraSkip].join(", ");
+    // Buttons, labels and pop-up dialogs hold interface text, not the page's topic.
+    const SKIP = ["nav, footer, aside, header nav, [role=navigation], [role=contentinfo], [role=banner] nav, [aria-hidden=true], .navbox, .sidebar, .menu, .cookie, #cookie, .ad, .ads, button, [role=button], label, dialog, [role=dialog], [role=alertdialog], [aria-modal=true]", ...extraSkip].join(", ");
     let focus = "";
     for (const sel of (RULE.include || []).filter(validSel)) {
       for (const el of document.querySelectorAll(sel)) {
@@ -167,12 +168,18 @@ function extractionScript(ruleExtract) {
       if (t && t.length < 160) headings.push({ t, inView: inView(h), top: h.tagName === "H1" });
     }
     headings.sort((a, b) => (b.top - a.top) || (b.inView - a.inView));
+    // The text comes in blocks (one per paragraph, list item, cell...) so the
+    // ranking can recognise blocks that repeat on every page of a site.
     let text = "";
+    const blocks = [];
     for (const el of nearView(document.querySelectorAll("p, li, dd, blockquote, td, figcaption, h1, h2, h3, h4, article div:not(:has(*))"))) {
       if (text.length > 6000) break;
       if (!inView(el) || el.closest(SKIP)) continue;
       const t = clean(el.innerText);
-      if (t.length > 20) text += t + " . ";
+      if (t.length > 20) {
+        text += t + " . ";
+        if (blocks.length < 150) blocks.push(t.slice(0, 400));
+      }
     }
     const selection = clean(String(window.getSelection ? window.getSelection() : "")).slice(0, 600);
     return {
@@ -182,6 +189,7 @@ function extractionScript(ruleExtract) {
       headings: headings.slice(0, 20).map((h) => h.t),
       selection,
       text: text.slice(0, 6000),
+      blocks,
       focus: focus.slice(0, 3000),
       lang: document.documentElement.lang || "",
       names: uniq(names),

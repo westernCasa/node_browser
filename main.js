@@ -29,7 +29,7 @@ if (!app.commandLine.hasSwitch("user-data-dir")) {
 }
 
 // Platform-neutral logic lives in core/ (shared with the mobile app).
-const { rankTerms, SessionDF } = require("./core/keywords");
+const { analyzePage, KeywordContext } = require("./core/keywords");
 const { PROVIDERS, Registry, defaultSettings, SETTINGS_VERSION } = require("./core/providers");
 const Rules = require("./core/rules");
 const AI = require("./core/ai");
@@ -69,6 +69,10 @@ const UA_PLATFORM = {
 }[process.platform] || "X11; Linux x86_64";
 const USER_AGENT = `Mozilla/5.0 (${UA_PLATFORM}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${process.versions.chrome.split(".")[0]}.0.0.0 Safari/537.36`;
 app.userAgentFallback = USER_AGENT;
+// Requests NODE makes on its own (search sources, previews, Talk) and pages the
+// AI agent reader loads say so, rather than passing as a person in Chrome.
+const BACKGROUND_UA = `NODE/${app.getVersion()} (research browser; +https://github.com/westernCasa/node_browser)`;
+const AGENT_UA = `${USER_AGENT} NODE-agent/${app.getVersion()} (+https://github.com/westernCasa/node_browser)`;
 
 let win;
 let sidebarWidth = SIDEBAR_DEFAULT;
@@ -282,13 +286,22 @@ function applyAudio() {
 // page's main media with sound (muted if the page refuses sound), "muted" plays
 // it muted, "off" pauses media the page starts on its own before the user has
 // interacted with it.
+// NODE's page scripts run in their own JavaScript world, like a browser
+// extension's content scripts: they see the page's DOM, but the page's own
+// scripts cannot see them (no extra globals or wrapped functions). Bot-detection
+// services treat scripts they can see in the page as automation.
+const NODE_WORLD = 1001;
+function runInPage(wc, code, userGesture = false) {
+  return wc.executeJavaScriptInIsolatedWorld(NODE_WORLD, [{ code }], userGesture);
+}
+
 function tryAutoplay(wc, mode = "on") {
   if (mode === "off") return blockAutoplay(wc);
-  wc.executeJavaScript(autoplayScript(mode), true).catch(() => {});
+  runInPage(wc, autoplayScript(mode), true).catch(() => {});
 }
 
 function blockAutoplay(wc) {
-  wc.executeJavaScript(blockAutoplayScript()).catch(() => {});
+  runInPage(wc, blockAutoplayScript()).catch(() => {});
 }
 
 // Playback limit (core/playback.js): media plays in up to 4 tabs at once. The
@@ -362,7 +375,7 @@ function attachListeners(tab) {
   on("dom-ready", () => {
     tryAutoplay(wc, tab.rule?.autoplay);
     // Clicking a video, image or embedded player scrolls it to the middle (site rule "center").
-    if (tab.rule?.center !== false) wc.executeJavaScript(centerOnClickScript()).catch(() => {});
+    if (tab.rule?.center !== false) runInPage(wc, centerOnClickScript()).catch(() => {});
   });
   on("did-start-loading", ping);
   on("did-stop-loading", () => {
@@ -600,7 +613,7 @@ function initAgents() {
   agentTools = createAgents({
     BrowserWindow,
     session,
-    userAgent: USER_AGENT,
+    userAgent: AGENT_UA,
     registry: search,
     research,
     getTabs: () =>
@@ -944,7 +957,7 @@ async function extractPage(id) {
   const tab = tabs.get(id);
   if (!tab) return null;
   try {
-    return await tab.view.webContents.executeJavaScript(extractionScript(tab.rule?.extract), true);
+    return await runInPage(tab.view.webContents, extractionScript(tab.rule?.extract), true);
   } catch (err) {
     return { url: tab.view.webContents.getURL(), title: tab.view.webContents.getTitle(), error: String(err) };
   }
@@ -952,7 +965,7 @@ async function extractPage(id) {
 
 // ---- Network layer (B12, B13): core/net.js ----
 // fetch is looked up on each call so tests can replace globalThis.fetch.
-const netLayer = createNet({ fetch: (...args) => globalThis.fetch(...args), userAgent: USER_AGENT });
+const netLayer = createNet({ fetch: (...args) => globalThis.fetch(...args), userAgent: BACKGROUND_UA });
 const getText = netLayer.getText;
 const CACHE_TTL = netLayer.ttl;
 
@@ -1143,8 +1156,9 @@ const search = new Registry({ getText, getConfig: (id) => loadSettings().provide
 const searchFlow = createSuggest({ registry: search, getAISettings: () => loadSettings().ai, ttl: CACHE_TTL });
 const { suggest, suggestFor, aiTest, aiReset, aiState } = searchFlow;
 
-// Session-wide document frequency, so words that appear on every page lose weight.
-const sessionDF = new SessionDF();
+// What keyword ranking learns while you browse (core/keywords.js): text that
+// repeats on every page of a site, and words that recur across sites (your topic).
+const keywordContext = new KeywordContext();
 
 // opts.ifChanged (the 5 s timer): skip reading the page when it has not been
 // scrolled, resized or had text selected since the last read of the same URL.
@@ -1167,12 +1181,17 @@ async function pageKeywords(id, banned = [], opts = {}) {
   if (tab && isInternal(tab.view.webContents.getURL())) return { disabled: true, page: tabState(tab), ranked: [] };
   const page = await extractPage(id);
   if (!page || page.error) return { page, ranked: [] };
-  const ranked = rankTerms(page, { df: sessionDF, banned, limit: 12 });
-  // The trail records the page's own topic words, without the session weighting
-  // that lowers words seen on earlier pages (that weighting suits searching for
-  // something new, but it hid the keywords that recur across a session).
-  const topic = rankTerms(page, { banned, limit: 6 }).map((r) => r.term);
-  return { page: { url: page.url, title: page.title, selection: page.selection }, ranked, topic };
+  const res = analyzePage(page, { context: keywordContext, banned, limit: 12 });
+  const info = { url: page.url, title: page.title, selection: page.selection };
+  if (res.thin) {
+    // Home screens, feeds, sign-in walls and bot checks: suggest from the
+    // running topic instead, and record nothing for this page in the trail.
+    const fallback = res.blocked ? [] : keywordContext.topic(8, banned);
+    return { page: info, ranked: fallback, topic: [], thin: true, blocked: res.blocked, fromTopic: fallback.length > 0 };
+  }
+  // The trail records the page's own topic words, without the cross-site boost.
+  const topic = analyzePage(page, { banned, limit: 6, learn: false }).ranked.map((r) => r.term);
+  return { page: info, ranked: res.ranked, topic };
 }
 
 // ---- Previews: core/preview.js ----
@@ -1499,7 +1518,9 @@ app.commandLine.appendSwitch("disable-features", "PreloadMediaEngagementData");
 app.whenReady().then(() => {
   protocol.handle("scoutlib", (request) => {
     try {
-      const id = new URL(request.url).hostname;
+      // scoutlib://item/<id> (older pages used scoutlib://<id>/file).
+      const u = new URL(request.url);
+      const id = u.hostname === "item" ? u.pathname.replace(/^\/+/, "") : u.hostname;
       const item = readIndex().find((row) => row.id === id);
       if (!item || !fs.existsSync(item.file)) return new Response("missing", { status: 404 });
       return net.fetch(require("url").pathToFileURL(item.file).toString());
@@ -1631,7 +1652,7 @@ ipcMain.handle("ai:ask", async (_e, id, question, history) => {
   if (!Chat.canChat(ai)) return { ok: false, error: "Set up a model first under Settings → AI: a local model (Ollama or LM Studio) or a Grok API key." };
   let page;
   try {
-    page = await tab.view.webContents.executeJavaScript(readableTextScript(Chat.PAGE_CHARS), true);
+    page = await runInPage(tab.view.webContents, readableTextScript(Chat.PAGE_CHARS), true);
   } catch (err) {
     return { ok: false, error: "Could not read the page: " + String(err.message || err) };
   }
@@ -1989,7 +2010,8 @@ ipcMain.handle("library:root", () => libraryRoot());
 ipcMain.handle("library:list", () =>
   readIndex().map((item) => ({
     ...item,
-    mediaUrl: `scoutlib://${item.id}/file`,
+    // The id goes in the path: a numeric host would be read as an IP address.
+    mediaUrl: `scoutlib://item/${item.id}`,
     kind: /\.(mp4|webm|ogv|mov|m4v)$/i.test(item.name)
       ? "video"
       : /\.(mp3|m4a|wav|ogg)$/i.test(item.name)
@@ -2036,7 +2058,7 @@ ipcMain.handle("library:grab", async (_e, id, explicitUrl) => {
   if (!tab) throw new Error("No tab");
   const found = explicitUrl
     ? { url: explicitUrl, kind: "file" }
-    : await tab.view.webContents.executeJavaScript(`(() => {
+    : await runInPage(tab.view.webContents, `(() => {
         const abs = (u) => { try { return new URL(u, location.href).href; } catch (e) { return ""; } };
         const videos = [...document.querySelectorAll("video")];
         const v = videos.find((el) => el.currentSrc || el.src);

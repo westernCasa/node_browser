@@ -3,6 +3,8 @@
 //
 // page (from extractPage) -> rankTerms() -> ranked terms -> buildQueries() -> queries
 
+const { rarityWeight } = require("./frequency");
+
 const STOP = new Set(
   `a about above after again against all almost also am an and any are aren't around as at be because been
   before being below between both but by can can't cannot could couldn't did didn't do does doesn't doing don't
@@ -49,6 +51,11 @@ const COMMON = new Set(
   matter matters recommend recommends feed feeds goes keep keeps needs makes making whether below above`.split(/\s+/)
 );
 
+// Shop and checkout words: rarely what a page is about.
+const SHOP = new Set(
+  `cart basket checkout shipping delivery returns refund refunds wishlist coupon coupons discount sale price prices stock warranty order orders subtotal tax taxes`.split(/\s+/)
+);
+
 const TOKEN_RE = /[\p{L}\p{N}][\p{L}\p{N}'’+#.-]*/gu;
 
 function clean(s) {
@@ -86,7 +93,7 @@ function siteStopwords(page) {
     const host = new URL(page?.url || "").hostname.replace(/^www\./, "");
     for (const part of host.split(".")) if (part.length > 2) set.add(part.toLowerCase());
   } catch (_) {}
-  const titleParts = clean(page?.title).split(/\s[|–—-]\s/);
+  const titleParts = clean(page?.title).split(/\s[|–—:-]\s/);
   if (titleParts.length > 1) {
     // "Topic - Site Name": the last segment is usually the site name.
     for (const t of tokens(titleParts.at(-1), new Set())) set.add(t);
@@ -96,13 +103,13 @@ function siteStopwords(page) {
 
 // Strip the site-name suffix from a page title.
 function coreTitle(title) {
-  const parts = clean(title).split(/\s[|–—-]\s/);
+  const parts = clean(title).split(/\s[|–—:-]\s/);
   return parts.length > 1 ? parts.slice(0, -1).join(" - ") : clean(title);
 }
 
 // Multi-word proper names ("Marie Curie", "Large Hadron Collider") from original-case text.
 const NAME_RE = /\b[\p{Lu}][\p{Ll}\p{Lu}'’.-]+(?:\s+(?:of|de|del|da|van|von|the|la|le)?\s*[\p{Lu}][\p{Ll}\p{Lu}'’.-]+){1,3}\b/gu;
-const NAME_SKIP = /^(The|A|An|And|For|With|From|This|That|You|Your|Home|Page|Video|Image|Photo|Main|Sign|Log|Read|Click)\s/;
+const NAME_SKIP = /^(The|A|An|And|For|With|From|This|That|You|Your|Home|Page|Video|Image|Photo|Main|Sign|Log|Read|Click|Is|Are|Was|Were|Why|How|What|When|Where|Who|Did|Does|Do|Can|Will|Should)\s/;
 
 const CONNECTOR = /\s+(?:of|de|del|da|van|von|the|and|la|le)\s+/i;
 
@@ -162,24 +169,167 @@ const FIELD_WEIGHT = {
   media: 0.6,
 };
 
+// Interface text: prompts, buttons and calls to action ("Try searching to get
+// started", "Continue with Google", "Join the conversation"). Short blocks that
+// start like this are about using the site, not about the page's topic.
+const UI_START = /^(try|start(ed)?|get( started)?|continue|join|sign|log ?in|log ?out|watch|subscribe|follow|download|install|click|tap|discover|explore|learn more|shop|buy|add to|create|upload|share|enable|accept|allow|manage|choose|select|search|browse|view all|see (all|more)|read more|show (more|less)|load more|open|go to|skip|reply|award|report|save|vote|upvote|sort|filter|close|cancel|agree|reject|play|pause|send|post|upgrade|register|apply now|contact us|chat with|need help|book now|order now|get the app)\b/i;
+const UI_SENTENCE = /^(free (shipping|delivery|returns)|in stock|out of stock|only \d+ left|you('|’)re|your (account|feed|cart|library|subscriptions|history)|we use cookies|by (continuing|signing|clicking)|already have an account|don('|’)t have an account|no results|nothing (here|to see)|something went wrong|loading|this (site|page) uses)/i;
+
+function isInterfaceText(s, maxWords = 12) {
+  const t = clean(s);
+  if (!t) return true;
+  if (t.split(" ").length > maxWords) return false;
+  return UI_START.test(t) || UI_SENTENCE.test(t);
+}
+
+const blockKey = (s) => clean(s).toLowerCase().slice(0, 160);
+
+function hostOf(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "").toLowerCase();
+  } catch (_) {
+    return "";
+  }
+}
+
+// What NODE learns while you browse, for better keywords:
+// - furniture: text blocks that repeat on different pages of the same site
+//   (sidebars, sign-up boxes, site descriptions) are left out on that site;
+// - topic: words that are among the top keywords on pages from different sites
+//   are your running topic; they rank higher, and thin pages fall back to them.
+class KeywordContext {
+  constructor({ pagesPerHost = 30, topicPages = 40 } = {}) {
+    this.pagesPerHost = pagesPerHost;
+    this.topicPages = topicPages;
+    this.hosts = new Map(); // host -> Map(url -> Set(blockKey))
+    this.pages = new Map(); // url -> { host, terms: string[] }, newest last
+  }
+
+  furniture(host, url) {
+    const seen = new Set();
+    for (const [u, keys] of this.hosts.get(host) || []) if (u !== url) for (const k of keys) seen.add(k);
+    return seen;
+  }
+
+  rememberBlocks(host, url, keys) {
+    if (!host) return;
+    if (!this.hosts.has(host)) this.hosts.set(host, new Map());
+    const m = this.hosts.get(host);
+    m.delete(url);
+    m.set(url, new Set(keys));
+    while (m.size > this.pagesPerHost) m.delete(m.keys().next().value);
+  }
+
+  rememberTopic(host, url, terms) {
+    this.pages.delete(url);
+    this.pages.set(url, { host, terms: terms.map((t) => t.toLowerCase()) });
+    while (this.pages.size > this.topicPages) this.pages.delete(this.pages.keys().next().value);
+  }
+
+  // Distinct sites whose pages had this word among their top keywords.
+  sitesFor(term) {
+    const t = String(term).toLowerCase();
+    const hosts = new Set();
+    for (const p of this.pages.values()) if (p.terms.includes(t)) hosts.add(p.host);
+    return hosts.size;
+  }
+
+  boost(term) {
+    const n = this.sitesFor(term);
+    return n >= 2 ? Math.min(2, 1 + 0.35 * (n - 1)) : 1;
+  }
+
+  // The running topic: words on pages from 2 or more sites first, then words
+  // on 2 or more pages. Empty until there is something recurring.
+  topic(limit = 8, banned = []) {
+    const skip = new Set(banned.map((b) => String(b).toLowerCase()));
+    const count = new Map();
+    const sites = new Map();
+    for (const p of this.pages.values()) {
+      for (const t of p.terms) {
+        count.set(t, (count.get(t) || 0) + 1);
+        if (!sites.has(t)) sites.set(t, new Set());
+        sites.get(t).add(p.host);
+      }
+    }
+    return [...count.entries()]
+      .filter(([t, n]) => n >= 2 && !skip.has(t))
+      .map(([t, n]) => ({ term: t, score: sites.get(t).size * 10 + n, kind: "topic", from: "topic" }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit);
+  }
+}
+
+// Fewer real words than this (after interface text and site furniture are left
+// out) and the page is "thin": a home screen, feed, search box or sign-in wall.
+const THIN_WORDS = 20;
+
+// Bot checks and access blocks (Cloudflare, DataDome, Akamai and similar).
+const BLOCKED = /^(just a moment|attention required|access (is )?(temporarily )?(restricted|denied)|access to this page has been denied|are you a robot|verify you are human|checking (if the site connection is secure|your browser)|please verify you are a human|pardon our interruption|request blocked|you have been blocked|sorry, you have been blocked|too many requests|unusual traffic)/i;
+
+function isBlockedPage(page) {
+  const lines = [page?.title, ...(page?.headings || []), ...(page?.blocks || []).slice(0, 6)].map(clean);
+  return lines.some((l) => l && BLOCKED.test(l)) || /captcha-delivery\.com|challenges\.cloudflare\.com/.test(String(page?.text || ""));
+}
+
 /**
  * Rank keywords for a page.
  * @param {object} page  output of extractPage()
- * @param {object} opts  { df: SessionDF, banned: string[], limit }
- * @returns {{term:string, score:number, kind:"term"|"phrase", from:string}[]}
+ * @param {object} opts  { context: KeywordContext, banned: string[], limit, df (older SessionDF) }
+ * @returns {{ranked: {term, score, kind, from}[], thin: boolean, words: number}}
  */
-function rankTerms(page, opts = {}) {
+function analyzePage(page, opts = {}) {
   const banned = new Set((opts.banned || []).map((b) => b.toLowerCase()));
   const extraStop = siteStopwords(page);
+  const ctx = opts.context || null;
+  const url = page?.url || "";
+  const host = hostOf(url);
+  const furniture = ctx ? ctx.furniture(host, url) : new Set();
+
+  // Body text: keep blocks that are neither interface text nor site furniture.
+  const allBlocks = Array.isArray(page?.blocks) ? page.blocks.map(clean).filter(Boolean) : null;
+  const kept = allBlocks ? allBlocks.filter((b) => !furniture.has(blockKey(b)) && !isInterfaceText(b)) : null;
+  const headings = (page?.headings || []).map(clean).filter((h) => h && !furniture.has(blockKey(h)) && !isInterfaceText(h, 4));
+  const desc = clean(page?.description);
+  const description = desc && !furniture.has("desc:" + blockKey(desc)) ? desc : "";
+  const bodyText = kept ? kept.join(" . ") : clean(page?.text);
+
   const fields = {
     selection: clean(page?.selection),
     focus: clean(page?.focus),
     title: coreTitle(page?.title),
-    headings: (page?.headings || []).join(" . "),
-    description: clean(page?.description),
+    headings: headings.join(" . "),
+    description,
     names: (page?.names || []).join(" . "),
-    text: clean(page?.text),
+    text: bodyText,
     media: [...(page?.mediaMeta || []), ...(page?.mediaLinks || [])].join(" . "),
+  };
+
+  const words = tokens(`${fields.text} ${fields.headings} ${fields.focus}`, extraStop).length;
+  const blocked = isBlockedPage(page);
+  // A page with a real title of its own (a video, an image, a short post) is
+  // not thin even with little text; "YouTube" or "Home" alone is.
+  const titleWords = tokens(fields.title, extraStop).length;
+  const thin = blocked || (!fields.selection && !fields.focus && words < THIN_WORDS && titleWords < 2);
+
+  // Words written with a capital letter in mid-sentence are names ("Apple",
+  // "Fire" in "Light No Fire"), so being a common English word costs less.
+  const caps = new Map();
+  for (const text of [bodyText, fields.headings, fields.selection]) {
+    for (const m of String(text).matchAll(TOKEN_RE)) {
+      const t = normToken(m[0]);
+      const before = String(text).slice(Math.max(0, m.index - 2), m.index);
+      const sentenceStart = m.index === 0 || /[.!?:]\s*$|^\s*$/.test(before);
+      if (sentenceStart) continue;
+      const c = caps.get(t) || [0, 0];
+      c[1]++;
+      if (/^\p{Lu}/u.test(m[0])) c[0]++;
+      caps.set(t, c);
+    }
+  }
+  const nameLike = (t) => {
+    const c = caps.get(t);
+    return Boolean(c && c[0] >= 1 && c[0] / c[1] >= 0.6);
   };
 
   // 1. Single-word scores, weighted by where the word appears.
@@ -203,14 +353,22 @@ function rankTerms(page, opts = {}) {
       tf.delete(t);
     }
   }
-  if (opts.df) opts.df.add(page?.url || "", [...tf.keys()]);
+  if (opts.df) opts.df.add(url, [...tf.keys()]);
+
+  const weightOf = (t) => {
+    let r = rarityWeight(t);
+    if (nameLike(t)) r = Math.max(r, 0.9);
+    if (COMMON.has(t)) r = Math.min(r, 0.5);
+    if (SHOP.has(t)) r = Math.min(r, 0.2);
+    return r;
+  };
 
   const scored = new Map();
   for (const [t, s] of tf) {
-    let score = s * (opts.df ? opts.df.idf(t) : 1);
-    if (COMMON.has(t)) score *= 0.35;
-    if (t.length >= 7) score *= 1.15;
     if (banned.has(t)) continue;
+    let score = s * weightOf(t) * (opts.df ? opts.df.idf(t) : 1);
+    if (t.length >= 7) score *= 1.1;
+    if (ctx) score *= ctx.boost(t);
     scored.set(t, { term: t, score, kind: "term", from: from.get(t) });
   }
 
@@ -219,6 +377,7 @@ function rankTerms(page, opts = {}) {
   const phraseCase = new Map();
   const addPhrases = (text, w) => {
     for (const p of phrasesFrom(text)) {
+      if (isInterfaceText(p, 6)) continue;
       const key = p.toLowerCase();
       phraseCount.set(key, (phraseCount.get(key) || 0) + w);
       if (!phraseCase.has(key)) phraseCase.set(key, p);
@@ -229,10 +388,10 @@ function rankTerms(page, opts = {}) {
   addPhrases(page?.title, 4);
   addPhrases(fields.headings, 3);
   addPhrases(fields.names, 2);
-  addPhrases(page?.text, 1);
+  addPhrases(bodyText, 1);
   for (const n of page?.names || []) {
     const key = clean(n).toLowerCase();
-    if (key.includes(" ")) {
+    if (key.includes(" ") && !isInterfaceText(n, 6)) {
       phraseCount.set(key, (phraseCount.get(key) || 0) + 2);
       if (!phraseCase.has(key)) phraseCase.set(key, clean(n));
     }
@@ -243,7 +402,10 @@ function rankTerms(page, opts = {}) {
     const parts = tokens(key, extraStop);
     if (parts.length < 2) continue;
     const memberScores = parts.map((p) => scored.get(p)?.score || 0);
-    const score = weight + Math.max(...memberScores) * 0.9;
+    let score = weight + Math.max(...memberScores) * 0.9;
+    // A "name" made only of everyday words ("Get The App") is usually interface.
+    if (Math.max(...parts.map((p) => rarityWeight(p))) < 0.5) score *= 0.4;
+    if (ctx) score *= ctx.boost(key);
     scored.set(key, { term: phraseCase.get(key), score, kind: "phrase", from: "names" });
     for (const p of parts) {
       const s = scored.get(p);
@@ -252,17 +414,30 @@ function rankTerms(page, opts = {}) {
   }
 
   const limit = opts.limit || 12;
-  const ranked = [...scored.values()].sort((a, b) => b.score - a.score);
+  const ordered = [...scored.values()].sort((a, b) => b.score - a.score);
   // Drop single words already covered by a higher-ranked phrase ("marie" under "Marie Curie").
   const covered = new Set();
-  const out = [];
-  for (const r of ranked) {
+  const ranked = [];
+  for (const r of ordered) {
     if (r.kind === "term" && covered.has(r.term)) continue;
     if (r.kind === "phrase") for (const p of tokens(r.term, new Set())) covered.add(p);
-    out.push(r);
-    if (out.length >= limit) break;
+    ranked.push(r);
+    if (ranked.length >= limit) break;
   }
-  return out;
+
+  if (ctx && opts.learn !== false) {
+    const keys = (allBlocks || []).map(blockKey);
+    for (const h of page?.headings || []) keys.push(blockKey(h));
+    if (desc) keys.push("desc:" + blockKey(desc));
+    ctx.rememberBlocks(host, url, keys);
+    if (!thin) ctx.rememberTopic(host, url, ranked.slice(0, 8).map((r) => r.term));
+  }
+  return { ranked: blocked ? [] : ranked, thin, blocked, words };
+}
+
+// Older entry point: just the ranked list.
+function rankTerms(page, opts = {}) {
+  return analyzePage(page, opts).ranked;
 }
 
 /**
@@ -322,4 +497,4 @@ function overlap(a, b) {
   return inter / Math.max(A.size, B.size);
 }
 
-module.exports = { rankTerms, buildQueries, overlap, coreTitle, SessionDF, tokens, phrasesFrom };
+module.exports = { rankTerms, analyzePage, isBlockedPage, KeywordContext, isInterfaceText, buildQueries, overlap, coreTitle, SessionDF, tokens, phrasesFrom };

@@ -6,11 +6,11 @@
 // The platform supplies:
 //   extract(tab)          -> Promise<page>   (runs core/page-scripts extractionScript in the page)
 //   suggestFor(payload)   -> Promise<result> (core/suggest.js)
-//   rankTerms, SessionDF  (core/keywords.js)
+//   analyzePage, KeywordContext  (core/keywords.js)
 //   research              (core/research.js ResearchStore, optional)
 //   onChange(state)       called after every state change
 
-const { rankTerms, SessionDF, overlap } = require("./keywords");
+const { analyzePage, KeywordContext, overlap } = require("./keywords");
 
 const RECRAWL_GAP_MS = 20000; // minimum time between automatic searches (B11)
 const SELECTION_GAP_MS = 3000;
@@ -23,7 +23,7 @@ class SuggestController {
     this.research = research;
     this.onChange = onChange;
     this.now = now;
-    this.df = new SessionDF();
+    this.context = new KeywordContext();
     this.state = {
       pinned: research ? [...(research.current.pins || [])] : [],
       banned: [],
@@ -132,7 +132,17 @@ class SuggestController {
       return;
     }
     if (!page || page.error) return;
-    const ranked = rankTerms(page, { df: this.df, banned: this.state.banned, limit: 12 });
+    const res = analyzePage(page, { context: this.context, banned: this.state.banned, limit: 12 });
+    // Thin pages (home screens, feeds, bot checks) use the running topic.
+    const ranked = res.thin ? (res.blocked ? [] : this.context.topic(8, this.state.banned)) : res.ranked;
+    if (res.thin && !ranked.length) {
+      if (this.last.url !== tab.url) {
+        this.last = { at: this.now(), url: tab.url, terms: [], selection: "" };
+        this.set({ auto: [], results: [], status: res.blocked ? "This page is a bot check or an access block." : "Not much to read on this page yet." });
+        if (this.state.pinned.length) return this.crawl();
+      }
+      return;
+    }
     const terms = ranked.map((r) => r.term).slice(0, 6);
     const selection = page.selection || selectionText || "";
     const now = this.now();
@@ -147,7 +157,7 @@ class SuggestController {
     }
     this.last = { at: now, url: tab.url, terms, selection };
     this.set({ auto: ranked, disabled: false });
-    if (this.research) this.research.visit(tab.url, tab.title, terms.slice(0, 5));
+    if (this.research && !res.thin) this.research.visit(tab.url, tab.title, terms.slice(0, 5));
     return this.crawl();
   }
 
