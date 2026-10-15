@@ -17,7 +17,21 @@ permissions:
   contents: write
 
 jobs:
+  # Create the release once, before the three builds upload to it, so they
+  # never race to create duplicate releases.
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
+            gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --title "NODE ${GITHUB_REF_NAME#v}" \
+              --notes "Installers for this version are being built. They appear here in about 20 minutes."
+
   build:
+    needs: release
     strategy:
       fail-fast: false
       matrix:
@@ -31,7 +45,9 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run test:unit
+      - name: Unit tests
+        if: runner.os == 'Linux'
+        run: npm run test:unit
       - name: Build and publish
         shell: bash
         env:
@@ -45,6 +61,13 @@ jobs:
           WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
         run: |
           # No certificate: build unsigned instead of failing.
-          if [ -z "$CSC_LINK" ]; then export CSC_IDENTITY_AUTO_DISCOVERY=false; unset CSC_LINK CSC_KEY_PASSWORD; fi
+          EXTRA=""
+          if [ -z "$CSC_LINK" ]; then
+            export CSC_IDENTITY_AUTO_DISCOVERY=false; unset CSC_LINK CSC_KEY_PASSWORD
+            # Without a certificate the Mac app is ad-hoc signed: unsigned apps
+            # on Apple chips report "damaged"; ad-hoc ones get the normal
+            # "Open Anyway" prompt in Privacy & Security.
+            if [ "$RUNNER_OS" = "macOS" ]; then EXTRA="-c.mac.identity=-"; fi
+          fi
           if [ -z "$WIN_CSC_LINK" ]; then unset WIN_CSC_LINK WIN_CSC_KEY_PASSWORD; fi
-          npx electron-builder --publish always
+          npx electron-builder --publish always $EXTRA
