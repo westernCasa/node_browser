@@ -57,3 +57,10 @@ macOS builds use the hardened runtime with the entitlements in `build/entitlemen
 ## Building locally
 
 `npm run dist:mac`, `npm run dist:win` or `npx electron-builder --linux` build installers into `dist/` without publishing. `npm run release` builds and publishes from your machine (needs `GH_TOKEN`).
+
+## Notes from the first release (v0.9.0, 2026-10-15)
+
+- Release notes for testers go in `docs/release-notes/v<version>.md` before tagging. The workflow's first job creates the release with them; the three builds then upload their files to it.
+- Without an Apple certificate, the Mac app is ad-hoc signed. Testers open it once with System Settings → Privacy & Security → Open Anyway, and update by downloading the new version by hand.
+- The tag is pushed from your own computer (`git tag v<version> && git push origin v<version>`). Claude's cloud session can push branches but not tags.
+- Never delete or reuse a tag. If a build fails, fix it, bump the patch version in package.json, and tag again.
