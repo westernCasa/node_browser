@@ -22,13 +22,16 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - name: Create the GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # Release notes for testers: docs/release-notes/<tag>.md when it exists.
+          NOTES="docs/release-notes/${GITHUB_REF_NAME}.md"
+          if [ -f "$NOTES" ]; then set -- --notes-file "$NOTES"; else set -- --notes "Installers for this version are being built. They appear here in about 20 minutes."; fi
           gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
-            gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --title "NODE ${GITHUB_REF_NAME#v}" \
-              --notes "Installers for this version are being built. They appear here in about 20 minutes."
+            gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --title "NODE ${GITHUB_REF_NAME#v} (beta)" "$@"
 
   build:
     needs: release
