@@ -106,6 +106,32 @@ function clean(list) {
 
 class AIError extends Error {}
 
+// Grok models think before they answer, at "high" effort unless told
+// otherwise, and the thinking counts against max_tokens. For short jobs like
+// query ideas that is slow (often over 12 s) and can leave no room for the
+// answer. So for Grok: ask for "low" effort and leave room for the thinking.
+const GROK_THINKING_ROOM = 2000;
+
+function chatBody(settings, body) {
+  if (settings.provider !== "grok") return body;
+  return { ...body, reasoning_effort: "low", max_tokens: (body.max_tokens || 0) + GROK_THINKING_ROOM };
+}
+
+// POST /chat/completions. A model that does not accept reasoning_effort
+// answers HTTP 400; then send the request once more without it.
+async function postChat(doFetch, e, settings, body, ms) {
+  const headers = { "Content-Type": "application/json" };
+  if (e.key) headers.Authorization = `Bearer ${e.key}`;
+  const send = (b) => doFetch(`${e.base}/chat/completions`, { method: "POST", headers, body: JSON.stringify(b), signal: timeoutSignal(ms) });
+  const full = chatBody(settings, body);
+  const res = await send(full);
+  if (res.status === 400 && full.reasoning_effort) {
+    const { reasoning_effort, ...rest } = full;
+    return send(rest);
+  }
+  return res;
+}
+
 function describeHttpError(status, provider) {
   if (status === 401 || status === 403) return provider === "grok" ? "Grok rejected the API key." : "The local server refused the request.";
   if (status === 404) return provider === "grok" ? "Grok does not know this model name. Use Test to list models." : "Model or address not found. Is the model pulled (for Ollama: ollama pull <model>)?";
@@ -119,14 +145,13 @@ function describeHttpError(status, provider) {
  */
 async function expand(input, settings, { fetch: doFetch = fetch, timeout } = {}) {
   const e = endpoint(settings);
-  const headers = { "Content-Type": "application/json" };
-  if (e.key) headers.Authorization = `Bearer ${e.key}`;
   let res;
   try {
-    res = await doFetch(`${e.base}/chat/completions`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
+    res = await postChat(
+      doFetch,
+      e,
+      settings,
+      {
         model: e.model,
         temperature: 0.4,
         max_tokens: 200,
@@ -135,10 +160,10 @@ async function expand(input, settings, { fetch: doFetch = fetch, timeout } = {})
           { role: "system", content: SYSTEM_PROMPT },
           { role: "user", content: userPrompt(input) },
         ],
-      }),
-      // Local models can be slow to load the first time.
-      signal: timeoutSignal(timeout || (settings.provider === "grok" ? 12000 : 25000)),
-    });
+      },
+      // Local models can be slow to load the first time; Grok thinks first.
+      timeout || (settings.provider === "grok" ? 30000 : 25000)
+    );
   } catch (err) {
     if (err?.name === "TimeoutError") throw new AIError("The AI server took too long to answer.");
     throw new AIError(settings.provider === "grok" ? "Could not reach Grok." : `Could not reach the local model at ${e.base}. Is Ollama or LM Studio running?`);
@@ -172,4 +197,4 @@ async function listModels(settings, { fetch: doFetch = fetch } = {}) {
   return (data?.data || data?.models || []).map((m) => m.id || m.name).filter(Boolean);
 }
 
-module.exports = { AI_DEFAULTS, GROK_URL, expand, listModels, ready, parseQueries, userPrompt, endpoint, AIError };
+module.exports = { AI_DEFAULTS, GROK_URL, chatBody, postChat, expand, listModels, ready, parseQueries, userPrompt, endpoint, AIError };

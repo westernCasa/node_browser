@@ -5,8 +5,7 @@
 // characters), its title and its address to the model, and only when the
 // user asks a question. The UI says so next to the question box.
 
-const { endpoint, AIError } = require("./ai");
-const { timeoutSignal } = require("./compat");
+const { endpoint, postChat, AIError } = require("./ai");
 
 const PAGE_CHARS = 20000;
 
@@ -44,16 +43,9 @@ function pageMessage(page) {
 async function complete(messages, settings, { fetch: doFetch = fetch, timeout, maxTokens = 700, temperature = 0.3 } = {}) {
   if (!canChat(settings)) throw new AIError("Set up a model first: Settings → AI (a local model or a Grok key).");
   const e = endpoint(settings);
-  const headers = { "Content-Type": "application/json" };
-  if (e.key) headers.Authorization = `Bearer ${e.key}`;
   let res;
   try {
-    res = await doFetch(`${e.base}/chat/completions`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ model: e.model, temperature, max_tokens: maxTokens, stream: false, messages }),
-      signal: timeoutSignal(timeout || (settings.provider === "grok" ? 60000 : 120000)),
-    });
+    res = await postChat(doFetch, e, settings, { model: e.model, temperature, max_tokens: maxTokens, stream: false, messages }, timeout || (settings.provider === "grok" ? 60000 : 120000));
   } catch (err) {
     if (err?.name === "TimeoutError") throw new AIError("The AI server took too long to answer.");
     throw new AIError(settings.provider === "grok" ? "Could not reach Grok." : `Could not reach the local model at ${e.base}. Is Ollama or LM Studio running?`);
@@ -79,8 +71,6 @@ async function complete(messages, settings, { fetch: doFetch = fetch, timeout, m
 async function askPage({ question, page, history = [] }, settings, { fetch: doFetch = fetch, timeout } = {}) {
   if (!canChat(settings)) throw new AIError("Set up a model first: Settings → AI (a local model or a Grok key).");
   const e = endpoint(settings);
-  const headers = { "Content-Type": "application/json" };
-  if (e.key) headers.Authorization = `Bearer ${e.key}`;
   const messages = [
     { role: "system", content: SYSTEM },
     { role: "user", content: pageMessage(page) },
@@ -90,12 +80,7 @@ async function askPage({ question, page, history = [] }, settings, { fetch: doFe
   ];
   let res;
   try {
-    res = await doFetch(`${e.base}/chat/completions`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ model: e.model, temperature: 0.3, max_tokens: 700, stream: false, messages }),
-      signal: timeoutSignal(timeout || (settings.provider === "grok" ? 45000 : 90000)),
-    });
+    res = await postChat(doFetch, e, settings, { model: e.model, temperature: 0.3, max_tokens: 700, stream: false, messages }, timeout || (settings.provider === "grok" ? 45000 : 90000));
   } catch (err) {
     if (err?.name === "TimeoutError") throw new AIError("The AI server took too long to answer.");
     throw new AIError(settings.provider === "grok" ? "Could not reach Grok." : `Could not reach the local model at ${e.base}. Is Ollama or LM Studio running?`);
