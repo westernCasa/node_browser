@@ -1,0 +1,38 @@
+diff --git a/chrome/app/theme/chromium/BRANDING b/chrome/app/theme/chromium/BRANDING
+index f8363d5..a34d227 100644
+--- a/chrome/app/theme/chromium/BRANDING
++++ b/chrome/app/theme/chromium/BRANDING
+@@ -1,10 +1,10 @@
+-COMPANY_FULLNAME=The Chromium Authors
+-COMPANY_SHORTNAME=The Chromium Authors
+-PRODUCT_FULLNAME=Chromium
+-PRODUCT_SHORTNAME=Chromium
+-PRODUCT_INSTALLER_FULLNAME=Chromium Installer
+-PRODUCT_INSTALLER_SHORTNAME=Chromium Installer
+-COPYRIGHT=Copyright @LASTCHANGE_YEAR@ The Chromium Authors. All rights reserved.
+-MAC_BUNDLE_ID=org.chromium.Chromium
++COMPANY_FULLNAME=Sven Manzanarez
++COMPANY_SHORTNAME=Sven Manzanarez
++PRODUCT_FULLNAME=NODE Chromium
++PRODUCT_SHORTNAME=NODE Chromium
++PRODUCT_INSTALLER_FULLNAME=NODE Chromium Installer
++PRODUCT_INSTALLER_SHORTNAME=NODE Chromium Installer
++COPYRIGHT=Copyright @LASTCHANGE_YEAR@ Sven Manzanarez and The Chromium Authors. All rights reserved.
++MAC_BUNDLE_ID=app.node.chromium
+ MAC_CREATOR_CODE=Cr24
+ MAC_TEAM_ID=
+diff --git a/chrome/common/chrome_paths_mac.mm b/chrome/common/chrome_paths_mac.mm
+index 6829c9c..d2baaee 100644
+--- a/chrome/common/chrome_paths_mac.mm
++++ b/chrome/common/chrome_paths_mac.mm
+@@ -37,7 +37,9 @@ char* ProductDirNameForBundle(NSBundle* chrome_bundle) {
+ #elif BUILDFLAG(GOOGLE_CHROME_BRANDING)
+       product_dir_name = "Google/Chrome";
+ #else
+-      product_dir_name = "Chromium";
++      // NODE: its own profile folder, separate from Chromium and from the
++      // Electron NODE app (~/Library/Application Support/NODE).
++      product_dir_name = "NODE Chromium";
+ #endif
+     }
+ 

@@ -1,6 +1,6 @@
 # NODE Browser: Roadmap and Backlog
 
-Last updated: 2026-10-18 (an hour of browsing on the Mac passed the Phase 2 gate; MCP test items B66-B68). The editable version (with status dropdowns) is in the review doc: https://claude.ai/code/artifact/b6ec4995-3117-41d0-a3c4-948c16e699fc
+Last updated: 2026-10-18 (an hour of browsing on the Mac passed the Phase 2 gate; MCP test items B66-B68; Chromium build started, N01-N07). The editable version (with status dropdowns) is in the review doc: https://claude.ai/code/artifact/b6ec4995-3117-41d0-a3c4-948c16e699fc
 
 ## Roadmap
 
@@ -13,6 +13,7 @@ Each phase ends at a gate that must pass before the next phase starts. No dates 
 | 2. Network layer | Cached, rate-limited search through swappable sources | B12-B15 | An hour of browsing with no search blocks; repeat pages load previews from cache | Done. Gate passed 2026-10-18 (an hour of browsing on the Mac, no problems) |
 | 3. Behaviour shell | Per-site rules, research session, WebContentsView, history and find, AI query ideas | B16-B20, B25 | A new site behaviour can be added by editing a rules file, without code changes | Done. Gate passed in testing (rules edited live) |
 | 4. Desktop release readiness | Installable, stable and easy to set up on macOS and Windows | B26-B50 | NODE is your daily research browser for a week with no blocking bugs | Next |
+| 4C. Chromium build (alongside 4) | NODE on ungoogled-chromium so Google sign-in works; Electron stays the release build until parity. See `13-chromium-build.md` | N01-N07 | N01-N06 done, Google sign-in works, daily browser for a week with no blocking bugs | Started 2026-10-18: N01 code done, first Mac build next |
 | 5. Mobile app | React Native (Expo) app reusing `core/`; see `06-mobile-plan.md` | M01-M15 | To be set when Phase 5 starts | Planning and groundwork done; build waits for the Phase 4 gate. M01-M02 (try it on a phone) can run now |
 
 ## Backlog
@@ -71,7 +72,7 @@ Effort: XS under 1 hour, S half a day, M 1-2 days, L 3+ days. Finding IDs (C1, K
 | B48 | 4 | Chrome Web Store extensions | P2 | L | Not started |
 | B49 | 4 | AI chat across tabs and cited summaries of a research session | P2 | M | Not started |
 | B50 | 4 | Sync across devices | P3 | L | Not started |
-| B51 | 5+ | Decide whether to move NODE from Electron to a Chromium-based browser build (as Brave, Vivaldi and Arc do), which Google sign-in accepts; large effort. See `08-engine-decision.md` | P1 | L | Decided 2026-10-14: stay on Electron and finish this build; extension dropped (see 08) |
+| B51 | 5+ | Decide whether to move NODE from Electron to a Chromium-based browser build (as Brave, Vivaldi and Arc do), which Google sign-in accepts; large effort. See `08-engine-decision.md` | P1 | L | Decided 2026-10-18: build on ungoogled-chromium (option B); Electron stays the release build until parity. Steps N01-N07 in `13-chromium-build.md` (2026-10-14 decision to stay on Electron replaced) |
 | B53 | 4.5 | Agent view: a page's main content as Markdown (`core/markdown.js`), for agents and later for mobile and exports | P1 | S | Done |
 | B54 | 4.5 | Read-only MCP server for AI agents: search, logged-out page reader, shared tabs, research sessions as resources; token, localhost only, hard blocks, rate limits, activity log, stop switch | P1 | M | Done |
 | B55 | 4.5 | Trail: recurring keywords use each page's own topic words (the session weighting hid them) | P1 | S | Done |
@@ -100,6 +101,10 @@ Effort: XS under 1 hour, S half a day, M 1-2 days, L 3+ days. Finding IDs (C1, K
 - Turn on AI query ideas with Ollama or Grok, press Test, and check the "(AI)" queries give useful results.
 
 These checks are backlog item B26.
+
+## Chromium build backlog
+
+N01-N07 are listed in `13-chromium-build.md`. N01 (base, branding, built-in panel, build scripts) is written; the first full build runs on the Mac.
 
 ## Mobile backlog
 

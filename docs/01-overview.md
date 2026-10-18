@@ -14,6 +14,7 @@ The long-term goal is a "shell for behaviours": the browser's actions (what to r
 | --- | --- |
 | Electron desktop build | Working. Phases 0 to 3 of the roadmap are done. Next: Phase 4, desktop release readiness. |
 | Mobile app (React Native, Expo) | Planned (`06-mobile-plan.md`). Groundwork done: shared `core/` and a walking-skeleton app in `mobile/` that compiles for iOS and Android. Not yet run on a phone (M01). Full build waits for the Phase 4 gate. |
+| Chromium build | Started 2026-10-18 (`13-chromium-build.md`, code in `browser/`): ungoogled-chromium 152 with NODE's patches and built-in panel. Patches and panel checked; first Mac build next. Electron stays the release build until parity. |
 | Old Tauri build | Does not compile. Replaced by the React Native plan; to be removed (M15). |
 | Backlog | Desktop: 45 items, 35 done, open B26-B31 (Phase 4). B21-B24 (Tauri) replaced. Mobile: M01-M15 in `06-mobile-plan.md`. |
 | Testing | 13 end-to-end test scripts (130 checks) in `test/e2e`, run in Electron 44.7.0 with search sources and AI servers stubbed. Live results still need a check on a real machine (B26). |
@@ -29,6 +30,7 @@ The long-term goal is a "shell for behaviours": the browser's actions (what to r
 | Original review findings and what happened to each | `scout/04-review-findings.md` |
 | Change log and testing notes | `scout/05-changelog.md` |
 | Mobile plan, framework decision, mobile backlog | `scout/06-mobile-plan.md` |
+| Chromium build plan and steps | `scout/13-chromium-build.md` |
 
 ## Repository layout
 
@@ -38,6 +40,7 @@ The long-term goal is a "shell for behaviours": the browser's actions (what to r
 | `main.js`, `preload.js`, `view-preload.js`, `fs-storage.js` | Desktop app main process (Electron) |
 | `renderer/` | Desktop toolbar, sidebar and Library UI |
 | `mobile/` | Mobile app (React Native, Expo) walking skeleton |
+| `browser/` | Chromium build: pinned base, patches, built-in extension, macOS build scripts |
 | `test/` | Unit demos (`*-demo.js`) and desktop end-to-end tests (`e2e/`) |
 | `docs/` | These documents (also in the NODE Browser project) |
 | `src-tauri/`, `renderer/tauri-bridge.js` | Old Tauri build; does not compile; to be removed (M15) |
@@ -115,6 +118,7 @@ Desktop: two-finger swipe for back and forward (with an arrow at the page edge),
 
 | Date | Decision |
 | --- | --- |
+| 2026-10-18 | Start the Chromium build on ungoogled-chromium (BSD), not BrowserOS (AGPL). Electron stays the release build until the Chromium build reaches parity (`13-chromium-build.md`). Replaces the 2026-10-14 decision to stay on Electron only. |
 | 2026-10-10 | AI query ideas use a local model or Grok (xAI). |
 | 2026-10-10 | Mobile (Tauri) is on hold until the desktop app passes Phase 4 (daily use for a week with no blocking bugs). |
 | 2026-10-10 | While desktop testing waits: plan the mobile app and lay groundwork now; the full mobile build still waits for the Phase 4 gate. |

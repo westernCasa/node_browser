@@ -41,3 +41,32 @@ jobs:
         with:
           name: e2e-screenshots
           path: e2e-out/**/*.png
+
+  # NODE Chromium build (browser/): the patches still apply to the pinned
+  # Chromium version, and the built-in extension works in that Chromium.
+  # The full browser is built on a Mac (browser/build.sh), not here.
+  chromium-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Patches apply
+        run: npm run check:browser-patches
+      - name: Build the built-in extension
+        run: npm run build:browser-extension
+      - name: Extension in Chromium of the same version
+        run: |
+          source browser/base.env
+          curl -sSLf -o /tmp/ugc.tar.xz "https://github.com/ungoogled-software/ungoogled-chromium-portablelinux/releases/download/${UNGOOGLED_MACOS_TAG%.*}/ungoogled-chromium-${UNGOOGLED_MACOS_TAG%.*}-x86_64_linux.tar.xz"
+          mkdir -p /tmp/ugc && tar xf /tmp/ugc.tar.xz -C /tmp/ugc --strip-components=1
+          npm install --no-save playwright@1.56.0
+          npx playwright install-deps chromium
+          sudo apt-get install -y xvfb
+          (cd test/e2e/site && python3 -m http.server 8765 >/dev/null 2>&1 &)
+          sleep 1
+          NODE_CHROMIUM=/tmp/ugc/chrome xvfb-run -a node test/e2e/22-chromium-build.js

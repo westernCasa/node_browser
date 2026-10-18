@@ -29,13 +29,17 @@
     "dist:win": "electron-builder --win",
     "test:redteam": "node test/e2e/18-redteam.js",
     "test:unit": "node test/keywords-demo.js && node test/keywords-eval.js && node test/providers-demo.js && node test/rules-demo.js && node test/ai-demo.js && node test/controller-demo.js && node test/playback-demo.js && node test/bookmarks-demo.js && node test/google-demo.js && node test/agents-demo.js && node test/agent-demo.js && node test/talk-demo.js",
-    "release": "electron-builder --publish always"
+    "release": "electron-builder --publish always",
+    "build:browser-extension": "node browser/extension/build.js",
+    "check:browser-patches": "python3 browser/check_patches.py",
+    "test:chromium-build": "node test/e2e/22-chromium-build.js"
   },
   "devDependencies": {
+    "@tauri-apps/api": "^2.8.0",
     "@tauri-apps/cli": "^2.8.0",
     "electron": "^44.7.0",
     "electron-builder": "^26.17.0",
-    "@tauri-apps/api": "^2.8.0"
+    "esbuild": "^0.28.2"
   },
   "dependencies": {
     "@ghostery/adblocker-electron": "2.19",
