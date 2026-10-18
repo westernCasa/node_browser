@@ -16,6 +16,20 @@ Raw material for the portfolio case study. One section per interaction: decision
 2. Click the button while hovering it: the turn-on fade should still be the slower 200ms one (the `.chip.active` rule comes after `.chip:hover`).
 3. Tab to the button with the keyboard: the focus ring appears at once and does not fade.
 
+## 02. Card "read" state
+
+**Decision note.** Once you have opened a suggestion it should step back, so the cards you have not read stand out, but it should still be there to find again. Dimming the card (rather than hiding or moving it) keeps the list stable while you work through it. The badge fades in on the same beat as the dim, so the card says why it changed. It only ever goes one way, because a page you have read stays read for the session.
+
+**Before.** The card switched to 60% at once, and the "read" badge only appeared the next time the list was redrawn.
+
+**After.** The card fades to 60% over 200ms (`--ease-move`); the badge is added at the same moment and fades in over 200ms (`--ease-enter`). Cards that were already read when the list loads show their badge with no animation. Reduced motion: both fades at 120ms.
+
+**Three checks.**
+
+1. Open a suggestion, then let the list refresh (new keywords or Crawl): the read card must not fade again.
+2. Click Open tab on a card that is already read: nothing should replay.
+3. Check the dimmed text still meets contrast for reading (60% white on #0e0e0f), especially the snippet text.
+
 ## 08. Mosaic tab windows
 
 **Decision note.** Mosaic is the moment NODE shows that several pages are live at once, so the switch should explain where each page went instead of cutting. Going into Mosaic, the other tabs are already in their tiles underneath, and the tab you were reading shrinks into its own tile, so your eye follows the page you care about. Going back, that tile grows over the others; they are hidden only after they are covered, so nothing blinks out. Entering takes longer (320ms) than leaving (200ms), because arriving at a new view needs a moment to read and leaving should get out of the way. Tab windows are native views, so they are resized for real on every frame instead of transformed; that is the one place NODE animates size.

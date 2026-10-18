@@ -44,6 +44,18 @@
   @media (prefers-reduced-motion: reduce) { .chip, .chip:hover, .chip.active { transition-duration: var(--motion-fast); } }
   .stage-row { display: flex; gap: 8px; align-items: center; padding: 18px; background: var(--surface-raised); border: 1px solid var(--line); }
 
+  /* 02 Card "read" state */
+  .card { width: 280px; padding: 10px; background: var(--surface-raised); border: 1px solid var(--line); font-size: 13px;
+          transition: border-color var(--motion-fast) var(--ease-move), opacity var(--motion-base) var(--ease-move); }
+  .card .src { font: 11px var(--mono); color: var(--ink-muted); }
+  .card .badge { margin-left: 6px; color: var(--signal); }
+  .card.read { opacity: 0.6; }
+  .card .badge.is-new { animation: node-fade-in var(--motion-base) var(--ease-enter); }
+  @keyframes node-fade-in { from { opacity: 0; } }
+  .reduced .card { transition-duration: var(--motion-fast); }
+  .reduced .card .badge.is-new { animation-duration: var(--motion-fast); }
+  @media (prefers-reduced-motion: reduce) { .card { transition-duration: var(--motion-fast); } .card .badge.is-new { animation-duration: var(--motion-fast); } }
+
   /* 08: a stand-in for NODE's content area. The tab windows are boxes moved and
      resized with left/top/width/height, as Electron resizes the real ones. */
   .stage { position: relative; height: 340px; background: var(--surface-raised); border: 1px solid var(--line); overflow: hidden; }
@@ -68,6 +80,13 @@
     <p>Border and text fade to violet when it turns on (200ms, ease-enter) and back when it turns off (120ms, ease-exit). The word swaps instantly. The colour follows the state NODE confirms, so the demo waits 40ms like the app does.</p>
     <div class="row"><button class="chip" id="m01-replay">Replay</button></div>
     <div class="stage-row"><button class="chip" id="m01-chip">Sound: one</button></div>
+  </section>
+  <section id="m02" aria-labelledby="m02-title">
+    <p class="kicker">02 · Card "read" state</p>
+    <h2 id="m02-title">A suggestion you opened</h2>
+    <p>The card dims to 60% (200ms, ease-move) and a "read" badge fades in (200ms, ease-enter). It only goes one way: a card never turns back to unread.</p>
+    <div class="row"><button class="chip" id="m02-replay">Replay</button></div>
+    <div class="stage-row"><article class="card" id="m02-card"><div class="src">WIKIPEDIA · memex</div><b>Vannevar Bush</b><p>American engineer who described the memex in 1945.</p><button class="chip" id="m02-open">Open tab</button></article></div>
   </section>
   <section id="m08" aria-labelledby="m08-title">
     <p class="kicker">08 · Mosaic tab windows</p>
@@ -98,6 +117,24 @@
     const set = (v) => setTimeout(() => { on = v; paint(); }, 40); // the "confirmed" state comes back
     chip.addEventListener("click", () => set(!on));
     document.getElementById("m01-replay").addEventListener("click", () => { on = false; paint(); set(true); setTimeout(() => set(false), 1000); });
+  })();
+
+  // ---- 02 Card "read" state (same helpers as renderer/app.js) ----
+  function playOnce(el, cls) { el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); el.addEventListener("animationend", () => el.classList.remove(cls), { once: true }); }
+  (() => {
+    const card = document.getElementById("m02-card");
+    const markRead = () => {
+      if (card.classList.contains("read")) return;
+      card.classList.add("read");
+      const src = card.querySelector(".src");
+      src.insertAdjacentHTML("beforeend", `<span class="badge">read</span>`);
+      playOnce(src.querySelector(".badge"), "is-new");
+    };
+    document.getElementById("m02-open").addEventListener("click", markRead);
+    document.getElementById("m02-replay").addEventListener("click", () => {
+      card.classList.remove("read"); card.querySelector(".badge")?.remove(); void card.offsetWidth;
+      setTimeout(markRead, 250);
+    });
   })();
 
   // ---- 08 Mosaic tab windows (mirrors applyLayout in main.js) ----

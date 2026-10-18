@@ -397,13 +397,30 @@ function readUrls() {
   return new Set([...(session?.trail || []).map((r) => r.url), ...(session?.opened || []).map((o) => o.url)]);
 }
 
+// ---- Motion helpers (docs/motion) ----
+// Adds a class that runs a CSS animation once, then removes it, so the
+// animation does not play again when the element is redrawn or moved.
+function playOnce(el, cls) {
+  if (!el) return;
+  el.classList.remove(cls);
+  void el.offsetWidth; // forces the browser to notice the removal, so the animation restarts
+  el.classList.add(cls);
+  el.addEventListener("animationend", () => el.classList.remove(cls), { once: true });
+}
+
+// 02: a card turns "read". animate: only when the user just opened it.
+function markRead(card, animate = false) {
+  card.classList.add("read");
+  const src = card.querySelector(".src");
+  if (!src || src.querySelector(".badge")) return;
+  src.insertAdjacentHTML("beforeend", `<span class="badge">read</span>`);
+  if (animate) playOnce(src.querySelector(".badge"), "is-new");
+}
+
 // Marks cards already read in this session and adds a dismiss button.
 function decorateCard(card, item) {
-  card.classList.toggle("read", readUrls().has(item.url));
-  const src = card.querySelector(".src");
-  if (src && card.classList.contains("read") && !src.querySelector(".badge")) {
-    src.insertAdjacentHTML("beforeend", `<span class="badge">read</span>`);
-  }
+  if (readUrls().has(item.url)) markRead(card);
+  else card.classList.remove("read");
   if (card.__decorated || !api?.researchDismiss) return;
   card.__decorated = true;
   const x = document.createElement("button");
@@ -421,7 +438,7 @@ function decorateCard(card, item) {
     b.addEventListener("click", () => {
       api.researchOpened?.(item);
       session?.opened.push({ url: item.url, title: item.title, query: item.query || "" });
-      card.classList.add("read");
+      markRead(card, true);
     });
   }
 }

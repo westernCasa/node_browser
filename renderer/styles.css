@@ -722,3 +722,13 @@ svg.brand path { fill: var(--ink); }
   .chip, .chip:hover, .chip.active { transition-duration: var(--motion-fast); }
 }
 
+/* 02 Result card turns "read": the card dims, the badge fades in. One way only. */
+.card { transition: border-color var(--motion-fast) var(--ease-move), color var(--motion-fast) var(--ease-move), background-color var(--motion-fast) var(--ease-move), opacity var(--motion-base) var(--ease-move); }
+.card .badge.is-new { animation: node-fade-in var(--motion-base) var(--ease-enter); }
+@keyframes node-fade-in { from { opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .card { transition-duration: var(--motion-fast); }
+  .card .badge.is-new { animation-duration: var(--motion-fast); }
+}
+
