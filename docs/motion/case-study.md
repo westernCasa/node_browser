@@ -2,6 +2,20 @@
 
 Raw material for the portfolio case study. One section per interaction: decision note, before and after, and the three checks.
 
+## 01. Sound toggle
+
+**Decision note.** "Sound: all" changes what you hear in every tab, so the button should show the change has been made, not just that it was clicked. The colour fades in a little slower (200ms) as it turns on and leaves faster (120ms) as it turns off, so "on" feels like it arrives and "off" gets out of the way. Only colour moves; the button keeps its size and place, and the word swaps at once so it can be read straight away. Every chip that turns violet (Mosaic, the sidebar tabs, Library filters) now uses the same timing, so "active" looks the same everywhere.
+
+**Before.** One shared 120ms ease-out fade for every colour change, on and off.
+
+**After.** On: 200ms, `--ease-enter`. Off: 120ms, `--ease-exit`. Hover in: 120ms, `--ease-move`. Reduced motion: 120ms both ways. The colour changes when the main process confirms the new sound setting, which `paintSound()` already waited for.
+
+**Three checks.**
+
+1. Press Cmd/Ctrl+Shift+A and use View → Sound for all tabs: both must fade the same as a click, because all three go through the main process.
+2. Click the button while hovering it: the turn-on fade should still be the slower 200ms one (the `.chip.active` rule comes after `.chip:hover`).
+3. Tab to the button with the keyboard: the focus ring appears at once and does not fade.
+
 ## 08. Mosaic tab windows
 
 **Decision note.** Mosaic is the moment NODE shows that several pages are live at once, so the switch should explain where each page went instead of cutting. Going into Mosaic, the other tabs are already in their tiles underneath, and the tab you were reading shrinks into its own tile, so your eye follows the page you care about. Going back, that tile grows over the others; they are hidden only after they are covered, so nothing blinks out. Entering takes longer (320ms) than leaving (200ms), because arriving at a new view needs a moment to read and leaving should get out of the way. Tab windows are native views, so they are resized for real on every frame instead of transformed; that is the one place NODE animates size.

@@ -650,8 +650,8 @@ input, textarea, select { border-radius: var(--radius-sm); }
 :focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
 /* The logo is flat ink outside the app icon. */
 svg.brand path { fill: var(--ink); }
-/* Motion: short and linear. */
-.chip, .icon, .card, .key, .talk-item { transition: border-color 120ms ease-out, color 120ms ease-out, background-color 120ms ease-out; }
+/* Motion: tokens in :root, rules in docs/motion/tokens.md. Hover colour fades. */
+.icon, .card, .key, .talk-item { transition: border-color var(--motion-fast) var(--ease-move), color var(--motion-fast) var(--ease-move), background-color var(--motion-fast) var(--ease-move); }
 /* Result card: source and query in telemetry at ink-muted (brand 7). AI-written queries keep the signal badge. */
 .card .src { font-family: var(--mono); color: var(--ink-muted); letter-spacing: 0.04em; }
 /* Sidebar actions: tighter tracking so they fit two rows. */
@@ -708,3 +708,17 @@ svg.brand path { fill: var(--ink); }
 .trail-row .cap { width: 64px; height: 40px; padding: 0; border: 1px solid var(--line); background: var(--surface-raised); color: var(--ink-muted); font: 11px "JetBrains Mono", monospace; cursor: pointer; overflow: hidden; }
 .trail-row .cap:hover { border-color: var(--ink); }
 .trail-row .cap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* ==== Motion (docs/motion) ==== */
+
+/* 01 Chips turning on and off (Sound, Mosaic, pane tabs, Library filters).
+   The browser uses the transition of the state it is moving TO, so the "off"
+   timing sits on .chip and the "on" timing on .chip.active. */
+.chip { transition: border-color var(--motion-fast) var(--ease-exit), color var(--motion-fast) var(--ease-exit), background-color var(--motion-fast) var(--ease-exit); }
+.chip:hover { transition-timing-function: var(--ease-move); }
+.chip.active { transition: border-color var(--motion-base) var(--ease-enter), color var(--motion-base) var(--ease-enter), background-color var(--motion-base) var(--ease-enter); }
+
+@media (prefers-reduced-motion: reduce) {
+  .chip, .chip:hover, .chip.active { transition-duration: var(--motion-fast); }
+}
+
