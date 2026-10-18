@@ -40,7 +40,7 @@ async function launch() {
   // Dismiss the first card, open the second.
   const firstUrl = await ui.$eval("#results .card", (c) => c.dataset.url);
   await ui.click("#results .card .dismiss");
-  await sleep(300);
+  await sleep(800); // the card fades out and the gap closes first (motion 07)
   log("dismissed card gone:", !(await ui.$$eval("#results .card", (cs) => cs.map((c) => c.dataset.url))).includes(firstUrl));
   await ui.click("#results .card [data-act='open']");
   await sleep(2000);

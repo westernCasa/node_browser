@@ -772,3 +772,12 @@ svg.brand path { fill: var(--ink); }
   .key.pinned { transition-duration: var(--motion-fast); }
 }
 
+/* 07 Result cards: new cards fade in, each 40ms after the one before (no
+   slide). "backwards" keeps a waiting card invisible until its turn. The ×
+   fade-out and the gap closing run in renderer/app.js (decorateCard). */
+.card.entering { animation: node-fade-in var(--motion-slow) var(--ease-enter) backwards; animation-delay: calc(var(--motion-fast) / 3 * var(--enter-index, 0)); }
+
+@media (prefers-reduced-motion: reduce) {
+  .card.entering { animation-duration: var(--motion-fast); }
+}
+

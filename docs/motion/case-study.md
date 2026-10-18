@@ -90,6 +90,24 @@ FLIP stands for First, Last, Invert, Play: note where each chip is, make the cha
 
 The chip itself is a `<span>`, so it cannot be reached with Tab; only its × can. Making the chip focusable would change behaviour, so it is left for a later decision.
 
+## 07. Result cards
+
+**Decision note.** Suggestions arrive in two waves (Wikipedia first, then web results), so new cards should feel like they are being dealt onto the table, not snapping in. Each new card fades in place, 40ms after the one before, which reads as a list filling up without anything sliding around while you read. Cards already on screen never animate again, because the second wave should not disturb what you are looking at. Dismissing is two clear beats: the card fades out so you see which one went, then the space closes so the list stays tidy.
+
+**Before.** The list was cleared and rebuilt each time; new cards appeared at once, and × removed a card instantly so the cards below jumped up.
+
+**After.** `renderResults()` keeps cards that are already on screen in place in the page and only inserts new ones; each new card fades in over 320ms (`--ease-enter`) with a delay of 40ms (`calc(var(--motion-fast) / 3)`) times its position among the new cards. ×: the card fades out over 120ms (`--ease-exit`), then its height, padding and border collapse to 0 and its bottom margin to minus the list gap over 320ms (`--ease-move`); only then does NODE call `researchDismiss` and remove it, in the same order as before. Focus moves to the next card's × if the removed one had focus. Reduced motion: cards fade in over 120ms; × fades the card, then the gap closes at once.
+
+The spec mentioned collapsing a wrapper; cards have no wrapper element, so the card itself collapses (its padding and border go to 0 with its height).
+
+**Found while building.** Results from several searches are merged in turn (round-robin), so when web results arrive they can be placed above Wikipedia cards that are already showing. Those cards then shift down without animating. Proposed fix: use the same FLIP step as the keyword chips (06) for cards that stay but move.
+
+**Three checks.**
+
+1. Dismiss a card while the second wave of results is still loading: the card should finish leaving; it must not reappear.
+2. Tab to a card's × and press Enter: focus must move to the next card's ×, or the previous one if it was the last card.
+3. Timing: the dismissal is saved about 440ms after the click (after the motion). If NODE is quit in that moment, the dismissal is not saved.
+
 ## 08. Mosaic tab windows
 
 **Decision note.** Mosaic is the moment NODE shows that several pages are live at once, so the switch should explain where each page went instead of cutting. Going into Mosaic, the other tabs are already in their tiles underneath, and the tab you were reading shrinks into its own tile, so your eye follows the page you care about. Going back, that tile grows over the others; they are hidden only after they are covered, so nothing blinks out. Entering takes longer (320ms) than leaving (200ms), because arriving at a new view needs a moment to read and leaving should get out of the way. Tab windows are native views, so they are resized for real on every frame instead of transformed; that is the one place NODE animates size.

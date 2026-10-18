@@ -92,6 +92,15 @@
   .reduced .key.pinned { transition-duration: var(--motion-fast); }
   @media (prefers-reduced-motion: reduce) { .key.pinned { transition-duration: var(--motion-fast); } }
 
+  /* 07 Result cards */
+  .results { display: flex; flex-direction: column; gap: 8px; max-width: 320px; }
+  .rcard { position: relative; padding: 10px; background: var(--surface-raised); border: 1px solid var(--line); font-size: 13px; }
+  .rcard .src { font: 11px var(--mono); color: var(--ink-muted); }
+  .rcard .dismiss { position: absolute; top: 6px; right: 8px; border: 0; background: none; color: var(--ink-muted); font-size: 15px; cursor: pointer; }
+  .rcard.entering { animation: node-fade-in var(--motion-slow) var(--ease-enter) backwards; animation-delay: calc(var(--motion-fast) / 3 * var(--enter-index, 0)); }
+  .reduced .rcard.entering { animation-duration: var(--motion-fast); }
+  @media (prefers-reduced-motion: reduce) { .rcard.entering { animation-duration: var(--motion-fast); } }
+
   /* 08: a stand-in for NODE's content area. The tab windows are boxes moved and
      resized with left/top/width/height, as Electron resizes the real ones. */
   .stage { position: relative; height: 340px; background: var(--surface-raised); border: 1px solid var(--line); overflow: hidden; }
@@ -151,6 +160,13 @@
     <p>Click a chip to pin it: it turns violet (200ms, ease-enter) and every chip slides to its new place (200ms, ease-move). Click × to hide one: it fades and shrinks to 0.9 in place (120ms, ease-exit), the others slide over, and the next keyword scales in from 0.95 (200ms, ease-enter). A fast second click waits for the first.</p>
     <div class="row"><button class="chip" id="m06-replay">Replay</button></div>
     <div class="keys" id="m06-keys"></div>
+  </section>
+  <section id="m07" aria-labelledby="m07-title">
+    <p class="kicker">07 · Result cards</p>
+    <h2 id="m07-title">Cards arrive and leave</h2>
+    <p>New cards fade in (320ms, ease-enter), each starting 40ms after the one before; cards already on screen stay still. × fades a card out (120ms, ease-exit), then the gap closes (320ms, ease-move) before the card is removed.</p>
+    <div class="row"><button class="chip" id="m07-replay">Replay</button><button class="chip" id="m07-more">Load more</button></div>
+    <div class="results" id="m07-list"></div>
   </section>
   <section id="m08" aria-labelledby="m08-title">
     <p class="kicker">08 · Mosaic tab windows</p>
@@ -296,6 +312,38 @@
       setTimeout(() => { pinned = []; render(true); }, 2200);
     });
     render(false);
+  })();
+
+  // ---- 07 Result cards ----
+  (() => {
+    const list = document.getElementById("m07-list");
+    const data = [["WIKIPEDIA", "Memex"], ["WIKIPEDIA", "Vannevar Bush"], ["WEB", "As We May Think, The Atlantic, 1945"], ["WEB", "The history of hypertext"], ["WIKIPEDIA", "Project Xanadu"], ["WEB", "Associative trails explained"]];
+    let n = 0;
+    const card = ([src, title], i) => {
+      const el = document.createElement("article");
+      el.className = "rcard";
+      el.innerHTML = `<button class="dismiss" title="Hide this result">×</button><div class="src">${src}</div><b>${title}</b>`;
+      el.style.setProperty("--enter-index", String(i));
+      playOnce(el, "entering");
+      el.querySelector(".dismiss").addEventListener("click", async () => {
+        if (el.__leaving) return; el.__leaving = true;
+        const hadFocus = el.contains(document.activeElement);
+        await el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: ms("--motion-fast"), easing: css.getPropertyValue("--ease-exit").trim(), fill: "forwards" }).finished;
+        if (!reduced()) {
+          const gap = parseFloat(getComputedStyle(list).rowGap) || 0;
+          el.style.overflow = "hidden";
+          await el.animate([{ height: el.offsetHeight + "px", marginBottom: "0px" }, { height: "0px", paddingTop: "0px", paddingBottom: "0px", borderTopWidth: "0px", borderBottomWidth: "0px", marginBottom: -gap + "px" }], { duration: ms("--motion-slow"), easing: css.getPropertyValue("--ease-move").trim(), fill: "forwards" }).finished;
+        }
+        const next = el.nextElementSibling || el.previousElementSibling;
+        el.remove();
+        if (hadFocus) next?.querySelector(".dismiss")?.focus();
+      });
+      return el;
+    };
+    const add = (count) => { for (let i = 0; i < count; i++) list.appendChild(card(data[n++ % data.length], i)); };
+    document.getElementById("m07-more").addEventListener("click", () => add(2));
+    document.getElementById("m07-replay").addEventListener("click", () => { list.innerHTML = ""; n = 0; add(4); });
+    add(4);
   })();
 
   // ---- 08 Mosaic tab windows (mirrors applyLayout in main.js) ----

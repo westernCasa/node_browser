@@ -533,11 +533,34 @@ function decorateCard(card, item) {
   x.className = "dismiss";
   x.title = "Not useful: hide this result for this session";
   x.textContent = "×";
+  // 07: the card fades out, then the gap it leaves closes; only then is it
+  // dismissed and removed (same order of calls as before, just later).
   x.addEventListener("click", async (e) => {
     e.stopPropagation();
+    if (card.__leaving) return;
+    card.__leaving = true;
+    const hadFocus = card.contains(document.activeElement);
+    const reduced = reducedMotion();
+    await card.animate([{ opacity: 1 }, { opacity: 0 }], { duration: motionMs("--motion-fast"), easing: motionCurve("--ease-exit"), fill: "forwards" }).finished.catch(() => {});
+    if (!reduced) {
+      // Height is an agreed exception: the list has to close the gap.
+      const gap = parseFloat(getComputedStyle(resultsEl).rowGap) || 0;
+      card.style.overflow = "hidden";
+      await card
+        .animate(
+          [
+            { height: `${card.offsetHeight}px`, marginBottom: "0px" },
+            { height: "0px", paddingTop: "0px", paddingBottom: "0px", borderTopWidth: "0px", borderBottomWidth: "0px", marginBottom: `${-gap}px` },
+          ],
+          { duration: motionMs("--motion-slow"), easing: motionCurve("--ease-move"), fill: "forwards" }
+        )
+        .finished.catch(() => {});
+    }
     await api.researchDismiss(item.url);
     session?.dismissed.push(item.url);
+    const next = card.nextElementSibling?.classList.contains("card") ? card.nextElementSibling : card.previousElementSibling;
     card.remove();
+    if (hadFocus) next?.querySelector(".dismiss")?.focus();
   });
   card.prepend(x);
   for (const b of card.querySelectorAll(".card-actions button")) {
@@ -587,18 +610,28 @@ function renderResults(items) {
   previewQueue.length = 0;
   previewObserver?.disconnect();
   const existing = new Map([...resultsEl.querySelectorAll(".card")].map((c) => [c.dataset.url, c]));
-  resultsEl.innerHTML = "";
   if (!items?.length) {
     resultsEl.innerHTML = `<p class="empty">No suggestions yet. Load a page, or add keywords and press Crawl.</p>`;
     return;
   }
-  for (const item of items) {
+  resultsEl.querySelector(".empty")?.remove();
+  // 07: cards already on screen stay where they are in the page (moving them
+  // would restart their animation); new cards fade in one after another.
+  let fresh = 0;
+  items.forEach((item, i) => {
     let card = existing.get(item.url);
-    if (!card) card = buildCard(item);
+    if (!card) {
+      card = buildCard(item);
+      card.style.setProperty("--enter-index", String(fresh++));
+      playOnce(card, "entering");
+    }
+    existing.delete(item.url);
     if (!card.__hydrated) queuePreview(card, item);
     decorateCard?.(card, item);
-    resultsEl.appendChild(card);
-  }
+    if (resultsEl.children[i] !== card) resultsEl.insertBefore(card, resultsEl.children[i] || null);
+  });
+  for (const old of existing.values()) old.remove();
+  while (resultsEl.children.length > items.length) resultsEl.lastElementChild.remove();
 }
 
 function escapeHtml(s) {
