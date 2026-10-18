@@ -1,6 +1,6 @@
 # NODE Browser: Roadmap and Backlog
 
-Last updated: 2026-10-12 (first feedback from desktop testing: speed, Brave default, autoplay). The editable version (with status dropdowns) is in the review doc: https://claude.ai/code/artifact/b6ec4995-3117-41d0-a3c4-948c16e699fc
+Last updated: 2026-10-18 (an hour of browsing on the Mac passed the Phase 2 gate; MCP test items B66-B68). The editable version (with status dropdowns) is in the review doc: https://claude.ai/code/artifact/b6ec4995-3117-41d0-a3c4-948c16e699fc
 
 ## Roadmap
 
@@ -10,7 +10,7 @@ Each phase ends at a gate that must pass before the next phase starts. No dates 
 | --- | --- | --- | --- | --- |
 | 0. Safety and basics | No silent permissions, shortcuts work inside pages, one tab plays sound at a time | B01-B06 | Camera and mic prompt per site; S works on any page; popups need a click | Done |
 | 1. Keyword engine | Keywords come from the page text, and the user's pins and hides stick | B07-B11 | Text-only articles give relevant keywords; a pinned word survives scrolling | Done |
-| 2. Network layer | Cached, rate-limited search through swappable sources | B12-B15 | An hour of browsing with no search blocks; repeat pages load previews from cache | Done (gate still needs a live check) |
+| 2. Network layer | Cached, rate-limited search through swappable sources | B12-B15 | An hour of browsing with no search blocks; repeat pages load previews from cache | Done. Gate passed 2026-10-18 (an hour of browsing on the Mac, no problems) |
 | 3. Behaviour shell | Per-site rules, research session, WebContentsView, history and find, AI query ideas | B16-B20, B25 | A new site behaviour can be added by editing a rules file, without code changes | Done. Gate passed in testing (rules edited live) |
 | 4. Desktop release readiness | Installable, stable and easy to set up on macOS and Windows | B26-B50 | NODE is your daily research browser for a week with no blocking bugs | Next |
 | 5. Mobile app | React Native (Expo) app reusing `core/`; see `06-mobile-plan.md` | M01-M15 | To be set when Phase 5 starts | Planning and groundwork done; build waits for the Phase 4 gate. M01-M02 (try it on a phone) can run now |
@@ -46,7 +46,7 @@ Effort: XS under 1 hour, S half a day, M 1-2 days, L 3+ days. Finding IDs (C1, K
 | B23 | 5 | Port Library, Shot, Save, Media to Rust | P2 | M | Replaced by M05 |
 | B24 | 5 | Decide the mobile tab model | P2 | M | Done in planning: one WebView per tab, Mosaic on tablets (`06-mobile-plan.md`) |
 | B25 | 3 | Show Wikipedia results first while web results load (web requests are spaced 2.5 s apart, so a search can take 6 s) | P1 | S | Done |
-| B26 | 4 | Check on a real machine: live Wikipedia, DuckDuckGo, Brave, Grok and local model results, and an hour of browsing (Phase 2 gate) | P0 | S | Not started |
+| B26 | 4 | Check on a real machine: live Wikipedia, DuckDuckGo, Brave, Grok and local model results, and an hour of browsing (Phase 2 gate) | P0 | S | In progress: hour of browsing done on the Mac 2026-10-18 with no problems. Still to confirm: Brave results with a key, AI query ideas with Grok or a local model |
 | B27 | 4 | Installable builds for macOS (.dmg) and Windows (.exe) with an app icon | P0 | M | Done (0.4): `npm run dist:mac` / `dist:win`; not signed; automatic updates are B46 |
 | B28 | 4 | Visual editor for site rules in Settings, so no JSON editing is needed | P1 | M | Done |
 | B29 | 4 | Sleep background tabs that are not playing media, to save memory with many tabs open | P1 | M | Done: after 15 minutes unused; never while playing, on screen or shared |
@@ -82,16 +82,21 @@ Effort: XS under 1 hour, S half a day, M 1-2 days, L 3+ days. Finding IDs (C1, K
 | B61 | 4 | Browser basics: right-click menu, downloads (Library → Downloads), reopen closed tab, tab shortcuts, print and Save as PDF, error and crashed-tab pages, reopen last session's tabs | P0 | M | Done |
 | B62 | 4 | Passkeys on macOS: Apple Developer ID signing, Apple's web-browser passkey entitlement (com.apple.developer.web-browser.public-key-credential), and a native bridge to AuthenticationServices (as electron-webauthn-mac does) | P1 | L | Not started; passkeys off on Mac until then |
 | B63 | 4 | Watch: tab name stayed the same after moving to another page (reported once on the Mac, 2026-10-14; cleared up by itself; not reproduced on Linux with link clicks, single-page sites, restored and sleeping tabs, or Mosaic). If it happens again, note the site and how the page was left, and copy diagnostics | P2 | S | Watching |
+| B64 | 4 | Usage summary for the beta survey: NODE counts locally (suggestions shown and opened, pins, hides, trail pages, sessions, agent runs, Ask AI questions, days used, version, OS); Settings → Help → Copy usage summary puts the counts on the clipboard. No pages, addresses or keywords; nothing sent automatically. See `10-beta-survey.md` | P1 | S | Not started |
+| B65 | 4 | Beta survey prompt: after NODE has been used on 3 different days, a one-time sidebar notice (Take survey / Later / Don't ask again) opens the survey in a tab; link also in Settings → Help. Survey address in `core/urls.js` (`SURVEY_URL`) | P1 | XS | Not started |
+| B66 | 4 | Trail skips sign-in pages: pages the sign-in, account, payment and banking rule blocks are not added to the research session, so their addresses never reach `get_research_session` or exports. Found in the MCP test (2026-10-18): X passkey and password pages and `github.com/session` were listed as pages read. Also remove them from existing sessions when they load | P0 | S | Not started |
+| B67 | 4 | Keyword noise: leave out the signed-in user's own name taken from a site's interface (X showed "Isaac Sven Manzanarez" on every page), keyboard-shortcut help text ("shortcuts", "keyboard"), and image alt text or file names that describe interface graphics ("Brave Logo Small", "Snoo Map", "Google Button", "Semi Protection Shackle"). Add these cases to `test/keywords-eval.js`. Found in the MCP test (2026-10-18) | P1 | S | Not started |
+| B68 | 4.5 | Agent reader (`core/markdown.js`): See also, References, Further reading and Categories lists come back as empty bullets. Keep link-only and citation list items (link text, or drop the empty list). Found with `fetch_page` on a Wikipedia article (2026-10-18) | P2 | XS | Not started |
 | B60 | 5 | NODE for Chromium extension | — | — | Dropped 2026-10-14: missing must-have features |
 | B59 | 6 | Research agent v3: gated actions with confirmation (forms, downloads) | P2 | L | Not started |
 | B52 | 4 | Google window: Google sign-in and Google apps open in a separate window of a Chromium-based browser on the computer, with its own NODE profile and a NODE extension (history, center on click, autoplay, no duplicate tabs). The extension is also the first step of B51 | P0 | M | Done; to test sign-in on the Mac |
 
 ## Open checks
 
+- ~~Browse for an hour to check the Phase 2 gate (no search blocks).~~ Done on the Mac, 2026-10-18.
 - Run NODE on a real machine and confirm live results from Wikipedia and DuckDuckGo.
 - Add a Brave Search API key under Settings and confirm Brave results appear.
 - Check that browsing feels smooth with several tabs open, and that video sites (YouTube, Vimeo, news sites) start playing on their own (B32, B34).
-- Browse for an hour to check the Phase 2 gate (no search blocks).
 - Turn on AI query ideas with Ollama or Grok, press Test, and check the "(AI)" queries give useful results.
 
 These checks are backlog item B26.
