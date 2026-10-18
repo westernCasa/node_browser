@@ -30,6 +30,20 @@ Raw material for the portfolio case study. One section per interaction: decision
 2. Click Open tab on a card that is already read: nothing should replay.
 3. Check the dimmed text still meets contrast for reading (60% white on #0e0e0f), especially the snippet text.
 
+## 03. Mosaic button
+
+**Decision note.** The Mosaic button says what it will do next ("Mosaic" or "Focus"), so when its word changes, the change should be noticed but not perform. The new word rises 3px into place, like a line being set, while the old word simply disappears; that small lift is enough to show the button has a new job without drawing the eye away from the tiles. It waits for NODE to confirm the new layout, so the button never shows a state the window is not in. The tiles get their own motion in 08.
+
+**Before.** Clicking changed the label and colour immediately, before the layout had changed.
+
+**After.** The click asks the main process to switch; when it answers, the button turns violet (01 timing) and the new label rises 3px and fades in over 200ms (`--ease-enter`), using a keyframe that restarts on every change. Reduced motion: the label fades in over 120ms with no rise.
+
+**Three checks.**
+
+1. Toggle with Cmd/Ctrl+Shift+M and with the research agent's "Open in Mosaic": the label must animate the same way.
+2. Click twice quickly: the second label should replace the first cleanly, with no half-risen word left behind.
+3. With a screen reader, the button's name should read "Mosaic" or "Focus" (the label is a span inside the button, so its name is unchanged).
+
 ## 08. Mosaic tab windows
 
 **Decision note.** Mosaic is the moment NODE shows that several pages are live at once, so the switch should explain where each page went instead of cutting. Going into Mosaic, the other tabs are already in their tiles underneath, and the tab you were reading shrinks into its own tile, so your eye follows the page you care about. Going back, that tile grows over the others; they are hidden only after they are covered, so nothing blinks out. Entering takes longer (320ms) than leaving (200ms), because arriving at a new view needs a moment to read and leaving should get out of the way. Tab windows are native views, so they are resized for real on every frame instead of transformed; that is the one place NODE animates size.

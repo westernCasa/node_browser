@@ -793,11 +793,17 @@ document.getElementById("key-form").addEventListener("submit", (e) => {
   crawl();
 });
 
-layoutBtn.addEventListener("click", async () => {
-  layout = layout === "mosaic" ? "focus" : "mosaic";
+// 03: the button changes once the main process confirms the new layout. The
+// new label rises into place; the old one is replaced at once.
+function paintLayout(animate = false) {
   layoutBtn.classList.toggle("active", layout === "mosaic");
-  layoutBtn.textContent = layout === "mosaic" ? "Focus" : "Mosaic";
-  if (api) await api.setLayout(layout);
+  layoutBtn.innerHTML = `<span class="label">${layout === "mosaic" ? "Focus" : "Mosaic"}</span>`;
+  if (animate) playOnce(layoutBtn.firstElementChild, "rise");
+}
+layoutBtn.addEventListener("click", async () => {
+  const next = layout === "mosaic" ? "focus" : "mosaic";
+  layout = api ? await api.setLayout(next) : next;
+  paintLayout(true);
 });
 
 // Sound from every playing tab, or only the current one. Remembered between runs.

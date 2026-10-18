@@ -56,6 +56,13 @@
   .reduced .card .badge.is-new { animation-duration: var(--motion-fast); }
   @media (prefers-reduced-motion: reduce) { .card { transition-duration: var(--motion-fast); } .card .badge.is-new { animation-duration: var(--motion-fast); } }
 
+  /* 03 Mosaic button label */
+  .chip .label { display: inline-block; }
+  .chip .label.rise { animation: node-rise-in var(--motion-base) var(--ease-enter); }
+  @keyframes node-rise-in { from { opacity: 0; transform: translateY(3px); } }
+  .reduced .chip .label.rise { animation: node-fade-in var(--motion-fast) var(--ease-enter); }
+  @media (prefers-reduced-motion: reduce) { .chip .label.rise { animation: node-fade-in var(--motion-fast) var(--ease-enter); } }
+
   /* 08: a stand-in for NODE's content area. The tab windows are boxes moved and
      resized with left/top/width/height, as Electron resizes the real ones. */
   .stage { position: relative; height: 340px; background: var(--surface-raised); border: 1px solid var(--line); overflow: hidden; }
@@ -87,6 +94,13 @@
     <p>The card dims to 60% (200ms, ease-move) and a "read" badge fades in (200ms, ease-enter). It only goes one way: a card never turns back to unread.</p>
     <div class="row"><button class="chip" id="m02-replay">Replay</button></div>
     <div class="stage-row"><article class="card" id="m02-card"><div class="src">WIKIPEDIA · memex</div><b>Vannevar Bush</b><p>American engineer who described the memex in 1945.</p><button class="chip" id="m02-open">Open tab</button></article></div>
+  </section>
+  <section id="m03" aria-labelledby="m03-title">
+    <p class="kicker">03 · Mosaic button</p>
+    <h2 id="m03-title">Mosaic / Focus</h2>
+    <p>The new label rises 3px and fades in (200ms, ease-enter); the old one goes at once. The colour change is the same as 01. (The tiles themselves are 08.)</p>
+    <div class="row"><button class="chip" id="m03-replay">Replay</button></div>
+    <div class="stage-row"><button class="chip" id="m03-chip"><span class="label">Mosaic</span></button></div>
   </section>
   <section id="m08" aria-labelledby="m08-title">
     <p class="kicker">08 · Mosaic tab windows</p>
@@ -135,6 +149,20 @@
       card.classList.remove("read"); card.querySelector(".badge")?.remove(); void card.offsetWidth;
       setTimeout(markRead, 250);
     });
+  })();
+
+  // ---- 03 Mosaic button ----
+  (() => {
+    const btn = document.getElementById("m03-chip");
+    let layout = "focus";
+    const paint = () => {
+      btn.classList.toggle("active", layout === "mosaic");
+      btn.innerHTML = `<span class="label">${layout === "mosaic" ? "Focus" : "Mosaic"}</span>`;
+      playOnce(btn.firstElementChild, "rise");
+    };
+    const set = (v) => setTimeout(() => { layout = v; paint(); }, 40);
+    btn.addEventListener("click", () => set(layout === "mosaic" ? "focus" : "mosaic"));
+    document.getElementById("m03-replay").addEventListener("click", () => { set("mosaic"); setTimeout(() => set("focus"), 1000); });
   })();
 
   // ---- 08 Mosaic tab windows (mirrors applyLayout in main.js) ----

@@ -732,3 +732,12 @@ svg.brand path { fill: var(--ink); }
   .card .badge.is-new { animation-duration: var(--motion-fast); }
 }
 
+/* 03 Mosaic button: the new label rises 3px and fades in; the colour is 01. */
+.chip .label { display: inline-block; }
+.chip .label.rise { animation: node-rise-in var(--motion-base) var(--ease-enter); }
+@keyframes node-rise-in { from { opacity: 0; transform: translateY(3px); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .chip .label.rise { animation: node-fade-in var(--motion-fast) var(--ease-enter); }
+}
+
