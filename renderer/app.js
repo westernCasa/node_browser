@@ -1793,16 +1793,32 @@ function reportHtml(md, sources) {
   return out.join("");
 }
 
+// 05: lines already in the list stay as they are; only new steps are added,
+// and each new one is typed out left to right.
+let agentShown = { steps: null, count: 0 }; // which run's steps are drawn, and how many
+
 function renderAgent() {
   const steps = document.getElementById("agent-steps");
-  steps.innerHTML = "";
-  for (const s of agentRun.steps) {
+  let animate = true;
+  if (agentShown.steps !== agentRun.steps || agentRun.steps.length < agentShown.count) {
+    // A different run: start the list again. Steps that already exist (the pane
+    // was redrawn) appear without typing; steps arriving from now on type out.
+    steps.innerHTML = "";
+    animate = agentRun.steps.length === 0;
+    agentShown = { steps: agentRun.steps, count: 0 };
+  }
+  for (const s of agentRun.steps.slice(agentShown.count)) {
     if (s.kind === "view") continue;
     const li = document.createElement("li");
     li.className = s.kind;
-    li.textContent = s.text;
+    const line = document.createElement("span");
+    line.className = "line";
+    line.textContent = s.text;
+    li.appendChild(line);
     steps.appendChild(li);
+    if (animate) playOnce(line, "typing");
   }
+  agentShown.count = agentRun.steps.length;
   steps.scrollTop = steps.scrollHeight;
   const following = agentRun.thread.length > 0;
   document.getElementById("agent-form").hidden = following;

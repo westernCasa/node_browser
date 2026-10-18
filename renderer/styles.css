@@ -753,3 +753,13 @@ svg.brand path { fill: var(--ink); }
   #star-btn .glyph.save { animation: node-fade-up var(--motion-fast) var(--ease-enter); }
 }
 
+/* 05 Research agent steps: a new line is typed out left to right. clip-path is
+   an agreed exception: it reveals the line in place without moving it. */
+#agent-steps .line { display: block; }
+#agent-steps .line.typing { animation: node-type var(--motion-type) var(--ease-type); }
+@keyframes node-type { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+
+@media (prefers-reduced-motion: reduce) {
+  #agent-steps .line.typing { animation: node-fade-in var(--motion-fast) var(--ease-enter); }
+}
+

@@ -74,6 +74,15 @@
   .reduced .icon .glyph.save { animation: node-fade-up var(--motion-fast) var(--ease-enter); }
   @media (prefers-reduced-motion: reduce) { .icon .glyph.save { animation: node-fade-up var(--motion-fast) var(--ease-enter); } }
 
+  /* 05 Research agent steps */
+  .steps { margin: 0; padding: 8px 10px 8px 30px; max-height: 160px; overflow-y: auto; background: var(--surface-raised); border: 1px solid var(--line); font: 12px/18px var(--mono); color: var(--ink-muted); }
+  .steps li { margin: 2px 0; }
+  .steps .line { display: block; }
+  .steps .line.typing { animation: node-type var(--motion-type) var(--ease-type); }
+  @keyframes node-type { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+  .reduced .steps .line.typing { animation: node-fade-in var(--motion-fast) var(--ease-enter); }
+  @media (prefers-reduced-motion: reduce) { .steps .line.typing { animation: node-fade-in var(--motion-fast) var(--ease-enter); } }
+
   /* 08: a stand-in for NODE's content area. The tab windows are boxes moved and
      resized with left/top/width/height, as Electron resizes the real ones. */
   .stage { position: relative; height: 340px; background: var(--surface-raised); border: 1px solid var(--line); overflow: hidden; }
@@ -119,6 +128,13 @@
     <p>Save: the filled star scales from 0.6 to 1 and fades up from 0.4 (200ms, ease-enter). Remove: the outline star fades up from 0.4 with no scale (120ms, ease-exit). Switching tabs repaints the star with no animation; "Switch tab" shows that.</p>
     <div class="row"><button class="chip" id="m04-replay">Replay</button><button class="chip" id="m04-switch">Switch tab</button></div>
     <div class="stage-row"><button class="icon" id="m04-star" title="Bookmark this page"><span class="glyph">☆</span></button></div>
+  </section>
+  <section id="m05" aria-labelledby="m05-title">
+    <p class="kicker">05 · Research agent steps</p>
+    <h2 id="m05-title">Each new step types out</h2>
+    <p>Only new lines animate: each one is revealed left to right in 14 even steps over 160ms. Lines already listed stay still, and the list keeps scrolling to the newest line.</p>
+    <div class="row"><button class="chip" id="m05-replay">Replay</button><button class="chip" id="m05-add">Add a step</button></div>
+    <ol class="steps" id="m05-steps"></ol>
   </section>
   <section id="m08" aria-labelledby="m08-title">
     <p class="kicker">08 · Mosaic tab windows</p>
@@ -195,6 +211,27 @@
     star.addEventListener("click", () => { on = !on; paint(true); });
     document.getElementById("m04-switch").addEventListener("click", () => { on = !on; paint(false); });
     document.getElementById("m04-replay").addEventListener("click", () => { on = false; paint(false); setTimeout(() => { on = true; paint(true); }, 250); setTimeout(() => { on = false; paint(true); }, 1250); });
+  })();
+
+  // ---- 05 Research agent steps ----
+  (() => {
+    const list = document.getElementById("m05-steps");
+    const lines = ["Planning searches", "Searching: sourdough starter fails", "Searching: starter temperature rye", "Reading Why sourdough starters fail", "Notes: cold kitchens slow the starter", "Reading Starter forum", "Skipped Members area: it asks for a password", "Checking for gaps", "Writing the report", "Done: 3 sources"];
+    let i = 0, timers = [];
+    const add = () => {
+      const li = document.createElement("li");
+      const span = document.createElement("span");
+      span.className = "line";
+      span.textContent = lines[i++ % lines.length];
+      li.appendChild(span); list.appendChild(li);
+      playOnce(span, "typing");
+      list.scrollTop = list.scrollHeight;
+    };
+    document.getElementById("m05-add").addEventListener("click", add);
+    document.getElementById("m05-replay").addEventListener("click", () => {
+      timers.forEach(clearTimeout); list.innerHTML = ""; i = 0;
+      timers = lines.map((_, n) => setTimeout(add, 200 + n * 450));
+    });
   })();
 
   // ---- 08 Mosaic tab windows (mirrors applyLayout in main.js) ----

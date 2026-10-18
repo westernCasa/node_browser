@@ -58,6 +58,20 @@ Raw material for the portfolio case study. One section per interaction: decision
 2. Switch between a bookmarked and an unbookmarked tab: the star must change with no animation.
 3. With keyboard focus on the star, press Enter: the focus ring must stay steady while the glyph animates inside it.
 
+## 05. Research agent steps
+
+**Decision note.** The research agent works in the background, and its list of steps is the only sign of what it is doing. Typing each new line out left to right makes it read like a log being written as it happens, and the 14 even jumps give it the feel of a terminal rather than a smooth fade. Only the newest line moves; everything already listed stays still, so you can read the earlier steps while new ones arrive. The whole line is revealed in 160ms, short enough that it never holds up reading.
+
+**Before.** The list was cleared and rebuilt on every new step, so every line was redrawn each time and nothing showed which line was new.
+
+**After.** `renderAgent()` keeps the lines it has already drawn and only appends new steps. Each new line is revealed with `clip-path: inset(0 100% 0 0)` → `inset(0 0 0 0)` over 160ms with `steps(14, end)`. Starting a new run clears the list; reopening the pane on a finished run shows its lines without typing. Reduced motion: each new line fades in over 120ms with `--ease-enter`.
+
+**Three checks.**
+
+1. Ask a follow-up question: the list should clear, and the new run's lines should type out from the first one.
+2. Close the agent pane during a run and open it again: lines already there must not retype.
+3. Long lines that wrap to two rows are revealed left to right on both rows at once; check that this still reads as one line being written.
+
 ## 08. Mosaic tab windows
 
 **Decision note.** Mosaic is the moment NODE shows that several pages are live at once, so the switch should explain where each page went instead of cutting. Going into Mosaic, the other tabs are already in their tiles underneath, and the tab you were reading shrinks into its own tile, so your eye follows the page you care about. Going back, that tile grows over the others; they are hidden only after they are covered, so nothing blinks out. Entering takes longer (320ms) than leaving (200ms), because arriving at a new view needs a moment to read and leaving should get out of the way. Tab windows are native views, so they are resized for real on every frame instead of transformed; that is the one place NODE animates size.
