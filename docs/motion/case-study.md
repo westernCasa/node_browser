@@ -44,6 +44,20 @@ Raw material for the portfolio case study. One section per interaction: decision
 2. Click twice quickly: the second label should replace the first cleanly, with no half-risen word left behind.
 3. With a screen reader, the button's name should read "Mosaic" or "Focus" (the label is a span inside the button, so its name is unchanged).
 
+## 04. Bookmark star
+
+**Decision note.** Saving a bookmark is a small commitment, so it gets a small, clear acknowledgement: the filled star grows into place from 60% and settles, the way a stamp lands. Removing it is quieter and quicker, a short fade with no change in size, because taking something away should not feel like a reward. The star stays white rather than violet, since violet in NODE means "active now", and a bookmark is a saved fact, not something running. Switching tabs repaints the star without any animation, so the star only moves when you act.
+
+**Before.** The star glyph swapped instantly on save, remove and tab switch alike.
+
+**After.** Save (click or Cmd/Ctrl+D): scale 0.6 → 1 and opacity 0.4 → 1 over 200ms, `--ease-enter`. Remove: opacity 0.4 → 1 over 120ms, `--ease-exit`. Tab switch: no animation (`paintStar()` only animates when `toggleBookmark()` passes `animate: true`). Reduced motion: save is a 120ms fade with no scale.
+
+**Three checks.**
+
+1. Press Cmd/Ctrl+D twice quickly: the second change should replace the first without the star getting stuck small.
+2. Switch between a bookmarked and an unbookmarked tab: the star must change with no animation.
+3. With keyboard focus on the star, press Enter: the focus ring must stay steady while the glyph animates inside it.
+
 ## 08. Mosaic tab windows
 
 **Decision note.** Mosaic is the moment NODE shows that several pages are live at once, so the switch should explain where each page went instead of cutting. Going into Mosaic, the other tabs are already in their tiles underneath, and the tab you were reading shrinks into its own tile, so your eye follows the page you care about. Going back, that tile grows over the others; they are hidden only after they are covered, so nothing blinks out. Entering takes longer (320ms) than leaving (200ms), because arriving at a new view needs a moment to read and leaving should get out of the way. Tab windows are native views, so they are resized for real on every frame instead of transformed; that is the one place NODE animates size.

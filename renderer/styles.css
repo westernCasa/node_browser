@@ -741,3 +741,15 @@ svg.brand path { fill: var(--ink); }
   .chip .label.rise { animation: node-fade-in var(--motion-fast) var(--ease-enter); }
 }
 
+/* 04 Bookmark star: saving pops the filled star in; removing fades the outline up.
+   Saved stays white (--ink), not violet. */
+#star-btn .glyph { display: inline-block; }
+#star-btn .glyph.save { animation: node-star-save var(--motion-base) var(--ease-enter); }
+#star-btn .glyph.unsave { animation: node-fade-up var(--motion-fast) var(--ease-exit); }
+@keyframes node-star-save { from { opacity: 0.4; transform: scale(0.6); } }
+@keyframes node-fade-up { from { opacity: 0.4; } }
+
+@media (prefers-reduced-motion: reduce) {
+  #star-btn .glyph.save { animation: node-fade-up var(--motion-fast) var(--ease-enter); }
+}
+

@@ -1967,11 +1967,14 @@ document.getElementById("zoom-badge").addEventListener("click", () => activeId &
 
 // ---- Bookmarks star ----
 const starBtn = document.getElementById("star-btn");
-async function paintStar() {
+// animate: only when the user saved or removed the bookmark (04). A repaint
+// from switching tabs shows the star with no animation.
+async function paintStar({ animate = false } = {}) {
   const tab = tabs.find((t) => t.id === activeId);
   starUrl = tab?.url || "";
   const on = api?.bookmarkHas && /^https?:/i.test(starUrl) ? await api.bookmarkHas(starUrl) : false;
-  starBtn.textContent = on ? "★" : "☆";
+  starBtn.innerHTML = `<span class="glyph">${on ? "★" : "☆"}</span>`;
+  if (animate) playOnce(starBtn.firstElementChild, on ? "save" : "unsave");
   starBtn.classList.toggle("on", on);
   starBtn.title = on ? "Bookmarked. Click to remove (Cmd/Ctrl+D)" : "Bookmark this page (Cmd/Ctrl+D)";
 }
@@ -1980,7 +1983,7 @@ async function toggleBookmark() {
   if (!api?.bookmarkToggle || !tab || !/^https?:/i.test(tab.url || "")) return;
   const on = await api.bookmarkToggle(tab.url, tab.title);
   statusEl.textContent = on ? `Bookmarked: ${tab.title || tab.url}` : "Bookmark removed.";
-  paintStar();
+  paintStar({ animate: true });
 }
 starBtn.addEventListener("click", toggleBookmark);
 

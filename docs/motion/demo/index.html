@@ -63,6 +63,17 @@
   .reduced .chip .label.rise { animation: node-fade-in var(--motion-fast) var(--ease-enter); }
   @media (prefers-reduced-motion: reduce) { .chip .label.rise { animation: node-fade-in var(--motion-fast) var(--ease-enter); } }
 
+  /* 04 Bookmark star */
+  .icon { width: 30px; height: 28px; border: 1px solid var(--line); border-radius: 2px; background: none; color: var(--ink-muted); font-size: 15px; cursor: pointer; }
+  .icon.on { color: var(--ink); }
+  .icon .glyph { display: inline-block; }
+  .icon .glyph.save { animation: node-star-save var(--motion-base) var(--ease-enter); }
+  .icon .glyph.unsave { animation: node-fade-up var(--motion-fast) var(--ease-exit); }
+  @keyframes node-star-save { from { opacity: 0.4; transform: scale(0.6); } }
+  @keyframes node-fade-up { from { opacity: 0.4; } }
+  .reduced .icon .glyph.save { animation: node-fade-up var(--motion-fast) var(--ease-enter); }
+  @media (prefers-reduced-motion: reduce) { .icon .glyph.save { animation: node-fade-up var(--motion-fast) var(--ease-enter); } }
+
   /* 08: a stand-in for NODE's content area. The tab windows are boxes moved and
      resized with left/top/width/height, as Electron resizes the real ones. */
   .stage { position: relative; height: 340px; background: var(--surface-raised); border: 1px solid var(--line); overflow: hidden; }
@@ -101,6 +112,13 @@
     <p>The new label rises 3px and fades in (200ms, ease-enter); the old one goes at once. The colour change is the same as 01. (The tiles themselves are 08.)</p>
     <div class="row"><button class="chip" id="m03-replay">Replay</button></div>
     <div class="stage-row"><button class="chip" id="m03-chip"><span class="label">Mosaic</span></button></div>
+  </section>
+  <section id="m04" aria-labelledby="m04-title">
+    <p class="kicker">04 · Bookmark star</p>
+    <h2 id="m04-title">Save and remove a bookmark</h2>
+    <p>Save: the filled star scales from 0.6 to 1 and fades up from 0.4 (200ms, ease-enter). Remove: the outline star fades up from 0.4 with no scale (120ms, ease-exit). Switching tabs repaints the star with no animation; "Switch tab" shows that.</p>
+    <div class="row"><button class="chip" id="m04-replay">Replay</button><button class="chip" id="m04-switch">Switch tab</button></div>
+    <div class="stage-row"><button class="icon" id="m04-star" title="Bookmark this page"><span class="glyph">☆</span></button></div>
   </section>
   <section id="m08" aria-labelledby="m08-title">
     <p class="kicker">08 · Mosaic tab windows</p>
@@ -163,6 +181,20 @@
     const set = (v) => setTimeout(() => { layout = v; paint(); }, 40);
     btn.addEventListener("click", () => set(layout === "mosaic" ? "focus" : "mosaic"));
     document.getElementById("m03-replay").addEventListener("click", () => { set("mosaic"); setTimeout(() => set("focus"), 1000); });
+  })();
+
+  // ---- 04 Bookmark star ----
+  (() => {
+    const star = document.getElementById("m04-star");
+    let on = false;
+    const paint = (animate) => {
+      star.innerHTML = `<span class="glyph">${on ? "★" : "☆"}</span>`;
+      star.classList.toggle("on", on);
+      if (animate) playOnce(star.firstElementChild, on ? "save" : "unsave");
+    };
+    star.addEventListener("click", () => { on = !on; paint(true); });
+    document.getElementById("m04-switch").addEventListener("click", () => { on = !on; paint(false); });
+    document.getElementById("m04-replay").addEventListener("click", () => { on = false; paint(false); setTimeout(() => { on = true; paint(true); }, 250); setTimeout(() => { on = false; paint(true); }, 1250); });
   })();
 
   // ---- 08 Mosaic tab windows (mirrors applyLayout in main.js) ----
