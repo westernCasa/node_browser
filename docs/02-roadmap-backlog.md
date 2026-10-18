@@ -46,7 +46,7 @@ Effort: XS under 1 hour, S half a day, M 1-2 days, L 3+ days. Finding IDs (C1, K
 | B23 | 5 | Port Library, Shot, Save, Media to Rust | P2 | M | Replaced by M05 |
 | B24 | 5 | Decide the mobile tab model | P2 | M | Done in planning: one WebView per tab, Mosaic on tablets (`06-mobile-plan.md`) |
 | B25 | 3 | Show Wikipedia results first while web results load (web requests are spaced 2.5 s apart, so a search can take 6 s) | P1 | S | Done |
-| B26 | 4 | Check on a real machine: live Wikipedia, DuckDuckGo, Brave, Grok and local model results, and an hour of browsing (Phase 2 gate) | P0 | S | In progress: hour of browsing done on the Mac 2026-10-18 with no problems. Still to confirm: Brave results with a key, AI query ideas with Grok or a local model |
+| B26 | 4 | Check on a real machine: live Wikipedia, DuckDuckGo, Brave, Grok and local model results, and an hour of browsing (Phase 2 gate) | P0 | S | In progress: hour of browsing and Brave results with a key confirmed on the Mac 2026-10-18. Still to confirm: AI query ideas with Grok or a local model |
 | B27 | 4 | Installable builds for macOS (.dmg) and Windows (.exe) with an app icon | P0 | M | Done (0.4): `npm run dist:mac` / `dist:win`; not signed; automatic updates are B46 |
 | B28 | 4 | Visual editor for site rules in Settings, so no JSON editing is needed | P1 | M | Done |
 | B29 | 4 | Sleep background tabs that are not playing media, to save memory with many tabs open | P1 | M | Done: after 15 minutes unused; never while playing, on screen or shared |
@@ -95,7 +95,7 @@ Effort: XS under 1 hour, S half a day, M 1-2 days, L 3+ days. Finding IDs (C1, K
 
 - ~~Browse for an hour to check the Phase 2 gate (no search blocks).~~ Done on the Mac, 2026-10-18.
 - Run NODE on a real machine and confirm live results from Wikipedia and DuckDuckGo.
-- Add a Brave Search API key under Settings and confirm Brave results appear.
+- ~~Add a Brave Search API key under Settings and confirm Brave results appear.~~ Done on the Mac, 2026-10-18.
 - Check that browsing feels smooth with several tabs open, and that video sites (YouTube, Vimeo, news sites) start playing on their own (B32, B34).
 - Turn on AI query ideas with Ollama or Grok, press Test, and check the "(AI)" queries give useful results.
 
