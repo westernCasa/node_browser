@@ -23,6 +23,16 @@
   --radius-md: 4px;
   --sans: "Barlow", "Helvetica Neue", Arial, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  /* Motion tokens (docs/motion/tokens.md). main.js copies --motion-slow and
+     --motion-base as MOTION_SLOW and MOTION_BASE for the tab windows. */
+  --motion-fast: 120ms;
+  --motion-base: 200ms;
+  --motion-slow: 320ms;
+  --motion-type: 160ms;
+  --ease-enter: cubic-bezier(0, 0, 0.2, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  --ease-move: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-type: steps(14, end);
   /* Older names used across this file, mapped to the brand tokens. */
   --bg: var(--surface);
   --bg-2: var(--surface-raised);

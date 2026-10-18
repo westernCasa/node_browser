@@ -1,4 +1,4 @@
-const { app, BrowserWindow, WebContentsView, ipcMain, session, shell, protocol, net, Menu, dialog, safeStorage, clipboard } = require("electron");
+const { app, BrowserWindow, WebContentsView, ipcMain, session, shell, protocol, net, Menu, dialog, safeStorage, clipboard, systemPreferences } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const { URL } = require("url");
@@ -140,6 +140,24 @@ function refreshRule(tab, url) {
   if (!tab.audioByUser) tab.audio = tab.rule.sound;
 }
 
+// Motion for the tab windows (interaction 08). The main process cannot read
+// CSS, so these must match --motion-slow and --motion-base in
+// renderer/styles.css and docs/motion/tokens.md.
+const MOTION_SLOW = 320;
+const MOTION_BASE = 200;
+
+// Electron only offers four easings. "ease-out" stands in for our
+// --ease-enter and "ease-in-out" for our --ease-move (see tokens.md).
+function motionFor(kind) {
+  if (!kind || systemPreferences.getAnimationSettings().prefersReducedMotion) return null;
+  if (kind === "enter") return { duration: MOTION_SLOW, easing: "ease-out" }; // Focus → Mosaic
+  if (kind === "exit") return { duration: MOTION_BASE, easing: "ease-out" }; // Mosaic → Focus
+  return { duration: MOTION_BASE, easing: "ease-in-out" }; // tiles moving to new cells
+}
+
+// Mosaic → Focus: the other tiles stay until the active one has covered them.
+let exitTimer = null;
+
 function chromeBounds() {
   const [width, height] = win.getContentSize();
   return { width, height };
@@ -166,10 +184,15 @@ function hideView(tab) {
   tab.attached = false;
 }
 
-function showView(tab, bounds) {
-  tab.view.setBounds(bounds);
+// anim: motion options or null. A tab window that is not on screen yet (or
+// has no size yet) appears in place: there is nothing to animate from.
+// index: where to insert it in the stack (0 = bottom); omitted = on top.
+function showView(tab, bounds, anim = null, index) {
+  if (anim && tab.attached && tab.view.getBounds().width > 0) tab.view.setBounds(bounds, { animate: anim });
+  else tab.view.setBounds(bounds);
   if (!tab.attached) {
-    win.contentView.addChildView(tab.view);
+    if (index >= 0) win.contentView.addChildView(tab.view, index);
+    else win.contentView.addChildView(tab.view);
     tab.attached = true;
   }
 }
@@ -179,9 +202,17 @@ function mosaicIds() {
   return [...tabs.keys()].filter((id) => id === activeId || tabs.get(id).rule?.mosaic !== false);
 }
 
-function applyLayout() {
+// opts.animate: "enter" | "exit" | "move", passed only by the Mosaic toggle
+// and by opening or closing a tab in Mosaic. Every other caller leaves it out.
+function applyLayout({ animate } = {}) {
   if (!win) return;
   applyAudio();
+  const anim = motionFor(animate);
+  // Back to Mosaic (or the library) before the exit finished: keep every tile.
+  if (exitTimer && (layout === "mosaic" || libraryOpen)) {
+    clearTimeout(exitTimer);
+    exitTimer = null;
+  }
   if (libraryOpen) {
     for (const tab of tabs.values()) hideView(tab);
     return;
@@ -192,8 +223,24 @@ function applyLayout() {
   for (const [id, tab] of tabs) if (!ids.includes(id)) hideView(tab);
 
   if (layout !== "mosaic" || ids.length <= 1) {
+    const active = tabs.get(activeId);
+    if (anim && animate === "exit" && active?.attached) {
+      win.contentView.addChildView(active.view); // already a child: this only raises it to the top
+      showView(active, rect, anim);
+      clearTimeout(exitTimer);
+      exitTimer = setTimeout(() => {
+        exitTimer = null;
+        applyLayout(); // now hide the covered tiles
+      }, MOTION_BASE);
+      return;
+    }
+    if (exitTimer) {
+      // The active tile is still growing: leave the others until the timer hides them.
+      if (active && !active.attached) showView(active, rect);
+      return;
+    }
     for (const [id, tab] of tabs) {
-      if (id === activeId) showView(tab, rect);
+      if (id === activeId) showView(tab, rect, anim);
       else hideView(tab);
     }
     return;
@@ -207,16 +254,23 @@ function applyLayout() {
   const cellW = Math.floor((rect.width - gap * (cols - 1)) / cols);
   const cellH = Math.floor((rect.height - gap * (rows - 1)) / rows);
 
-  ids.forEach((id, i) => {
-    const col = i % cols;
-    const row = Math.floor(i / cols);
-    showView(tabs.get(id), {
-      x: rect.x + col * (cellW + gap),
-      y: rect.y + row * (cellH + gap),
-      width: cellW,
-      height: cellH,
-    });
+  const cell = (i) => ({
+    x: rect.x + (i % cols) * (cellW + gap),
+    y: rect.y + Math.floor(i / cols) * (cellH + gap),
+    width: cellW,
+    height: cellH,
   });
+  const active = tabs.get(activeId);
+  if (animate === "enter" && anim && active?.attached) {
+    // Focus → Mosaic: the other tiles go in first, directly under the active
+    // tab and already in their cells; then the active tab shrinks into its own.
+    ids.forEach((id, i) => {
+      if (id !== activeId) showView(tabs.get(id), cell(i), null, win.contentView.children.indexOf(active.view));
+    });
+    showView(active, cell(ids.indexOf(activeId)), anim);
+    return;
+  }
+  ids.forEach((id, i) => showView(tabs.get(id), cell(i), anim));
 }
 
 function emit(payload) {
@@ -795,7 +849,8 @@ function createTab(url, opts = {}) {
   } else {
     view.webContents.loadURL(loadTarget(url, id));
   }
-  applyLayout();
+  // In Mosaic the existing tiles slide to their new cells; the new tab appears in place.
+  applyLayout(layout === "mosaic" ? { animate: "move" } : {});
   emitList();
   return id;
 }
@@ -835,7 +890,7 @@ function closeTab(id) {
     activeId = [...tabs.keys()].at(-1) || null;
   }
   if (!activeId) createTab(newTabUrl());
-  applyLayout();
+  applyLayout(layout === "mosaic" ? { animate: "move" } : {});
   emitList();
 }
 
@@ -1657,8 +1712,9 @@ ipcMain.handle("tab:forward", (_e, id) => {
 });
 ipcMain.handle("tab:reload", (_e, id) => tabs.get(id)?.view.webContents.reload());
 ipcMain.handle("layout:set", (_e, mode) => {
+  const before = layout;
   layout = mode === "mosaic" ? "mosaic" : "focus";
-  applyLayout();
+  applyLayout(layout !== before ? { animate: layout === "mosaic" ? "enter" : "exit" } : {});
   return layout;
 });
 ipcMain.handle("layout:sidebar", (_e, w) => {

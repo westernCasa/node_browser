@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>NODE Motion Demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet" />
+<style>
+  /* Same tokens as renderer/styles.css (docs/motion/tokens.md). */
+  :root {
+    color-scheme: dark;
+    --surface: #000; --surface-raised: #0e0e0f; --line: #2a2a2d;
+    --ink: #fff; --ink-muted: #a1a1a6; --signal: #b18cff;
+    --sans: "Barlow", "Helvetica Neue", Arial, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+    --motion-fast: 120ms; --motion-base: 200ms; --motion-slow: 320ms; --motion-type: 160ms;
+    --ease-enter: cubic-bezier(0, 0, 0.2, 1);
+    --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+    --ease-move: cubic-bezier(0.4, 0, 0.2, 1);
+    --ease-type: steps(14, end);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--surface); color: var(--ink); font: 15px/22px var(--sans); }
+  header { position: sticky; top: 0; z-index: 10; display: flex; gap: 16px; align-items: center; justify-content: space-between; padding: 14px 16px; background: var(--surface); border-bottom: 1px solid var(--line); }
+  header h1 { margin: 0; font-size: 15px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
+  main { max-width: 960px; margin: 0 auto; padding: 24px 16px 64px; }
+  section { border: 1px solid var(--line); padding: 20px; margin-bottom: 24px; }
+  .kicker { margin: 0; font: 12px var(--mono); color: var(--ink-muted); letter-spacing: .08em; text-transform: uppercase; }
+  h2 { margin: 4px 0 6px; font-size: 22px; font-weight: 700; }
+  p { margin: 0 0 14px; color: var(--ink-muted); max-width: 70ch; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+  .chip { height: 28px; padding: 0 12px; border: 1px solid var(--line); border-radius: 2px; background: none; color: var(--ink-muted); font: 600 12px var(--sans); letter-spacing: .12em; text-transform: uppercase; cursor: pointer;
+          transition: border-color var(--motion-fast) var(--ease-move), color var(--motion-fast) var(--ease-move); }
+  .chip:hover { border-color: var(--ink); color: var(--ink); }
+  .chip:disabled { opacity: .4; cursor: default; }
+  :focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+  label.toggle { display: flex; gap: 8px; align-items: center; font: 12px var(--mono); color: var(--ink-muted); cursor: pointer; }
+
+  /* 08: a stand-in for NODE's content area. The tab windows are boxes moved and
+     resized with left/top/width/height, as Electron resizes the real ones. */
+  .stage { position: relative; height: 340px; background: var(--surface-raised); border: 1px solid var(--line); overflow: hidden; }
+  .tab { position: absolute; background: #f4f4f2; color: #111; overflow: hidden; border-radius: 0; }
+  .tab .bar { height: 22px; padding: 0 8px; font: 11px/22px var(--mono); color: #000; background: #e2e2de; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tab .lines { padding: 10px; }
+  .tab .lines i { display: block; height: 7px; margin: 0 0 7px; background: #c9c9c4; }
+  .tab.active { outline: 1px solid var(--signal); outline-offset: -1px; }
+  .tab.hidden { display: none; }
+  .note { font: 12px var(--mono); color: var(--ink-muted); margin: 10px 0 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>NODE motion</h1>
+  <label class="toggle"><input type="checkbox" id="reduced" /> Preview reduced motion</label>
+</header>
+<main>
+  <section id="m08" aria-labelledby="m08-title">
+    <p class="kicker">08 · Mosaic tab windows</p>
+    <h2 id="m08-title">Tabs move into and out of the grid</h2>
+    <p>Focus → Mosaic: the other tabs wait in their tiles underneath; the active tab shrinks into its tile (320ms, ease-out). Mosaic → Focus: the active tile grows over the others (200ms, ease-out), and they are hidden once covered. Opening or closing a tab in Mosaic moves every tile to its new cell (200ms, ease-in-out); a new tab appears in place.</p>
+    <div class="row">
+      <button class="chip" id="m08-replay">Replay</button>
+      <button class="chip" id="m08-toggle">Mosaic</button>
+      <button class="chip" id="m08-open">Open tab</button>
+      <button class="chip" id="m08-close">Close tab</button>
+    </div>
+    <div class="stage" id="m08-stage" aria-label="Tab windows"></div>
+    <p class="note">The real tab windows use Electron's built-in curves: ease-out stands in for --ease-enter and ease-in-out for --ease-move, so this page uses the same CSS keywords.</p>
+  </section>
+</main>
+<script>
+  const css = getComputedStyle(document.documentElement);
+  const ms = (name) => parseFloat(css.getPropertyValue(name)); // "320ms" -> 320
+  const reducedBox = document.getElementById("reduced");
+  const reduced = () => reducedBox.checked || matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // ---- 08 Mosaic tab windows (mirrors applyLayout in main.js) ----
+  (() => {
+    const stage = document.getElementById("m08-stage");
+    const toggleBtn = document.getElementById("m08-toggle");
+    const names = ["Memex · Wikipedia", "Light No Fire trailer · YouTube", "Rocky exoplanet · News", "Field recordings · Video", "Levain guide", "Hario V60"];
+    let tabs = [];
+    let active = null;
+    let layout = "focus";
+    let exitTimer = null;
+    let next = 0;
+
+    const motion = (kind) => {
+      if (!kind || reduced()) return null;
+      if (kind === "enter") return { d: ms("--motion-slow"), e: "ease-out" };
+      if (kind === "exit") return { d: ms("--motion-base"), e: "ease-out" };
+      return { d: ms("--motion-base"), e: "ease-in-out" };
+    };
+
+    function make() {
+      const el = document.createElement("div");
+      el.className = "tab hidden";
+      el.innerHTML = `<div class="bar">${names[next++ % names.length]}</div><div class="lines">${"<i></i>".repeat(12)}</div>`;
+      [...el.querySelectorAll("i")].forEach((i, n) => (i.style.width = 40 + ((n * 37) % 55) + "%"));
+      stage.appendChild(el);
+      return { el, shown: false };
+    }
+
+    function place(tab, r, anim, z) {
+      const s = tab.el.style;
+      s.transition = anim && tab.shown ? ["left", "top", "width", "height"].map((p) => `${p} ${anim.d}ms ${anim.e}`).join(", ") : "none";
+      Object.assign(s, { left: r.x + "px", top: r.y + "px", width: r.w + "px", height: r.h + "px", zIndex: z });
+      tab.el.classList.remove("hidden");
+      tab.shown = true;
+    }
+    function hide(tab) {
+      tab.el.classList.add("hidden");
+      tab.shown = false;
+    }
+
+    function apply(kind) {
+      const anim = motion(kind);
+      if (exitTimer && layout === "mosaic") { clearTimeout(exitTimer); exitTimer = null; }
+      const W = stage.clientWidth, H = stage.clientHeight;
+      const full = { x: 0, y: 0, w: W, h: H };
+      tabs.forEach((t) => t.el.classList.toggle("active", t === active));
+      if (layout !== "mosaic" || tabs.length <= 1) {
+        if (anim && kind === "exit") {
+          place(active, full, anim, 3); // raised to the top, then grows
+          clearTimeout(exitTimer);
+          exitTimer = setTimeout(() => { exitTimer = null; apply(); }, anim.d);
+          return;
+        }
+        if (exitTimer) return;
+        tabs.forEach((t) => (t === active ? place(t, full, anim, 2) : hide(t)));
+        return;
+      }
+      const n = tabs.length, cols = Math.ceil(Math.sqrt(n)), rows = Math.ceil(n / cols), gap = 4;
+      const cw = Math.floor((W - gap * (cols - 1)) / cols), ch = Math.floor((H - gap * (rows - 1)) / rows);
+      const cell = (i) => ({ x: (i % cols) * (cw + gap), y: Math.floor(i / cols) * (ch + gap), w: cw, h: ch });
+      if (kind === "enter" && anim) {
+        tabs.forEach((t, i) => { if (t !== active) place(t, cell(i), null, 1); }); // underneath, already in place
+        void stage.offsetWidth;
+        place(active, cell(tabs.indexOf(active)), anim, 2); // then the active tab shrinks
+        return;
+      }
+      tabs.forEach((t, i) => place(t, cell(i), anim, t === active ? 2 : 1));
+    }
+
+    function setLayout(mode) {
+      if (mode === layout) return;
+      layout = mode;
+      toggleBtn.textContent = layout === "mosaic" ? "Focus" : "Mosaic";
+      apply(layout === "mosaic" ? "enter" : "exit");
+    }
+
+    function reset() {
+      clearTimeout(exitTimer); exitTimer = null;
+      stage.innerHTML = ""; tabs = []; next = 0; layout = "focus";
+      toggleBtn.textContent = "Mosaic";
+      for (let i = 0; i < 4; i++) tabs.push(make());
+      active = tabs[1];
+      apply();
+    }
+
+    toggleBtn.addEventListener("click", () => setLayout(layout === "mosaic" ? "focus" : "mosaic"));
+    document.getElementById("m08-open").addEventListener("click", () => {
+      if (tabs.length >= 6) return;
+      const t = make();
+      tabs.push(t);
+      active = t;
+      apply(layout === "mosaic" ? "move" : null);
+    });
+    document.getElementById("m08-close").addEventListener("click", () => {
+      if (tabs.length <= 1) return;
+      const gone = active;
+      tabs = tabs.filter((t) => t !== gone);
+      gone.el.remove();
+      active = tabs.at(-1);
+      apply(layout === "mosaic" ? "move" : null);
+    });
+    // Replay: Focus → Mosaic, a pause, then Mosaic → Focus.
+    document.getElementById("m08-replay").addEventListener("click", () => {
+      reset();
+      setTimeout(() => setLayout("mosaic"), 300);
+      setTimeout(() => setLayout("focus"), 300 + ms("--motion-slow") + 900);
+    });
+    reset();
+    addEventListener("resize", () => apply());
+  })();
+</script>
+</body>
+</html>
