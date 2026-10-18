@@ -83,6 +83,15 @@
   .reduced .steps .line.typing { animation: node-fade-in var(--motion-fast) var(--ease-enter); }
   @media (prefers-reduced-motion: reduce) { .steps .line.typing { animation: node-fade-in var(--motion-fast) var(--ease-enter); } }
 
+  /* 06 Keyword chips */
+  .keys { display: flex; flex-wrap: wrap; gap: 6px; padding: 14px; background: var(--surface-raised); border: 1px solid var(--line); min-height: 80px; align-content: flex-start; }
+  .key { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px 4px 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); color: var(--ink); font-size: 13px; cursor: pointer;
+         transition: border-color var(--motion-fast) var(--ease-move), color var(--motion-fast) var(--ease-move); }
+  .key.pinned { border-color: var(--signal); color: var(--signal); transition-duration: var(--motion-base); transition-timing-function: var(--ease-enter); }
+  .key button { border: 0; background: none; color: var(--ink-muted); cursor: pointer; font: inherit; }
+  .reduced .key.pinned { transition-duration: var(--motion-fast); }
+  @media (prefers-reduced-motion: reduce) { .key.pinned { transition-duration: var(--motion-fast); } }
+
   /* 08: a stand-in for NODE's content area. The tab windows are boxes moved and
      resized with left/top/width/height, as Electron resizes the real ones. */
   .stage { position: relative; height: 340px; background: var(--surface-raised); border: 1px solid var(--line); overflow: hidden; }
@@ -135,6 +144,13 @@
     <p>Only new lines animate: each one is revealed left to right in 14 even steps over 160ms. Lines already listed stay still, and the list keeps scrolling to the newest line.</p>
     <div class="row"><button class="chip" id="m05-replay">Replay</button><button class="chip" id="m05-add">Add a step</button></div>
     <ol class="steps" id="m05-steps"></ol>
+  </section>
+  <section id="m06" aria-labelledby="m06-title">
+    <p class="kicker">06 · Keyword chips</p>
+    <h2 id="m06-title">Pin, unpin and hide keywords</h2>
+    <p>Click a chip to pin it: it turns violet (200ms, ease-enter) and every chip slides to its new place (200ms, ease-move). Click × to hide one: it fades and shrinks to 0.9 in place (120ms, ease-exit), the others slide over, and the next keyword scales in from 0.95 (200ms, ease-enter). A fast second click waits for the first.</p>
+    <div class="row"><button class="chip" id="m06-replay">Replay</button></div>
+    <div class="keys" id="m06-keys"></div>
   </section>
   <section id="m08" aria-labelledby="m08-title">
     <p class="kicker">08 · Mosaic tab windows</p>
@@ -232,6 +248,54 @@
       timers.forEach(clearTimeout); list.innerHTML = ""; i = 0;
       timers = lines.map((_, n) => setTimeout(add, 200 + n * 450));
     });
+  })();
+
+  // ---- 06 Keyword chips (same approach as drawKeys in renderer/app.js) ----
+  (() => {
+    const box = document.getElementById("m06-keys");
+    const pool = ["memex", "Vannevar Bush", "hypertext", "associative trails", "microfilm", "Ted Nelson", "Douglas Engelbart", "As We May Think", "knowledge base", "Xanadu", "NLS", "bookmarks"];
+    let pinned = [], hidden = [];
+    const chips = new Map();
+    let queue = Promise.resolve();
+    const auto = () => pool.filter((t) => !pinned.includes(t) && !hidden.includes(t)).slice(0, 7);
+    const make = () => {
+      const el = document.createElement("span"); el.className = "key";
+      const label = document.createElement("span"); const x = document.createElement("button"); x.textContent = "×";
+      el.append(label, x);
+      el.addEventListener("click", () => { const t = el.__term; pinned = pinned.includes(t) ? pinned.filter((p) => p !== t) : [...pinned, t]; render(true); });
+      x.addEventListener("click", (e) => { e.stopPropagation(); const t = el.__term; if (pinned.includes(t)) pinned = pinned.filter((p) => p !== t); else hidden.push(t); render(true); });
+      return el;
+    };
+    const tidy = () => { [...chips.values()].sort((a, b) => a.style.order - b.style.order).forEach((el) => { box.appendChild(el); el.style.order = ""; }); };
+    async function draw(animate) {
+      const red = reduced(), fast = ms("--motion-fast"), base = ms("--motion-base"), curve = (n) => css.getPropertyValue(n).trim();
+      const want = [...pinned.map((t) => ({ t, pin: true })), ...auto().map((t) => ({ t, pin: false }))];
+      const keep = new Set(want.map((w) => w.t));
+      const leaving = [...chips].filter(([k]) => !keep.has(k));
+      if (animate && leaving.length) await Promise.all(leaving.map(([, el]) => el.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: red ? "none" : "scale(0.9)" }], { duration: fast, easing: curve("--ease-exit"), fill: "forwards" }).finished));
+      const first = new Map([...chips].map(([k, el]) => [k, el.getBoundingClientRect()]));
+      for (const [k, el] of leaving) { el.remove(); chips.delete(k); }
+      const entering = [];
+      want.forEach((w, i) => {
+        let el = chips.get(w.t);
+        if (!el) { el = make(); chips.set(w.t, el); box.appendChild(el); entering.push(el); }
+        el.__term = w.t; el.classList.toggle("pinned", w.pin);
+        el.firstChild.textContent = (w.pin ? "📌 " : "") + w.t; el.style.order = i;
+      });
+      if (!animate) return tidy();
+      const moves = [];
+      if (!red) for (const [k, el] of chips) { const f = first.get(k); if (!f) continue; const l = el.getBoundingClientRect(); const dx = f.left - l.left, dy = f.top - l.top; if (dx || dy) moves.push(el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "none" }], { duration: base, easing: curve("--ease-move") }).finished); }
+      for (const el of entering) moves.push(el.animate([{ opacity: 0, transform: red ? "none" : "scale(0.95)" }, { opacity: 1, transform: "none" }], { duration: red ? fast : base, easing: curve("--ease-enter") }).finished);
+      await Promise.all(moves); tidy();
+    }
+    const render = (animate) => (queue = queue.then(() => draw(animate)));
+    document.getElementById("m06-replay").addEventListener("click", () => {
+      pinned = []; hidden = []; chips.forEach((el) => el.remove()); chips.clear(); render(false);
+      setTimeout(() => { pinned = ["hypertext"]; render(true); }, 400);
+      setTimeout(() => { hidden.push("microfilm"); render(true); }, 1300);
+      setTimeout(() => { pinned = []; render(true); }, 2200);
+    });
+    render(false);
   })();
 
   // ---- 08 Mosaic tab windows (mirrors applyLayout in main.js) ----

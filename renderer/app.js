@@ -277,41 +277,147 @@ function renderTabs() {
   }
 }
 
-function renderKeys() {
+// ---- 06 Keyword chips ----
+// Chips are kept, one per keyword, instead of being rebuilt on every change, so
+// they can move from their old place to their new one. Their visual order comes
+// from the CSS `order` property while they move; the page order is tidied up
+// once they stop. Changes run one after another (a fast second click waits).
+const keyChips = new Map(); // lower-case keyword -> chip element
+let keysQueue = Promise.resolve();
+const rootStyle = () => getComputedStyle(document.documentElement);
+const motionMs = (name) => parseFloat(rootStyle().getPropertyValue(name)) || 0; // "200ms" -> 200
+const motionCurve = (name) => rootStyle().getPropertyValue(name).trim();
+const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function makeKeyChip() {
+  const el = document.createElement("span");
+  el.className = "key";
+  const label = document.createElement("span");
+  label.className = "label";
+  const btn = document.createElement("button");
+  btn.textContent = "×";
+  el.append(label, btn);
+  el.addEventListener("click", () => {
+    const term = el.__term;
+    if (isPinned(term)) pinned = pinned.filter((p) => lower(p) !== lower(term));
+    else pinned = [...pinned, term];
+    renderKeys({ animate: true });
+    crawl();
+  });
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const term = el.__term;
+    if (isPinned(term)) pinned = pinned.filter((p) => lower(p) !== lower(term));
+    else hideKeyword(term);
+    renderKeys({ animate: true });
+    crawl();
+  });
+  return el;
+}
+
+// Puts the chips in page order to match what is on screen, then clears `order`
+// (so keyboard Tab order matches the visual order again).
+function tidyKeyChips() {
+  const els = [...keyChips.values()].sort((a, b) => Number(a.style.order) - Number(b.style.order));
+  for (const el of els) {
+    keysEl.appendChild(el);
+    el.style.order = "";
+  }
+}
+
+async function drawKeys(animate) {
+  const reduced = reducedMotion();
+  const fast = motionMs("--motion-fast");
+  const base = motionMs("--motion-base");
+  const want = [...pinned.map((t) => ({ term: t, pin: true })), ...autoTerms().slice(0, AUTO_SHOWN).map((t) => ({ term: t, pin: false }))];
+  const wantKeys = new Set(want.map((w) => lower(w.term)));
+  const leaving = [...keyChips].filter(([k]) => !wantKeys.has(k));
+
+  // Which × had keyboard focus, by its place in the list.
+  const focusedChip = document.activeElement?.closest?.(".key");
+  const focusIndex = focusedChip && keysEl.contains(focusedChip) ? [...keysEl.children].indexOf(focusedChip) : -1;
+
+  // 1. A chip that is leaving fades and shrinks while still holding its place.
+  if (animate && leaving.length) {
+    const outs = leaving.map(([, el]) =>
+      el.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: reduced ? "none" : "scale(0.9)" }], { duration: fast, easing: motionCurve("--ease-exit"), fill: "forwards" }).finished
+    );
+    await Promise.all(outs).catch(() => {});
+  }
+
+  // 2. FLIP, "First": where every chip is now.
+  const first = new Map([...keyChips].map(([k, el]) => [k, el.getBoundingClientRect()]));
+  for (const [k, el] of leaving) {
+    el.remove();
+    keyChips.delete(k);
+  }
+
+  // Apply the new list: reuse chips, add new ones, set their order.
+  const entering = [];
+  want.forEach((w, i) => {
+    const k = lower(w.term);
+    let el = keyChips.get(k);
+    if (!el) {
+      el = makeKeyChip();
+      keyChips.set(k, el);
+      keysEl.appendChild(el);
+      entering.push(el);
+    }
+    el.__term = w.term;
+    el.classList.toggle("pinned", w.pin);
+    el.querySelector(".label").textContent = (w.pin ? "📌 " : "") + w.term;
+    el.title = w.pin ? "Pinned. Click to unpin." : "Click to pin. Pinned keywords go into every search.";
+    el.querySelector("button").title = w.pin ? "Unpin" : "Hide this keyword";
+    el.style.order = String(i);
+  });
+
+  // The × that had focus is gone: move focus to the × now in its place.
+  const restoreFocus = () => {
+    if (focusIndex < 0 || keysEl.contains(document.activeElement)) return;
+    const sorted = [...keyChips.values()].sort((a, b) => Number(a.style.order) - Number(b.style.order));
+    sorted[Math.min(focusIndex, sorted.length - 1)]?.querySelector("button")?.focus();
+  };
+
+  if (!animate) {
+    tidyKeyChips();
+    restoreFocus();
+    return;
+  }
+
+  // 3. FLIP, "Last, Invert, Play": each chip starts drawn at its old place and
+  // slides to the new one. Reduced motion: chips jump to their new places.
+  const moves = [];
+  if (!reduced) {
+    for (const [k, el] of keyChips) {
+      const f = first.get(k);
+      if (!f) continue;
+      const l = el.getBoundingClientRect();
+      const dx = f.left - l.left;
+      const dy = f.top - l.top;
+      if (dx || dy) moves.push(el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "none" }], { duration: base, easing: motionCurve("--ease-move") }).finished);
+    }
+  }
+  // New chips scale up from 0.95 and fade in.
+  for (const el of entering) {
+    moves.push(
+      el.animate([{ opacity: 0, transform: reduced ? "none" : "scale(0.95)" }, { opacity: 1, transform: "none" }], { duration: reduced ? fast : base, easing: motionCurve("--ease-enter") }).finished
+    );
+  }
+  restoreFocus();
+  await Promise.all(moves).catch(() => {});
+  tidyKeyChips();
+}
+
+// animate: true only for the user's own pin, unpin, hide and add.
+function renderKeys({ animate = false } = {}) {
   // Pins belong to the current research session (B17). Only save once the
   // session has loaded, so the empty startup render cannot wipe saved pins.
   if (session) api?.researchPins?.(pinned);
-  keysEl.innerHTML = "";
-  const chip = (term, isPin) => {
-    const el = document.createElement("span");
-    el.className = "key" + (isPin ? " pinned" : "");
-    el.title = isPin ? "Pinned. Click to unpin." : "Click to pin. Pinned keywords go into every search.";
-    el.textContent = (isPin ? "📌 " : "") + term;
-    el.addEventListener("click", () => {
-      if (isPin) pinned = pinned.filter((p) => lower(p) !== lower(term));
-      else pinned = [...pinned, term];
-      renderKeys();
-      crawl();
-    });
-    const btn = document.createElement("button");
-    btn.textContent = "×";
-    btn.title = isPin ? "Unpin" : "Hide this keyword";
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      if (isPin) {
-        pinned = pinned.filter((p) => lower(p) !== lower(term));
-      } else {
-        hideKeyword(term);
-      }
-      renderKeys();
-      crawl();
-    });
-    el.appendChild(btn);
-    keysEl.appendChild(el);
-  };
-  for (const p of pinned) chip(p, true);
-  for (const t of autoTerms().slice(0, AUTO_SHOWN)) chip(t, false);
+  keysQueue = keysQueue.then(() => drawKeys(animate)).catch(() => {});
+  renderHiddenKeys();
+}
 
+function renderHiddenKeys() {
   const hiddenEl = document.getElementById("hidden-keys");
   refreshBanned();
   hiddenEl.hidden = !banned.length;
@@ -778,7 +884,7 @@ function pinKeyword(text) {
   if (!v || isPinned(v)) return;
   pinned = [...pinned, v].slice(0, 6);
   unhideKeyword(v);
-  renderKeys();
+  renderKeys({ animate: true });
   crawl();
 }
 
@@ -789,7 +895,7 @@ document.getElementById("key-form").addEventListener("submit", (e) => {
   if (!v || isPinned(v)) return;
   pinned = [...pinned, v].slice(0, 6);
   unhideKeyword(v);
-  renderKeys();
+  renderKeys({ animate: true });
   crawl();
 });
 

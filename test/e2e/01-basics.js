@@ -63,6 +63,7 @@ const log = (...a) => console.log("•", ...a);
   const t0 = Date.now();
   while ((await ui.textContent("#suggest-status")).startsWith("Searching") && Date.now() - t0 < 30000) await sleep(250);
   log("search finished after", Date.now() - t0, "ms");
+  await sleep(600); // the hidden chip fades out and the others slide (motion 06)
   log("after pin + hide:", (await ui.$$eval("#keys .key", (els) => els.map((e) => e.textContent.replace("×", "").trim()))).join(" | "));
   log("hidden row:", (await ui.textContent("#hidden-keys")).trim());
   log("status:", await ui.textContent("#suggest-status"));

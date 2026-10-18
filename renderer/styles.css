@@ -763,3 +763,12 @@ svg.brand path { fill: var(--ink); }
   #agent-steps .line.typing { animation: node-fade-in var(--motion-fast) var(--ease-enter); }
 }
 
+/* 06 Keyword chips. Pinning turns the chip violet with the "on" timing; the
+   sliding, leaving and entering run in renderer/app.js (drawKeys) with the
+   Web Animations API, because CSS cannot animate an element between two places. */
+.key.pinned { transition-duration: var(--motion-base); transition-timing-function: var(--ease-enter); }
+
+@media (prefers-reduced-motion: reduce) {
+  .key.pinned { transition-duration: var(--motion-fast); }
+}
+

@@ -72,6 +72,24 @@ Raw material for the portfolio case study. One section per interaction: decision
 2. Close the agent pane during a run and open it again: lines already there must not retype.
 3. Long lines that wrap to two rows are revealed left to right on both rows at once; check that this still reads as one line being written.
 
+## 06. Keyword chips
+
+**Decision note.** Keywords are what NODE searches with, so when you pin or hide one you need to see exactly where everything went. Pinning moves a chip to the front and turns it violet; every other chip slides from its old place to its new one, so nothing appears to jump. Hiding is a two-beat change: the chip fades and shrinks where it is, so you see which one went, and only then do the others close the gap and the next keyword arrives. Changes run in order, so two quick clicks read as two clear steps instead of a tangle.
+
+**Before.** `renderKeys()` deleted and rebuilt every chip on each change, so pinning or hiding made the whole row jump at once with no sign of what changed.
+
+**After.** Chips are kept, one per keyword, and reordered with the CSS `order` property. Pin: the colour fades to violet (200ms, `--ease-enter`) and all chips slide to their new places with FLIP (200ms, `--ease-move`). Hide or unpin with ×: the chip fades and scales to 0.9 in place (120ms, `--ease-exit`), is removed, the others slide (FLIP), and a newly shown keyword scales in from 0.95 and fades in (200ms, `--ease-enter`). Each change waits for the one before. If the × that had focus is removed, focus moves to the × now in its place. When the motion ends, the chips are put back in page order so keyboard Tab order matches what you see. Reduced motion: no sliding or scaling; leaving and new chips fade over 120ms.
+
+FLIP stands for First, Last, Invert, Play: note where each chip is, make the change, measure where it ended up, then draw it at the old spot and animate it to the new one. It lets a layout change look like movement without animating the layout itself.
+
+**Three checks.**
+
+1. Pin a chip and immediately hide another: the hide must wait for the pin's slide to finish, and no chip should end up out of place.
+2. Tab to a chip's × and press Enter or Space: focus must land on the × of the chip that took its place, not jump to the top of the window.
+3. Keywords that change because you scrolled or opened a page must swap without any of this motion; only your own clicks animate.
+
+The chip itself is a `<span>`, so it cannot be reached with Tab; only its × can. Making the chip focusable would change behaviour, so it is left for a later decision.
+
 ## 08. Mosaic tab windows
 
 **Decision note.** Mosaic is the moment NODE shows that several pages are live at once, so the switch should explain where each page went instead of cutting. Going into Mosaic, the other tabs are already in their tiles underneath, and the tab you were reading shrinks into its own tile, so your eye follows the page you care about. Going back, that tile grows over the others; they are hidden only after they are covered, so nothing blinks out. Entering takes longer (320ms) than leaving (200ms), because arriving at a new view needs a moment to read and leaving should get out of the way. Tab windows are native views, so they are resized for real on every frame instead of transformed; that is the one place NODE animates size.
