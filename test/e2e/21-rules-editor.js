@@ -24,7 +24,7 @@ const log = (...a) => console.log("•", ...a);
   const playing = () => app.evaluate(({ webContents }) => webContents.getAllWebContents().find((w) => w.getURL().includes("media.html")).executeJavaScript(`[...document.querySelectorAll("video,audio")].some((m) => !m.paused)`));
   log("media playing before any rule:", await playing());
 
-  await ui.click("#sources-btn");
+  await ui.evaluate(() => document.querySelector('#sources-btn').click()); // in the menu overlay or the hidden Capture actions
   await sleep(800);
   log("rules listed:", await ui.$$eval("#rules-list .rn", (e) => e.map((x) => x.textContent)).then((l) => l.join(" | ")));
   log("summary of the sign-in rule:", await ui.$$eval("#rules-list .rs", (e) => e.at(-1).textContent));

@@ -51,7 +51,7 @@ const log = (...a) => console.log("•", ...a);
   await ui.$eval("#rail", (r) => (r.scrollTop = 0));
 
   // Sources panel: wrong key first, then the right one.
-  await ui.click("#sources-btn");
+  await ui.evaluate(() => document.querySelector('#sources-btn').click()); // in the menu overlay or the hidden Capture actions
   await sleep(800);
   log("sources panel visible:", await ui.$eval("#sources-pane", (e) => !e.hidden), "| DDG state:", (await ui.$$eval("#sources-list .source", (e) => e.map((x) => x.textContent))).find((t) => t.trim().startsWith("DuckDuckGo")).replace(/\s+/g, " ").slice(0, 120));
   const brave = (await ui.$$("#sources-list .source"))[1];

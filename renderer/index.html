@@ -6,69 +6,104 @@
   <title>NODE</title>
   <style>
     html, body { margin: 0; height: 100%; background: #000000; color: #ffffff; }
-    .shell { height: 100vh; width: 100vw; display: grid; grid-template-columns: 1fr 225px; grid-template-rows: 112px 1fr; }
+    .shell { height: 100vh; width: 100vw; display: grid; grid-template-columns: 1fr var(--panel-space, 356px); grid-template-rows: 96px 1fr; }
     .chrome { grid-column: 1 / -1; background: #0e0e0f; border-bottom: 1px solid #2a2a2d; display: flex; flex-direction: column; }
     .tabrow, .nav { display: flex; align-items: center; gap: 6px; padding: 6px 8px; }
     .omni { flex: 1; }
     .omni input { width: 100%; height: 28px; }
-    .rail { grid-column: 2; grid-row: 2; background: #0e0e0f; border-left: 1px solid #2a2a2d; overflow: auto; }
+    .rail { grid-column: 2; grid-row: 2; background: #0e0e0f; border: 1px solid #2a2a2d; overflow: auto; }
   </style>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+  <svg class="sprite" aria-hidden="true" focusable="false">
+    <symbol id="i-back" viewBox="0 0 20 20"><path d="M12 4 6 10l6 6"/></symbol>
+    <symbol id="i-forward" viewBox="0 0 20 20"><path d="M8 4l6 6-6 6"/></symbol>
+    <symbol id="i-reload" viewBox="0 0 20 20"><path d="M16 10a6 6 0 1 1-1.8-4.3"/><path d="M16 3v4h-4"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 20 20"><path d="M10 4v12M4 10h12"/></symbol>
+    <symbol id="i-close" viewBox="0 0 20 20"><path d="M5 5l10 10M15 5 5 15"/></symbol>
+    <symbol id="i-up" viewBox="0 0 20 20"><path d="M5 12.5l5-5 5 5"/></symbol>
+    <symbol id="i-down" viewBox="0 0 20 20"><path d="M5 7.5l5 5 5-5"/></symbol>
+    <symbol id="i-star" viewBox="0 0 20 20"><path d="M10 3l2.1 4.6 4.9.5-3.7 3.3 1.1 4.9-4.4-2.5-4.4 2.5 1.1-4.9L3 8.1l4.9-.5z"/></symbol>
+    <symbol id="i-mosaic" viewBox="0 0 20 20"><rect x="3" y="3" width="6" height="6"/><rect x="11" y="3" width="6" height="6"/><rect x="3" y="11" width="6" height="6"/><rect x="11" y="11" width="6" height="6"/></symbol>
+    <symbol id="i-focus" viewBox="0 0 20 20"><rect x="3" y="3" width="14" height="14"/></symbol>
+    <symbol id="i-sound" viewBox="0 0 20 20"><path d="M3 8h3l4-3v10l-4-3H3z"/><path d="M13 7.5a3.5 3.5 0 0 1 0 5"/></symbol>
+    <symbol id="i-sound-all" viewBox="0 0 20 20"><path d="M3 8h3l4-3v10l-4-3H3z"/><path d="M13 7.5a3.5 3.5 0 0 1 0 5"/><path d="M15.5 5a7 7 0 0 1 0 10"/></symbol>
+    <symbol id="i-capture" viewBox="0 0 20 20"><path d="M2.5 6h3l1.5-2h6l1.5 2h3v10h-15z"/><circle cx="10" cy="10.5" r="3"/></symbol>
+    <symbol id="i-agents" viewBox="0 0 20 20"><path d="M7 3v4M13 3v4"/><path d="M5 7h10v3a5 5 0 0 1-10 0z"/><path d="M10 15v2.5"/></symbol>
+    <symbol id="i-share" viewBox="0 0 20 20"><path d="M10 3v9M6.5 6.5 10 3l3.5 3.5"/><path d="M4 10v7h12v-7"/></symbol>
+    <symbol id="i-suggest" viewBox="0 0 20 20"><rect x="2.5" y="3.5" width="15" height="13"/><path d="M12 3.5v13M14 7h1.5M14 10h1.5"/></symbol>
+    <symbol id="i-fullscreen" viewBox="0 0 20 20"><path d="M3 7V3h4M17 7V3h-4M3 13v4h4M17 13v4h-4"/></symbol>
+    <symbol id="i-exit-fullscreen" viewBox="0 0 20 20"><path d="M7 3v4H3M13 3v4h4M7 17v-4H3M13 17v-4h4"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 20 20"><path d="M3 6h14M3 10h14M3 14h14"/></symbol>
+    <symbol id="i-download" viewBox="0 0 20 20"><path d="M10 3v9M6 8l4 4 4-4"/><path d="M3 14v3h14v-3"/></symbol>
+    <symbol id="i-library" viewBox="0 0 20 20"><path d="M4 3v14M8 3v14M11.5 3.5l4 13"/></symbol>
+    <symbol id="i-history" viewBox="0 0 20 20"><circle cx="10" cy="10" r="7"/><path d="M10 6v4l3 2"/></symbol>
+    <symbol id="i-bookmarks" viewBox="0 0 20 20"><path d="M5 3h10v14l-5-3.5L5 17z"/></symbol>
+    <symbol id="i-trail" viewBox="0 0 20 20"><circle cx="4.5" cy="15" r="1.5"/><circle cx="10" cy="9.5" r="1.5"/><circle cx="15.5" cy="5" r="1.5"/><path d="M5.6 13.9l3.3-3.3M11.2 8.5l3.1-2.5"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 20 20"><path d="M3 6h8M15 6h2M3 14h2M9 14h8"/><circle cx="13" cy="6" r="2"/><circle cx="7" cy="14" r="2"/></symbol>
+    <symbol id="i-help" viewBox="0 0 20 20"><circle cx="10" cy="10" r="7"/><path d="M8 8a2 2 0 1 1 3 1.7c-.7.4-1 .8-1 1.6M10 14v.5"/></symbol>
+    <symbol id="i-ask" viewBox="0 0 20 20"><path d="M3 4h14v9H8l-4 3v-3H3z"/></symbol>
+    <symbol id="i-agent" viewBox="0 0 20 20"><circle cx="5" cy="10" r="2"/><circle cx="15" cy="5" r="2"/><circle cx="15" cy="15" r="2"/><path d="M6.8 9.1l6.4-3.2M6.8 10.9l6.4 3.2"/></symbol>
+    <symbol id="i-talk" viewBox="0 0 20 20"><path d="M2.5 3.5h10v7h-6l-3 2.5v-2.5h-1z"/><path d="M15 7h2.5v7h-1v2.5l-3-2.5h-5v-1.5"/></symbol>
+  </svg>
   <div class="shell">
     <header class="chrome">
       <div class="tabrow">
         <svg class="brand" viewBox="0 0 24 24" aria-label="NODE" role="img"><defs><linearGradient id="brand-g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#c4b5fd"/><stop offset="0.55" stop-color="#8b5cf6"/><stop offset="1" stop-color="#6d28d9"/></linearGradient></defs><g transform="matrix(1.20193,0,0,1.20193,-1.2237,-2.42319)"><path fill="url(#brand-g)" d="M10.004,12.998L1.067,12.998C1.035,12.67 1.018,12.337 1.018,12C1.018,11.663 1.035,11.33 1.067,11.002L8.593,11.002L3.273,5.682C3.696,5.166 4.169,4.693 4.684,4.271L10.004,9.591L10.004,2.065C10.332,2.033 10.665,2.016 11.002,2.016C11.339,2.016 11.672,2.033 12,2.065L12,11.002L20.937,11.002C20.969,11.33 20.986,11.663 20.986,12C20.986,12.337 20.969,12.67 20.937,12.998L13.411,12.998L18.731,18.318C18.309,18.834 17.836,19.307 17.32,19.729L12,14.409L12,21.935C11.672,21.967 11.339,21.984 11.002,21.984C10.665,21.984 10.332,21.967 10.004,21.935L10.004,12.998Z"/></g></svg>
         <div class="tabs" id="tabs"></div>
-        <button class="icon" id="new-tab" title="New tab">+</button>
+        <button class="tb" id="new-tab" data-tip="New tab" data-keys="mod+T" aria-label="New tab"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg></button>
+        <span class="chrome-hint" id="chrome-hint" role="status" hidden></span>
       </div>
       <div class="nav">
-        <button class="icon" id="back" title="Back">←</button>
-        <button class="icon" id="forward" title="Forward">→</button>
-        <button class="icon" id="reload" title="Reload">↻</button>
+        <button class="tb" id="back" data-tip="Back" data-keys="mod+[" aria-label="Back"><svg class="ic" aria-hidden="true"><use href="#i-back"/></svg></button>
+        <button class="tb" id="forward" data-tip="Forward" data-keys="mod+]" aria-label="Forward"><svg class="ic" aria-hidden="true"><use href="#i-forward"/></svg></button>
+        <button class="tb" id="reload" data-tip="Reload" data-keys="mod+R" aria-label="Reload"><svg class="ic" aria-hidden="true"><use href="#i-reload"/></svg></button>
         <form id="omni-form" class="omni">
-          <input id="omni" type="text" spellcheck="false" placeholder="Search or enter address" list="history-list" autocomplete="off" />
+          <input id="omni" type="text" spellcheck="false" placeholder="Search or enter address" list="history-list" autocomplete="off" aria-label="Search or enter address" />
           <datalist id="history-list"></datalist>
         </form>
-        <button class="icon" id="star-btn" title="Bookmark this page (Cmd/Ctrl+D)">☆</button>
+        <button class="tb" id="star-btn" data-tip="Bookmark this page" data-keys="mod+D" aria-label="Bookmark this page"><span class="glyph"><svg class="ic" aria-hidden="true"><use href="#i-star"/></svg></span></button>
         <button class="chip" id="zoom-badge" title="Zoom. Click to reset to 100%" hidden>100%</button>
         <div class="findbar" id="findbar" hidden>
-          <input id="find-input" type="text" spellcheck="false" placeholder="Find in page" />
+          <input id="find-input" type="text" spellcheck="false" placeholder="Find in page" aria-label="Find in page" />
           <span id="find-count"></span>
-          <button class="icon" id="find-prev" title="Previous (Shift+Enter)">↑</button>
-          <button class="icon" id="find-next" title="Next (Enter)">↓</button>
-          <button class="icon" id="find-close" title="Close (Esc)">×</button>
+          <button class="tb" id="find-prev" data-tip="Previous match" data-keys="shift+Enter" aria-label="Previous match"><svg class="ic" aria-hidden="true"><use href="#i-up"/></svg></button>
+          <button class="tb" id="find-next" data-tip="Next match" data-keys="Enter" aria-label="Next match"><svg class="ic" aria-hidden="true"><use href="#i-down"/></svg></button>
+          <button class="tb" id="find-close" data-tip="Close find" data-keys="Esc" aria-label="Close find"><svg class="ic" aria-hidden="true"><use href="#i-close"/></svg></button>
         </div>
-        <button class="chip agent" id="agent-share-btn" hidden title="Let AI agents connected to NODE read this tab">Share tab</button>
-        <button class="chip agent on" id="agent-btn" hidden title="AI agents can use NODE. Click to stop them and turn the agent server off.">Agents ●</button>
-        <button class="chip" id="layout-btn" title="Tile every tab so media can play together">Mosaic</button>
-        <button class="chip" id="sound-btn" title="Hear every playing tab at once (up to 4), not only the current one. Shortcut: Cmd/Ctrl+Shift+A">Sound: one</button>
-        <button class="chip" id="pip-btn" title="Picture in picture for this page's video. Shortcut: Cmd/Ctrl+Shift+P">PiP</button>
-        <button class="chip" id="shot-btn" title="Shortcut: S">Shot <kbd>S</kbd></button>
-        <button class="chip" id="save-btn">Save</button>
-        <button class="chip" id="media-btn">Media</button>
-        <button class="chip" id="library-btn">Library</button>
-        <button class="chip dl" id="dl-btn" hidden title="Downloads in progress. Click to see them.">↓ 0</button>
+        <span class="tb-sep" aria-hidden="true"></span>
+        <button class="tb" id="layout-btn" data-tip="Mosaic: tile every tab" data-keys="mod+shift+M" aria-label="Mosaic: tile every tab"><svg class="ic" aria-hidden="true"><use href="#i-mosaic"/></svg></button>
+        <button class="tb" id="sound-btn" data-tip="Sound: this tab only" data-keys="mod+shift+A" aria-label="Sound: this tab only"><svg class="ic" aria-hidden="true"><use href="#i-sound"/></svg></button>
+        <button class="tb" id="capture-btn" data-tip="Capture: screenshot, save, media, picture in picture" aria-label="Capture: screenshot, save, media, picture in picture" aria-haspopup="menu"><svg class="ic" aria-hidden="true"><use href="#i-capture"/></svg></button>
+        <button class="tb" id="agent-share-btn" data-tip="Share this tab with agents" aria-label="Share this tab with agents" hidden><svg class="ic" aria-hidden="true"><use href="#i-share"/></svg></button>
+        <button class="tb" id="agent-btn" data-tip="Agents on. Click to stop them" aria-label="Agents on. Click to stop them" data-live hidden><svg class="ic" aria-hidden="true"><use href="#i-agents"/></svg></button>
+        <button class="tb dl" id="dl-btn" data-tip="Downloads in progress" aria-label="Downloads in progress" hidden><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg><span class="count" id="dl-count">0</span></button>
+        <span class="tb-sep" aria-hidden="true"></span>
+        <button class="tb" id="suggest-toggle" data-tip="Hide suggestions" data-keys="mod+shift+." aria-label="Hide suggestions" aria-controls="rail" aria-pressed="true"><svg class="ic" aria-hidden="true"><use href="#i-suggest"/></svg><span class="count" id="suggest-count" hidden></span><span class="new" id="suggest-new" hidden></span></button>
+        <button class="tb" id="fullscreen-btn" data-tip="Full screen" data-keys="ctrl+mod+F" aria-label="Full screen"><svg class="ic" aria-hidden="true"><use href="#i-fullscreen"/></svg></button>
+        <button class="tb" id="menu-btn" data-tip="Menu: library, history, settings" data-keys="mod+," aria-label="Menu: library, history, settings" aria-haspopup="dialog" aria-controls="menu-overlay"><svg class="ic" aria-hidden="true"><use href="#i-menu"/></svg></button>
+      </div>
+      <div id="capture-actions" hidden>
+        <button id="shot-btn" type="button">Screenshot</button>
+        <button id="save-btn" type="button">Save page</button>
+        <button id="media-btn" type="button">Save media</button>
+        <button id="pip-btn" type="button">Picture in picture</button>
       </div>
     </header>
 
-    <aside class="rail" id="rail">
-      <div id="suggest-pane">
-        <div class="rail-head">
-          <div>
-            <p class="kicker">Next pages</p>
-            <h1>Suggestions</h1>
-          </div>
-          <div class="rail-actions">
-            <button class="chip active" id="auto-btn" title="Re-search when the visible page changes">Auto</button>
-            <button class="chip" id="refresh-suggest" title="Search now">Crawl</button>
-            <button class="chip" id="ask-btn" title="Ask AI about this page">Ask</button>
-            <button class="chip" id="talk-btn" title="Talk: existing discussion of this page on Hacker News and Bluesky">Talk</button>
-            <button class="chip" id="agent-run-btn" title="Research agent: give it a question, it searches, reads and writes a report with sources">Agent</button>
-            <button class="chip" id="trail-btn" title="This research session: pages read, recurring keywords">Trail</button>
-            <button class="chip" id="sources-btn" title="Search sources and site rules">Settings</button>
-          </div>
+    <aside class="rail" id="rail" aria-label="Suggestions">
+      <div class="panel-tabs" role="tablist" aria-label="Suggestions widget">
+        <button class="ptab" id="suggest-tab" role="tab" aria-selected="true" aria-controls="suggest-pane" title="Suggestions: next pages to read"><svg class="ic" aria-hidden="true"><use href="#i-suggest"/></svg><span>Suggest</span></button>
+        <button class="ptab" id="ask-btn" role="tab" aria-selected="false" aria-controls="ask-pane" title="Ask AI about this page"><svg class="ic" aria-hidden="true"><use href="#i-ask"/></svg><span>Ask</span></button>
+        <button class="ptab" id="agent-run-btn" role="tab" aria-selected="false" aria-controls="agent-pane" title="Research agent: give it a question, it searches, reads and writes a report with sources"><svg class="ic" aria-hidden="true"><use href="#i-agent"/></svg><span>Agent</span></button>
+        <button class="ptab" id="talk-btn" role="tab" aria-selected="false" aria-controls="talk-pane" title="Talk: existing discussion of this page on Hacker News and Bluesky"><svg class="ic" aria-hidden="true"><use href="#i-talk"/></svg><span>Talk</span></button>
+        <button class="tb panel-collapse" id="suggest-collapse" data-tip="Collapse suggestions" data-keys="mod+shift+." aria-label="Collapse suggestions" aria-controls="rail" aria-expanded="true"><svg class="ic" aria-hidden="true"><use href="#i-up"/></svg></button>
+      </div>
+      <div id="suggest-pane" role="tabpanel" aria-labelledby="suggest-tab">
+        <div class="rail-actions">
+          <button class="chip active" id="auto-btn" title="Re-search when the visible page changes">Auto</button>
+          <button class="chip" id="refresh-suggest" title="Search now">Crawl</button>
         </div>
         <p class="help">Keywords come from the visible page. Click a keyword to pin it. × hides it. Select text on a page to search for it.</p>
         <div class="keys" id="keys"></div>
@@ -81,13 +116,12 @@
         <div class="rule-line" id="rule-line" hidden></div>
         <div class="results" id="results"></div>
       </div>
-      <div id="ask-pane" hidden>
+      <div id="ask-pane" role="tabpanel" aria-labelledby="ask-btn" hidden>
         <div class="rail-head">
           <div>
             <p class="kicker">This page</p>
             <h1>Ask AI</h1>
           </div>
-          <button class="chip" id="ask-back">Back</button>
         </div>
         <p class="help" id="ask-privacy"></p>
         <div class="actions-row" id="ask-quick">
@@ -104,25 +138,23 @@
           </div>
         </form>
       </div>
-      <div id="talk-pane" hidden>
+      <div id="talk-pane" role="tabpanel" aria-labelledby="talk-btn" hidden>
         <div class="rail-head">
           <div>
             <p class="kicker">This page</p>
             <h1>Talk</h1>
           </div>
-          <button class="chip" id="talk-back">Back</button>
         </div>
         <p class="help" id="talk-privacy">Opening Talk sends this page's address to Hacker News search and Bluesky search. Nothing is sent while Talk is closed.</p>
         <div id="talk-status" class="state"></div>
         <div id="talk-list"></div>
       </div>
-      <div id="agent-pane" hidden>
+      <div id="agent-pane" role="tabpanel" aria-labelledby="agent-run-btn" hidden>
         <div class="rail-head">
           <div>
             <p class="kicker">Research agent</p>
             <h1>Ask a question</h1>
           </div>
-          <button class="chip" id="agent-back">Back</button>
         </div>
         <p class="help" id="agent-privacy"></p>
         <form id="agent-form" class="ask-form">
@@ -145,214 +177,234 @@
           <div class="actions-row"><button class="chip" type="submit" id="agent-followup-send">Ask follow-up</button></div>
         </form>
       </div>
-      <div id="trail-pane" hidden>
-        <div class="rail-head">
-          <div>
-            <p class="kicker">Research session</p>
-            <h1>Trail</h1>
-          </div>
-          <button class="chip" id="trail-back">Back</button>
-        </div>
-        <input id="session-name" class="session-name" type="text" spellcheck="false" title="Session name" />
-        <div class="actions-row">
-          <select id="session-select" title="Switch session"></select>
-          <button class="chip" id="session-new">New</button>
-          <button class="chip" id="session-export" title="Save the session as Markdown notes in the Library">Export</button>
-        </div>
-        <p class="help" id="session-meta"></p>
-        <p class="kicker sub">Recurring keywords</p>
-        <div class="keys" id="threads"></div>
-        <p class="kicker sub">Pages read</p>
-        <div id="trail-list"></div>
-      </div>
-      <div id="sources-pane" hidden>
-        <div class="rail-head">
-          <div>
-            <p class="kicker">Search</p>
-            <h1>Sources</h1>
-          </div>
-          <button class="chip" id="sources-back">Back</button>
-        </div>
-        <p class="help">Wikipedia runs for every search. For web results NODE uses the first working source in this order: Brave, SearXNG, DuckDuckGo.</p>
-        <div id="sources-list"></div>
-        <div class="rail-head rules-head">
-          <div>
-            <p class="kicker">Search</p>
-            <h1>AI query ideas</h1>
-          </div>
-        </div>
-        <p class="help">An AI model suggests extra search queries from your pinned keywords, the page's top keywords and its title. It never receives the page text or address.</p>
-        <div class="source" id="ai-box">
-          <div class="top">
-            <label class="toggle"><input type="checkbox" id="ai-enabled" /> Use AI query ideas</label>
-          </div>
-          <label class="field"><span>Model</span>
-            <select id="ai-provider">
-              <option value="local">Local model (Ollama or LM Studio)</option>
-              <option value="grok">Grok (xAI, cloud)</option>
-            </select>
-          </label>
-          <div id="ai-local">
-            <label class="field"><span>Server address</span><input id="ai-local-url" type="text" spellcheck="false" placeholder="http://localhost:11434/v1" /></label>
-            <label class="field"><span>Model name</span><input id="ai-local-model" type="text" spellcheck="false" list="ai-models" placeholder="llama3.2" /></label>
-          </div>
-          <div id="ai-grok" hidden>
-            <label class="field"><span>xAI API key</span><input id="ai-grok-key" type="password" spellcheck="false" /></label>
-            <label class="field"><span>Model name</span><input id="ai-grok-model" type="text" spellcheck="false" list="ai-models" /></label>
-          </div>
-          <datalist id="ai-models"></datalist>
-          <div class="state" id="ai-state"></div>
-          <div class="actions"><button id="ai-test" title="Save, list the server's models and try one request">Test</button></div>
-          <p class="help" id="ai-privacy"></p>
-        </div>
-        <div class="rail-head rules-head">
-          <div>
-            <p class="kicker">Privacy</p>
-            <h1>Ads and trackers</h1>
-          </div>
-        </div>
-        <div class="source" id="adblock-box">
-          <div class="top">
-            <label class="toggle"><input type="checkbox" id="adblock-enabled" /> Block ads and trackers</label>
-          </div>
-          <div class="state" id="adblock-state"></div>
-          <p class="help">Uses the EasyList and EasyPrivacy lists, updated weekly. To allow ads on one site, add a site rule with <code>"adblock": false</code>.</p>
-        </div>
-        <div class="rail-head rules-head">
-          <div>
-            <p class="kicker">Startup</p>
-            <h1>Tabs</h1>
-          </div>
-        </div>
-        <div class="source" id="startup-box">
-          <div class="top"><label class="toggle"><input type="checkbox" id="restore-tabs" /> Reopen the tabs from last time</label></div>
-          <label class="field"><span>New tab page (leave empty for NODE's start page)</span><input type="text" id="start-page" placeholder="https://…" spellcheck="false" /></label>
-          <p class="help">Tabs you have not opened for 15 minutes go to sleep to save memory; they load again when you click them. Tabs playing media never sleep.</p>
-        </div>
-        <div class="rail-head rules-head">
-          <div>
-            <p class="kicker">AI agents</p>
-            <h1>Agent access (MCP)</h1>
-          </div>
-        </div>
-        <div class="source" id="agents-box">
-          <div class="top">
-            <label class="toggle"><input type="checkbox" id="agents-enabled" /> Let AI agents on this computer use NODE</label>
-          </div>
-          <div class="state" id="agents-state"></div>
-          <label class="field"><span>Port</span><input type="number" id="agents-port" min="1024" max="65535" /></label>
-          <div id="agents-connect" hidden>
-            <label class="field"><span>Add to Claude Code (run in Terminal)</span><textarea id="agents-cmd" rows="4" readonly spellcheck="false"></textarea></label>
-            <div class="row"><button class="chip" id="agents-copy">Copy command</button><button class="chip" id="agents-token">New token</button></div>
-            <p class="help"><b>Claude app (desktop):</b> it starts its tools as programs, so NODE adds a small bridge program to the Claude app's settings file. Restart the Claude app afterwards. NODE has to be open with Agents on while you use it.</p>
-            <div class="row"><button class="chip" id="agents-claude-add">Add to Claude app</button><button class="chip" id="agents-claude-copy">Copy config</button></div>
-            <div class="state" id="agents-claude-state"></div>
-          </div>
-          <p class="help">Agents such as Claude Code, Codex or Cursor can search with your sources, read public pages in a separate logged-out session, read tabs you share (Share tab in the toolbar) and read your research sessions. Read-only: they cannot click, type or sign in. Sign-in, payment and banking pages are never read. Only programs on this computer with the token can connect.</p>
-          <div class="agent-log" id="agents-log"></div>
-        </div>
-        <div class="rail-head rules-head">
-          <div>
-            <p class="kicker">Accounts</p>
-            <h1>Google window</h1>
-          </div>
-        </div>
-        <div class="source" id="google-box">
-          <label class="field"><span>Open in the Google window</span>
-            <select id="google-mode">
-              <option value="apps">Google sign-in and Google apps</option>
-              <option value="signin">Google sign-in only</option>
-              <option value="off">Off (Google pages stay in NODE, signed out)</option>
-            </select></label>
-          <label class="field"><span>Browser to use (optional, full path)</span><input type="text" id="google-browser" placeholder="Found automatically" spellcheck="false" /></label>
-          <div class="state" id="google-state"></div>
-          <p class="help">Google does not allow signing in inside NODE's engine. These pages open in a separate window of a Chromium-based browser on your computer (Brave, Chromium, Edge, Vivaldi or Chrome), with its own NODE profile. Google Search, YouTube and Scholar searches stay in NODE.</p>
-        </div>
-        <div class="rail-head rules-head">
-          <div>
-            <p class="kicker">Help</p>
-            <h1>Problems</h1>
-          </div>
-        </div>
-        <div class="source" id="help-box">
-          <p class="help">Copy diagnostics puts NODE's version, your system, which features are on and recent errors on the clipboard, without page text, addresses you typed or keys. Paste it into a bug report.</p>
-          <div class="row"><button class="chip" id="diag-copy">Copy diagnostics</button><button class="chip" id="diag-folder">Log folder</button></div>
-          <div class="state" id="diag-state"></div>
-          <div class="top"><label class="toggle"><input type="checkbox" id="auto-update" /> Check for updates automatically</label></div>
-          <div class="top"><label class="toggle"><input type="checkbox" id="passkeys" /> Passkeys (sign in with Touch ID or iCloud Keychain)</label></div>
-          <p class="help" id="passkeys-help">On a Mac, passkeys need a signed NODE that Apple has approved as a browser. Until then they are off, so sites such as X offer password sign-in instead of waiting for a passkey. Takes effect after restarting NODE.</p>
-          <div class="row"><button class="chip" id="update-check">Check now</button><button class="chip" id="update-releases">Releases</button></div>
-          <div class="state" id="update-state"></div>
-        </div>
-        <button class="chip wide" id="sources-save">Save</button>
-        <p class="help" id="sources-msg"></p>
-        <div class="rail-head rules-head">
-          <div>
-            <p class="kicker">Behaviour</p>
-            <h1>Site rules</h1>
-          </div>
-        </div>
-        <p class="help">Per-site autoplay, sound, popups, Mosaic, and what NODE reads. Later rules win over earlier ones.</p>
-        <div class="actions-row">
-          <button class="chip" id="rule-this-site">Rule for this site</button>
-          <button class="chip" id="rule-add">Add rule</button>
-        </div>
-        <ol id="rules-list" class="rules-list"></ol>
-        <form id="rule-form" class="source rule-form" hidden>
-          <label class="field"><span>Name</span><input type="text" id="rf-name" placeholder="e.g. News sites: no autoplay" /></label>
-          <label class="field"><span>Sites (comma-separated: example.com, *.example.com, example.com/path, or /regex/)</span><input type="text" id="rf-match" spellcheck="false" /></label>
-          <div class="rf-grid">
-            <label class="field"><span>Autoplay</span><select id="rf-autoplay"><option value="">Same as before</option><option value="on">On</option><option value="muted">Muted</option><option value="off">Off</option></select></label>
-            <label class="field"><span>Sound</span><select id="rf-sound"><option value="">Same as before</option><option value="auto">Active tab only</option><option value="on">Always on</option><option value="off">Always off</option></select></label>
-            <label class="field"><span>Popups</span><select id="rf-popups"><option value="">Same as before</option><option value="gesture">After a click</option><option value="block">Block all</option><option value="allow">Allow all</option></select></label>
-            <label class="field"><span>Suggestions</span><select id="rf-suggest"><option value="">Same as before</option><option value="true">On</option><option value="false">Off: never read</option></select></label>
-            <label class="field"><span>Mosaic</span><select id="rf-mosaic"><option value="">Same as before</option><option value="true">In the grid</option><option value="false">Keep out</option></select></label>
-            <label class="field"><span>Center on click</span><select id="rf-center"><option value="">Same as before</option><option value="true">On</option><option value="false">Off</option></select></label>
-            <label class="field"><span>Ad blocking</span><select id="rf-adblock"><option value="">Same as before</option><option value="true">On</option><option value="false">Allow ads</option></select></label>
-            <label class="field"><span>Talk</span><select id="rf-talk"><option value="">Same as before</option><option value="true">On</option><option value="false">Off</option></select></label>
-          </div>
-          <label class="field"><span>Read first (CSS selectors, comma-separated)</span><input type="text" id="rf-include" spellcheck="false" placeholder="article, #main" /></label>
-          <label class="field"><span>Never read (CSS selectors)</span><input type="text" id="rf-skip" spellcheck="false" placeholder="#comments, .sidebar" /></label>
-          <div class="row"><button class="chip" type="submit" id="rf-save">Save rule</button><button class="chip" type="button" id="rf-cancel">Cancel</button></div>
-          <div class="state bad" id="rf-errors"></div>
-        </form>
-        <div class="actions-row">
-          <button class="chip" id="rules-edit">Edit rules file</button>
-          <button class="chip" id="rules-reload">Reload</button>
-        </div>
-        <p class="help" id="rules-msg"></p>
-        <div class="rail-head rules-head">
-          <div>
-            <p class="kicker">Suggestions</p>
-            <h1>Hidden keywords</h1>
-          </div>
-        </div>
-        <p class="help">Keywords you hid with × are not suggested again on that site. Remove one here to allow it again.</p>
-        <ol id="hidden-list" class="rules-list"></ol>
-      </div>
-      <div id="library" hidden></div>
     </aside>
   </div>
-  <section id="shelf" hidden>
-    <div class="shelf-bar">
-      <div>
-        <p class="kicker">On this computer</p>
-        <h1>Library</h1>
+  <div id="menu-overlay" hidden>
+    <div class="menu-shots" id="menu-shots" aria-hidden="true"></div>
+    <div class="menu-scrim" id="menu-scrim"></div>
+    <div class="menu-panel" id="menu-panel" role="dialog" aria-modal="true" aria-labelledby="menu-title">
+      <div class="menu-head">
+        <h1 id="menu-title">Menu</h1>
+        <span class="menu-esc">Esc</span>
+        <button class="tb" id="menu-close" data-tip="Close menu" data-keys="Esc" aria-label="Close menu"><svg class="ic" aria-hidden="true"><use href="#i-close"/></svg></button>
       </div>
-      <div class="shelf-filters" id="shelf-filters">
-        <button class="chip active" data-folder="all">All</button>
-        <button class="chip" data-folder="screenshots">Shots</button>
-        <button class="chip" data-folder="media">Media</button>
-        <button class="chip" data-folder="saves">Saves</button>
-        <button class="chip" data-folder="bookmarks">Bookmarks</button>
-        <button class="chip" data-folder="history">History</button>
-        <button class="chip" data-folder="downloads">Downloads</button>
+      <div class="menu-body">
+        <nav class="menu-nav" aria-label="Menu sections">
+          <button class="mnav" data-section="library" id="library-btn" data-keys=""><svg class="ic" aria-hidden="true"><use href="#i-library"/></svg><span>Library</span><kbd></kbd></button>
+          <button class="mnav" data-section="bookmarks" data-keys="mod+shift+B"><svg class="ic" aria-hidden="true"><use href="#i-bookmarks"/></svg><span>Bookmarks</span><kbd></kbd></button>
+          <button class="mnav" data-section="history" data-keys="mod+Y"><svg class="ic" aria-hidden="true"><use href="#i-history"/></svg><span>History</span><kbd></kbd></button>
+          <button class="mnav" data-section="downloads" data-keys=""><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg><span>Downloads</span><kbd></kbd></button>
+          <button class="mnav" data-section="trail" id="trail-btn" data-keys=""><svg class="ic" aria-hidden="true"><use href="#i-trail"/></svg><span>Trail</span><kbd></kbd></button>
+          <button class="mnav" data-section="settings" id="sources-btn" data-keys="mod+,"><svg class="ic" aria-hidden="true"><use href="#i-settings"/></svg><span>Settings</span><kbd></kbd></button>
+          <button class="mnav" data-section="help" data-keys=""><svg class="ic" aria-hidden="true"><use href="#i-help"/></svg><span>Help</span><kbd></kbd></button>
+        </nav>
+        <div class="menu-content" id="menu-content">
+      <section id="shelf" class="menu-section" hidden>
+        <div class="shelf-bar">
+          <div>
+            <p class="kicker">On this computer</p>
+            <h1 id="shelf-title">Library</h1>
+          </div>
+          <div class="shelf-filters" id="shelf-filters">
+            <button class="chip active" data-folder="all">All</button>
+            <button class="chip" data-folder="screenshots">Shots</button>
+            <button class="chip" data-folder="media">Media</button>
+            <button class="chip" data-folder="saves">Saves</button>
+            <button class="chip" data-folder="bookmarks">Bookmarks</button>
+            <button class="chip" data-folder="history">History</button>
+            <button class="chip" data-folder="downloads">Downloads</button>
+          </div>
+          <button class="chip" id="library-folder">Show folder</button>
+        </div>
+        <div class="shelf-grid" id="library-list"></div>
+      </section>
+        <div id="trail-pane" class="menu-section" hidden>
+          <div class="rail-head">
+            <div>
+              <p class="kicker">Research session</p>
+              <h1>Trail</h1>
+            </div>
+          </div>
+          <input id="session-name" class="session-name" type="text" spellcheck="false" title="Session name" />
+          <div class="actions-row">
+            <select id="session-select" title="Switch session"></select>
+            <button class="chip" id="session-new">New</button>
+            <button class="chip" id="session-export" title="Save the session as Markdown notes in the Library">Export</button>
+          </div>
+          <p class="help" id="session-meta"></p>
+          <p class="kicker sub">Recurring keywords</p>
+          <div class="keys" id="threads"></div>
+          <p class="kicker sub">Pages read</p>
+          <div id="trail-list"></div>
+        </div>
+        <div id="sources-pane" class="menu-section" hidden>
+          <div class="rail-head">
+            <div>
+              <p class="kicker">Search</p>
+              <h1>Sources</h1>
+            </div>
+          </div>
+          <p class="help">Wikipedia runs for every search. For web results NODE uses the first working source in this order: Brave, SearXNG, DuckDuckGo.</p>
+          <div id="sources-list"></div>
+          <div class="rail-head rules-head">
+            <div>
+              <p class="kicker">Search</p>
+              <h1>AI query ideas</h1>
+            </div>
+          </div>
+          <p class="help">An AI model suggests extra search queries from your pinned keywords, the page's top keywords and its title. It never receives the page text or address.</p>
+          <div class="source" id="ai-box">
+            <div class="top">
+              <label class="toggle"><input type="checkbox" id="ai-enabled" /> Use AI query ideas</label>
+            </div>
+            <label class="field"><span>Model</span>
+              <select id="ai-provider">
+                <option value="local">Local model (Ollama or LM Studio)</option>
+                <option value="grok">Grok (xAI, cloud)</option>
+              </select>
+            </label>
+            <div id="ai-local">
+              <label class="field"><span>Server address</span><input id="ai-local-url" type="text" spellcheck="false" placeholder="http://localhost:11434/v1" /></label>
+              <label class="field"><span>Model name</span><input id="ai-local-model" type="text" spellcheck="false" list="ai-models" placeholder="llama3.2" /></label>
+            </div>
+            <div id="ai-grok" hidden>
+              <label class="field"><span>xAI API key</span><input id="ai-grok-key" type="password" spellcheck="false" /></label>
+              <label class="field"><span>Model name</span><input id="ai-grok-model" type="text" spellcheck="false" list="ai-models" /></label>
+            </div>
+            <datalist id="ai-models"></datalist>
+            <div class="state" id="ai-state"></div>
+            <div class="actions"><button id="ai-test" title="Save, list the server's models and try one request">Test</button></div>
+            <p class="help" id="ai-privacy"></p>
+          </div>
+          <div class="rail-head rules-head">
+            <div>
+              <p class="kicker">Privacy</p>
+              <h1>Ads and trackers</h1>
+            </div>
+          </div>
+          <div class="source" id="adblock-box">
+            <div class="top">
+              <label class="toggle"><input type="checkbox" id="adblock-enabled" /> Block ads and trackers</label>
+            </div>
+            <div class="state" id="adblock-state"></div>
+            <p class="help">Uses the EasyList and EasyPrivacy lists, updated weekly. To allow ads on one site, add a site rule with <code>"adblock": false</code>.</p>
+          </div>
+          <div class="rail-head rules-head">
+            <div>
+              <p class="kicker">Startup</p>
+              <h1>Tabs</h1>
+            </div>
+          </div>
+          <div class="source" id="startup-box">
+            <div class="top"><label class="toggle"><input type="checkbox" id="restore-tabs" /> Reopen the tabs from last time</label></div>
+            <label class="field"><span>New tab page (leave empty for NODE's start page)</span><input type="text" id="start-page" placeholder="https://…" spellcheck="false" /></label>
+            <p class="help">Tabs you have not opened for 15 minutes go to sleep to save memory; they load again when you click them. Tabs playing media never sleep.</p>
+          </div>
+          <div class="rail-head rules-head">
+            <div>
+              <p class="kicker">AI agents</p>
+              <h1>Agent access (MCP)</h1>
+            </div>
+          </div>
+          <div class="source" id="agents-box">
+            <div class="top">
+              <label class="toggle"><input type="checkbox" id="agents-enabled" /> Let AI agents on this computer use NODE</label>
+            </div>
+            <div class="state" id="agents-state"></div>
+            <label class="field"><span>Port</span><input type="number" id="agents-port" min="1024" max="65535" /></label>
+            <div id="agents-connect" hidden>
+              <label class="field"><span>Add to Claude Code (run in Terminal)</span><textarea id="agents-cmd" rows="4" readonly spellcheck="false"></textarea></label>
+              <div class="row"><button class="chip" id="agents-copy">Copy command</button><button class="chip" id="agents-token">New token</button></div>
+              <p class="help"><b>Claude app (desktop):</b> it starts its tools as programs, so NODE adds a small bridge program to the Claude app's settings file. Restart the Claude app afterwards. NODE has to be open with Agents on while you use it.</p>
+              <div class="row"><button class="chip" id="agents-claude-add">Add to Claude app</button><button class="chip" id="agents-claude-copy">Copy config</button></div>
+              <div class="state" id="agents-claude-state"></div>
+            </div>
+            <p class="help">Agents such as Claude Code, Codex or Cursor can search with your sources, read public pages in a separate logged-out session, read tabs you share (Share tab in the toolbar) and read your research sessions. Read-only: they cannot click, type or sign in. Sign-in, payment and banking pages are never read. Only programs on this computer with the token can connect.</p>
+            <div class="agent-log" id="agents-log"></div>
+          </div>
+          <div class="rail-head rules-head">
+            <div>
+              <p class="kicker">Accounts</p>
+              <h1>Google window</h1>
+            </div>
+          </div>
+          <div class="source" id="google-box">
+            <label class="field"><span>Open in the Google window</span>
+              <select id="google-mode">
+                <option value="apps">Google sign-in and Google apps</option>
+                <option value="signin">Google sign-in only</option>
+                <option value="off">Off (Google pages stay in NODE, signed out)</option>
+              </select></label>
+            <label class="field"><span>Browser to use (optional, full path)</span><input type="text" id="google-browser" placeholder="Found automatically" spellcheck="false" /></label>
+            <div class="state" id="google-state"></div>
+            <p class="help">Google does not allow signing in inside NODE's engine. These pages open in a separate window of a Chromium-based browser on your computer (Brave, Chromium, Edge, Vivaldi or Chrome), with its own NODE profile. Google Search, YouTube and Scholar searches stay in NODE.</p>
+          </div>
+          <div class="rail-head rules-head">
+            <div>
+              <p class="kicker">Help</p>
+              <h1>Problems</h1>
+            </div>
+          </div>
+          <div class="source" id="help-box">
+            <p class="help">Copy diagnostics puts NODE's version, your system, which features are on and recent errors on the clipboard, without page text, addresses you typed or keys. Paste it into a bug report.</p>
+            <div class="row"><button class="chip" id="diag-copy">Copy diagnostics</button><button class="chip" id="diag-folder">Log folder</button></div>
+            <div class="state" id="diag-state"></div>
+            <div class="top"><label class="toggle"><input type="checkbox" id="auto-update" /> Check for updates automatically</label></div>
+            <div class="top"><label class="toggle"><input type="checkbox" id="passkeys" /> Passkeys (sign in with Touch ID or iCloud Keychain)</label></div>
+            <p class="help" id="passkeys-help">On a Mac, passkeys need a signed NODE that Apple has approved as a browser. Until then they are off, so sites such as X offer password sign-in instead of waiting for a passkey. Takes effect after restarting NODE.</p>
+            <div class="row"><button class="chip" id="update-check">Check now</button><button class="chip" id="update-releases">Releases</button></div>
+            <div class="state" id="update-state"></div>
+          </div>
+          <button class="chip wide" id="sources-save">Save</button>
+          <p class="help" id="sources-msg"></p>
+          <div class="rail-head rules-head">
+            <div>
+              <p class="kicker">Behaviour</p>
+              <h1>Site rules</h1>
+            </div>
+          </div>
+          <p class="help">Per-site autoplay, sound, popups, Mosaic, and what NODE reads. Later rules win over earlier ones.</p>
+          <div class="actions-row">
+            <button class="chip" id="rule-this-site">Rule for this site</button>
+            <button class="chip" id="rule-add">Add rule</button>
+          </div>
+          <ol id="rules-list" class="rules-list"></ol>
+          <form id="rule-form" class="source rule-form" hidden>
+            <label class="field"><span>Name</span><input type="text" id="rf-name" placeholder="e.g. News sites: no autoplay" /></label>
+            <label class="field"><span>Sites (comma-separated: example.com, *.example.com, example.com/path, or /regex/)</span><input type="text" id="rf-match" spellcheck="false" /></label>
+            <div class="rf-grid">
+              <label class="field"><span>Autoplay</span><select id="rf-autoplay"><option value="">Same as before</option><option value="on">On</option><option value="muted">Muted</option><option value="off">Off</option></select></label>
+              <label class="field"><span>Sound</span><select id="rf-sound"><option value="">Same as before</option><option value="auto">Active tab only</option><option value="on">Always on</option><option value="off">Always off</option></select></label>
+              <label class="field"><span>Popups</span><select id="rf-popups"><option value="">Same as before</option><option value="gesture">After a click</option><option value="block">Block all</option><option value="allow">Allow all</option></select></label>
+              <label class="field"><span>Suggestions</span><select id="rf-suggest"><option value="">Same as before</option><option value="true">On</option><option value="false">Off: never read</option></select></label>
+              <label class="field"><span>Mosaic</span><select id="rf-mosaic"><option value="">Same as before</option><option value="true">In the grid</option><option value="false">Keep out</option></select></label>
+              <label class="field"><span>Center on click</span><select id="rf-center"><option value="">Same as before</option><option value="true">On</option><option value="false">Off</option></select></label>
+              <label class="field"><span>Ad blocking</span><select id="rf-adblock"><option value="">Same as before</option><option value="true">On</option><option value="false">Allow ads</option></select></label>
+              <label class="field"><span>Talk</span><select id="rf-talk"><option value="">Same as before</option><option value="true">On</option><option value="false">Off</option></select></label>
+            </div>
+            <label class="field"><span>Read first (CSS selectors, comma-separated)</span><input type="text" id="rf-include" spellcheck="false" placeholder="article, #main" /></label>
+            <label class="field"><span>Never read (CSS selectors)</span><input type="text" id="rf-skip" spellcheck="false" placeholder="#comments, .sidebar" /></label>
+            <div class="row"><button class="chip" type="submit" id="rf-save">Save rule</button><button class="chip" type="button" id="rf-cancel">Cancel</button></div>
+            <div class="state bad" id="rf-errors"></div>
+          </form>
+          <div class="actions-row">
+            <button class="chip" id="rules-edit">Edit rules file</button>
+            <button class="chip" id="rules-reload">Reload</button>
+          </div>
+          <p class="help" id="rules-msg"></p>
+          <div class="rail-head rules-head">
+            <div>
+              <p class="kicker">Suggestions</p>
+              <h1>Hidden keywords</h1>
+            </div>
+          </div>
+          <p class="help">Keywords you hid with × are not suggested again on that site. Remove one here to allow it again.</p>
+          <ol id="hidden-list" class="rules-list"></ol>
+        </div>
+        </div>
       </div>
-      <button class="chip" id="library-folder">Show folder</button>
-      <button class="chip" id="library-close">Close</button>
     </div>
-    <div class="shelf-grid" id="library-list"></div>
-  </section>
+  </div>
   <script src="tauri-bridge.js"></script>
   <div id="firstrun" hidden>
     <div class="fr-card">

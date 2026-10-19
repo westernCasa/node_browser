@@ -56,32 +56,31 @@ const log = (...a) => console.log("•", ...a);
 
   // Bookmarks.
   await go(`${BASE}/other.html?bm=1`);
-  log("star before:", await ui.textContent("#star-btn"));
+  log("star before:", await ui.getAttribute("#star-btn", "aria-label"));
   await ui.click("#star-btn");
   await sleep(600);
-  log("star after click:", await ui.textContent("#star-btn"), "| saved:", JSON.stringify((await ui.evaluate(() => window.scout.bookmarkSearch("", 10))).map((b) => b.title)));
+  log("star after click:", await ui.getAttribute("#star-btn", "aria-label"), "| saved:", JSON.stringify((await ui.evaluate(() => window.scout.bookmarkSearch("", 10))).map((b) => b.title)));
   await ui.fill("#omni", "levain");
   await ui.dispatchEvent("#omni", "input");
   await sleep(600);
   log("address-bar suggestions:", JSON.stringify(await ui.$$eval("#history-list option", (o) => o.map((x) => x.label))));
   await ui.press("#omni", "Escape");
   await ui.evaluate(() => {
-    document.querySelector('#shelf-filters [data-folder="bookmarks"]').click();
-    document.getElementById("library-btn").click();
+    document.querySelector('.mnav[data-section="bookmarks"]').click();
   });
   await sleep(800);
   log("Bookmarks shelf rows:", await ui.$$eval("#library-list .history-row .t", (e) => e.map((x) => x.textContent).join(" | ")));
-  await ui.click("#library-close");
+  await ui.click("#menu-close");
   await sleep(500);
   const prefs = JSON.parse(fs.readFileSync(path.join(userData, "bookmarks.json"), "utf8"));
   log("bookmarks.json entries:", prefs.length);
 
   // Picture-in-picture.
   await go(`${BASE}/video-main.html?pip=1`);
-  await ui.click("#pip-btn");
+  await ui.evaluate(() => document.querySelector('#pip-btn').click()); // in the menu overlay or the hidden Capture actions
   await sleep(1200);
   log("after PiP button: video in picture-in-picture:", await page(`!!document.pictureInPictureElement && document.pictureInPictureElement.id`));
-  await ui.click("#pip-btn");
+  await ui.evaluate(() => document.querySelector('#pip-btn').click()); // in the menu overlay or the hidden Capture actions
   await sleep(800);
   log("after second click: picture-in-picture closed:", await page(`!document.pictureInPictureElement`));
 

@@ -78,7 +78,7 @@ const log = (...a) => console.log("•", ...a);
   log("local address:", await ui.textContent("#talk-status"));
 
   // Closed: navigation sends nothing.
-  await ui.click("#talk-back");
+  await ui.click("#suggest-tab");
   const closed = await lookups();
   await go(SITE + "/article.html");
   await go(SITE + "/other.html");

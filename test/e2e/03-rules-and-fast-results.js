@@ -99,7 +99,7 @@ const log = (...a) => console.log("•", ...a);
   fs.writeFileSync(rulesPath, "{ broken");
   await sleep(1500);
   log("notice after saving a broken rules file:", (await ui.textContent("#notice")).slice(0, 140));
-  await ui.click("#sources-btn");
+  await ui.evaluate(() => document.querySelector('#sources-btn').click()); // in the menu overlay or the hidden Capture actions
   await sleep(800);
   await ui.screenshot({ path: path.join(OUT, "settings.png") });
   await app.close();

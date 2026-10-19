@@ -46,7 +46,7 @@ const log = (...a) => console.log("•", ...a);
   await go(BASE + "/article.html");
   log("AI off:", await waitStatus());
 
-  await ui.click("#sources-btn");
+  await ui.evaluate(() => document.querySelector('#sources-btn').click()); // in the menu overlay or the hidden Capture actions
   await sleep(600);
   await ui.check("#ai-enabled");
   await ui.click("#ai-test");
@@ -64,7 +64,7 @@ const log = (...a) => console.log("•", ...a);
   log("page text or address sent:", /Wild yeast and lactobacillus|127\.0\.0\.1/.test(sent));
 
   // Grok: bad key, then good key with a wrong model name, then the right model.
-  await ui.click("#sources-btn");
+  await ui.evaluate(() => document.querySelector('#sources-btn').click()); // in the menu overlay or the hidden Capture actions
   await sleep(600);
   await ui.selectOption("#ai-provider", "grok");
   await ui.fill("#ai-grok-key", "xai-bad");
@@ -86,7 +86,7 @@ const log = (...a) => console.log("•", ...a);
   log("with Grok:", await waitStatus());
 
   // Local server down: search still works, with a note.
-  await ui.click("#sources-btn");
+  await ui.evaluate(() => document.querySelector('#sources-btn').click()); // in the menu overlay or the hidden Capture actions
   await sleep(500);
   await ui.selectOption("#ai-provider", "local");
   await ui.click("#sources-save");

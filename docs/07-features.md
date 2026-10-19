@@ -14,7 +14,7 @@ NODE is a research browser that reads the page you are on, picks out keywords, a
 - Bookmarks: star or Cmd+D, Bookmarks shelf (Cmd+Shift+B), bookmarks first in address-bar suggestions; phone star and list.
 - Picture-in-picture: PiP button or Cmd+Shift+P, also for embedded players.
 - Ad and tracker blocking (desktop): EasyList and EasyPrivacy, weekly updates, Settings switch, site rule `adblock`.
-- Ask AI about the current page (sidebar Ask; phone: Suggestions → Ask AI), local model or Grok; page text sent only when asked.
+- Ask AI about the current page (Ask tab in the suggestions widget; phone: Suggestions → Ask AI), local model or Grok; page text sent only when asked.
 - Installer: `npm run dist:mac` (.dmg with icon), `npm run dist:win`. Not signed; no automatic updates yet.
 
 ## Desktop: tabs and layout
@@ -23,7 +23,10 @@ NODE is a research browser that reads the page you are on, picks out keywords, a
 - Tab bar: drag to reorder, middle-click to close, double-click the empty bar for a new tab.
 - Address bar: searches open Brave Search; history suggestions while typing.
 - Popups only right after a click or key press; others are blocked and listed.
-- Library: Shot (or S), Save (page note), Media (download main image or video).
+- Toolbar buttons are icons; hovering shows the name and shortcut. Capture holds Screenshot (or S), Save Page, Save Media and Picture in Picture in one menu.
+- Suggestions widget beside the page with Suggest, Ask, Agent and Talk tabs; collapses (Cmd+Shift+.) to give the page the full width, with the result count on the toolbar button.
+- Menu (☰, Cmd+,): Library, Bookmarks, History, Downloads, Trail, Settings and Help in one panel over the page.
+- Full screen hides the toolbar; it comes back while the pointer is at the top edge.
 
 ## Desktop: media and sound
 
@@ -59,7 +62,7 @@ NODE is a research browser that reads the page you are on, picks out keywords, a
 - Help menu and Settings → Help: Copy diagnostics (version, system, features on, recent errors; no page text or keys), Report a Problem, Open Log Folder.
 
 - Right-click menu: open link in a new or background tab, copy or save links and images, search Brave for or pin selected text, spelling suggestions, back, forward, reload, print, Save as PDF, Inspect.
-- Downloads go to the Downloads folder (a number is added when a name is taken); progress in the toolbar, list in Library → Downloads with Open, Show in folder and Cancel.
+- Downloads go to the Downloads folder (a number is added when a name is taken); progress in the toolbar, list in Menu → Downloads with Open, Show in folder and Cancel.
 - Tabs from last time reopen on start (Settings → Startup); tabs unused for 15 minutes sleep to save memory and load again when clicked.
 - Reopen Closed Tab (Cmd/Ctrl+Shift+T), Next and Previous Tab (Ctrl+Tab, Ctrl+Shift+Tab), Cmd/Ctrl+1 to 9, Print (Cmd/Ctrl+P), Save Page as PDF.
 - A page that fails to load, or whose tab crashes, shows a NODE page with the reason and Try again.
@@ -70,12 +73,12 @@ NODE is a research browser that reads the page you are on, picks out keywords, a
 
 ## Desktop: Talk
 
-- **Talk** in the sidebar: Hacker News stories and Bluesky posts that link to the page you are reading, and a Reddit search link. Clicking one opens it in a tab.
+- **Talk** tab in the suggestions widget: Hacker News stories and Bluesky posts that link to the page you are reading, and a Reddit search link. Clicking one opens it in a tab.
 - Looked up only while Talk is open, with tracking parameters removed. Never for sign-in, account, payment or banking pages, local addresses, or sites with the rule `"talk": false` or `"suggest": false`.
 
 ## Desktop: research agent
 
-- **Agent** in the sidebar: type a question; NODE plans up to 3 searches, reads the best results in the logged-out agent session, checks its notes for gaps and searches once more if needed (8 pages at most), then writes a short report with numbered sources.
+- **Agent** tab in the suggestions widget: type a question; NODE plans up to 3 searches, reads the best results in the logged-out agent session, checks its notes for gaps and searches once more if needed (8 pages at most), then writes a short report with numbered sources.
 - A small live view shows the page the agent is reading. Follow-up questions keep the earlier sources and their numbers and only read new pages.
 - Each step is listed as it happens; Stop ends it between steps.
 - Reads only addresses from its own search results, so text on a page cannot send it elsewhere; page text is marked as untrusted for the model; links in the model's text are removed and the sources list is built by NODE.
@@ -87,7 +90,7 @@ NODE is a research browser that reads the page you are on, picks out keywords, a
 - Off by default. When on, agents on this computer (Claude Code, Codex, Cursor) connect over MCP with a token shown in Settings.
 - Tools: web search with NODE's sources, a logged-out page reader that returns Markdown, tabs the user shares, research sessions.
 - Read-only. Sign-in, payment and banking pages, password and card forms, and local network addresses are refused in code.
-- Every call is logged in Settings and in the research session; **Agents ●** stops the server and unshares all tabs.
+- Every call is logged in Settings and in the research session; the green **Agents** toolbar button stops the server and unshares all tabs.
 
 ## Desktop: Google window
 

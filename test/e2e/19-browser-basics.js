@@ -80,12 +80,12 @@ const log = (...a) => console.log("•", ...a);
   await sleep(2500);
   const dls = await ui.evaluate(() => window.scout.downloads());
   log("downloads:", dls.map((d) => `${d.name} ${d.state}`).join(" | "), "| files:", fs.readdirSync(downloadsDir).join(", "));
-  await ui.click("#library-btn");
+  await ui.click("#menu-btn");
   await sleep(500);
-  await ui.click('#shelf-filters .chip[data-folder="downloads"]');
+  await ui.click('.mnav[data-section="downloads"]');
   await sleep(500);
   log("Library → Downloads rows:", await ui.$$eval(".download-row", (e) => e.length));
-  await ui.click("#library-btn");
+  await ui.click("#menu-close");
   await sleep(300);
 
   // Save as PDF.

@@ -97,7 +97,7 @@ const log = (...a) => console.log("•", ...a);
   await sleep(2000);
   log("library open after S:", !(await ui.$eval("#shelf", (e) => e.hidden)), "| items:", await ui.$$eval("#library-list .poster", (els) => els.length));
   await ui.screenshot({ path: path.join(OUT, "ui-library.png") });
-  await ui.click("#library-close");
+  await ui.click("#menu-close");
   await sleep(500);
 
   // Select text in the page -> selection-driven search within ~5 s.

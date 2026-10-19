@@ -72,6 +72,9 @@ Requires Node 18+.
 | Cmd/Ctrl+Shift+P | Picture-in-picture |
 | Cmd/Ctrl+Shift+U | Mute or unmute the tab |
 | Cmd/Ctrl+Shift+S, or S | Screenshot the tab |
+| Cmd/Ctrl+Shift+. | Show or hide the suggestions widget |
+| Cmd/Ctrl+, | Menu (opens at Settings) |
+| Ctrl+Cmd+F (Mac), F11 (Windows, Linux) | Full screen: the toolbar hides; move the pointer to the top edge to show it |
 
 ## Repository layout
 
@@ -89,12 +92,19 @@ The mobile app is planned with React Native (Expo) and reuses `core/`. A first v
 
 The old Tauri setup (`src-tauri/`, `renderer/tauri-bridge.js`) does not compile and will be removed.
 
+## Toolbar, suggestions widget and menu
+
+- **Toolbar buttons are icons.** Hover over one to see its name and shortcut. From the left: back, forward, reload, the address bar, bookmark star, then Mosaic, Sound, Capture (screenshot, save page, save media, picture-in-picture in one menu), Agents (only while agents are on), Downloads (only while one is running), the suggestions widget, full screen and the menu.
+- **Suggestions widget.** Suggest, Ask, Agent and Talk are tabs at the top of the widget beside the page. The arrow at its top right collapses it and gives the page the full width. While it is collapsed, the widget button in the toolbar shows the number of results, and in violet how many arrived since you collapsed it.
+- **Menu.** The menu button (☰) opens Library, Bookmarks, History, Downloads, Trail, Settings and Help in one panel over the page. Esc, × or a click outside closes it.
+- **Full screen.** The toolbar hides. Move the pointer to the top edge to bring it back; it hides again when the pointer moves down. It stays while you type in the address bar or the find bar, or while a menu is open. A video's own full screen covers the whole window.
+
 ## How it works
 
 1. Each tab is an Electron `WebContentsView`, a real Chromium page. Tabs that are not on screen are detached from the window, so Chromium stops drawing them and slows their timers; their media keeps playing. In Mosaic every tile is on screen, so several videos play together.
 2. **Mosaic** tiles every open tab. Click a tile to make it the current tab. **Focus** shows one tab at full size.
 3. **Playing in several tabs:** media autoplays in every tab, and up to 4 tabs play at once. When a fifth tab starts, the tab that started playing longest ago is paused and marked ⏸ in the tab bar (the active tab is never paused this way). Opening a paused tab resumes it.
-4. **Sound:** by default only the active tab is audible and other tabs keep playing muted. The **Sound: one / Sound: all** button in the toolbar (or Cmd/Ctrl+Shift+A) makes every playing tab audible at once. The speaker button on a tab overrides this; right-click it to go back to automatic.
+4. **Sound:** by default only the active tab is audible and other tabs keep playing muted. The **Sound** button in the toolbar (or Cmd/Ctrl+Shift+A) makes every playing tab audible at once. The speaker button on a tab overrides this; right-click it to go back to automatic.
 5. **Autoplay** is allowed without a prior click. As soon as a page is parsed, NODE plays its main media with sound: the largest visible video or YouTube, Vimeo or Dailymotion embed, or else the first audio player. Players that appear later (built by a script, or on sites like YouTube that change address without reloading) are caught for 20 seconds. Only the main player starts, and media you pause stays paused.
 6. **Center on click:** clicking a video, an image or an embedded player (YouTube, Vimeo and similar) smoothly scrolls the page so it sits in the middle of the view. Small images such as icons are ignored. Site rule `center` turns it off per site.
 7. **Popups** open as a new tab only if you clicked or typed in the page in the previous 2 seconds. Other popups are blocked and listed in the sidebar with an "Open in new tab" button.
@@ -109,9 +119,9 @@ The old Tauri setup (`src-tauri/`, `renderer/tauri-bridge.js`) does not compile 
 ## Bookmarks, picture-in-picture, ad blocking and Ask AI
 
 - **Bookmarks.** ☆ next to the address bar (or Cmd/Ctrl+D) bookmarks the page; ★ means it is saved. Bookmarks appear first in address-bar suggestions and in the Bookmarks shelf of the Library (Cmd/Ctrl+Shift+B).
-- **Picture-in-picture.** PiP in the toolbar (or Cmd/Ctrl+Shift+P) puts the page's video, or an embedded YouTube or Vimeo player, in a floating window. Again to close it.
+- **Picture-in-picture.** Capture → Picture in Picture in the toolbar (or Cmd/Ctrl+Shift+P) puts the page's video, or an embedded YouTube or Vimeo player, in a floating window. Again to close it.
 - **Ad and tracker blocking.** On by default, using the EasyList and EasyPrivacy lists (Ghostery's filter engine), downloaded on first run and updated weekly. Turn it off in Settings, or for one site with a site rule `"adblock": false`. Settings shows how many requests were blocked.
-- **Ask AI.** Ask in the sidebar opens a chat about the current page, with Summarize, Key facts and What next? buttons. It uses the model set up under Settings → AI (a local model or Grok). Questions send the page's readable text, title and address to that model; nothing is sent until you ask.
+- **Ask AI.** The Ask tab in the suggestions widget opens a chat about the current page, with Summarize, Key facts and What next? buttons. It uses the model set up under Settings → AI (a local model or Grok). Questions send the page's readable text, title and address to that model; nothing is sent until you ask.
 
 ## Installing
 
@@ -156,17 +166,17 @@ Mobile:
 
 ## Research sessions
 
-**Trail** in the sidebar shows the current research session: every page you read (with its top keywords), keywords that recur across pages, and how many suggestions you opened or hid. Click a keyword to pin it. Pinned keywords are saved with the session.
+**Trail** in the menu shows the current research session: every page you read (with its top keywords), keywords that recur across pages, and how many suggestions you opened or hid. Click a keyword to pin it. Pinned keywords are saved with the session.
 
 On result cards, **×** hides a result for the rest of the session, and results you have already opened or read are dimmed and marked "read". **New** starts a fresh session; the dropdown switches back to an older one. **Export** saves the session as Markdown notes in the Library (Saves).
 
 ## Talk
 
-**Talk** in the sidebar shows existing discussion of the page you are reading: Hacker News stories and Bluesky posts that link to it, plus a link to search Reddit. NODE looks the page up only while Talk is open, sends its address without tracking parameters, and never looks up sign-in, account, payment or banking pages or addresses on your own network. Turn it off for a site with the site rule `"talk": false`. This is stage 1 of the social layer plan; posting and accounts come later.
+The **Talk** tab in the suggestions widget shows existing discussion of the page you are reading: Hacker News stories and Bluesky posts that link to it, plus a link to search Reddit. NODE looks the page up only while Talk is open, sends its address without tracking parameters, and never looks up sign-in, account, payment or banking pages or addresses on your own network. Turn it off for a site with the site rule `"talk": false`. This is stage 1 of the social layer plan; posting and accounts come later.
 
 ## Research agent
 
-**Agent** in the sidebar asks for a question, then runs a few searches with your sources, reads the best results in a separate logged-out session, searches once more if its notes leave gaps (8 pages at most) and writes a short report with numbered sources. A small live view shows the page it is reading, and you can ask follow-up questions that build on the sources it already read. You see each step as it happens and can stop it. The report is saved to the Library and the research session, and **Open sources in Mosaic** opens the sources side by side. It uses the model set in Settings → AI.
+The **Agent** tab in the suggestions widget asks for a question, then runs a few searches with your sources, reads the best results in a separate logged-out session, searches once more if its notes leave gaps (8 pages at most) and writes a short report with numbered sources. A small live view shows the page it is reading, and you can ask follow-up questions that build on the sources it already read. You see each step as it happens and can stop it. The report is saved to the Library and the research session, and **Open sources in Mosaic** opens the sources side by side. It uses the model set in Settings → AI.
 
 It is tested against 12 prompt-injection pages before each release (`npm run test:redteam`), including with a model that obeys them. It only reads pages that came back from its own searches: the model picks results by number and never supplies an address, so hidden text on a page cannot send it somewhere else. It does not sign in, click or fill forms, and skips pages that ask for a password or card details.
 
@@ -182,7 +192,7 @@ NODE can serve AI agents on your computer, such as Claude Code, Codex or Cursor,
    ```
 
    Other clients take the same address and header in their MCP settings.
-3. To let an agent read a page you have open, click **Share tab** in the toolbar. Sharing ends when the tab goes to another site.
+3. To let an agent read a page you have open, click the **Share tab** button in the toolbar (the arrow out of a box). Sharing ends when the tab goes to another site.
 
 What agents can do:
 
@@ -193,7 +203,7 @@ What agents can do:
 | `list_shared_tabs`, `read_tab` | Lists and reads only the tabs you shared |
 | `list_research_sessions`, `get_research_session` | Your research trails as Markdown (also available as resources `node://sessions/...`) |
 
-Limits enforced by NODE, not by the agent: no clicking, typing or signing in; sign-in, account, payment and banking pages and pages with password or card fields are never read; addresses on your computer or local network are refused; only programs with the token can connect, and web pages cannot; calls are rate-limited. Every call is listed in Settings and saved in the research session. **Agents ●** in the toolbar (or View → Stop All Agents) turns the server off and takes back every shared tab.
+Limits enforced by NODE, not by the agent: no clicking, typing or signing in; sign-in, account, payment and banking pages and pages with password or card fields are never read; addresses on your computer or local network are refused; only programs with the token can connect, and web pages cannot; calls are rate-limited. Every call is listed in Settings and saved in the research session. The green **Agents** button in the toolbar (or View → Stop All Agents) turns the server off and takes back every shared tab.
 
 ## Site rules
 
@@ -228,7 +238,7 @@ The model never receives page text or addresses, and pages with suggestions turn
 
 ## Search sources
 
-Open **Settings** in the sidebar to turn sources on or off. **Test** runs one search with that source and shows the result or the error.
+Open **Menu → Settings** to turn sources on or off. **Test** runs one search with that source and shows the result or the error.
 
 | Source | Setup | Notes |
 | --- | --- | --- |

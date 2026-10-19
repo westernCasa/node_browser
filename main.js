@@ -1,4 +1,4 @@
-const { app, BrowserWindow, WebContentsView, ipcMain, session, shell, protocol, net, Menu, dialog, safeStorage, clipboard, systemPreferences } = require("electron");
+const { app, BrowserWindow, WebContentsView, ipcMain, session, shell, protocol, net, Menu, dialog, safeStorage, clipboard, systemPreferences, screen } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const { URL } = require("url");
@@ -56,8 +56,11 @@ const Talk = require("./core/talk");
 let research = null; // current research session store (B17), created when the app is ready
 
 const HOME_URL = "https://en.wikipedia.org/wiki/Main_Page";
-const CHROME_TOP = 112;
-const SIDEBAR_DEFAULT = 225;
+const CHROME_TOP = 96; // toolbar height: keep in step with .shell grid-template-rows in renderer/styles.css and index.html
+const SIDEBAR_DEFAULT = 356; // suggestions widget open (renderer/app.js PANEL_W + gaps)
+// Space the floating suggestions widget takes on the right of the page: its
+// width plus the gap around it. The renderer sends it (0 when collapsed).
+const PANEL_MAX = 600;
 // The standard Chrome user agent for this computer's system and Scout's real
 // Chromium version, without the "Electron/..." and app-name parts. Sites such as
 // Google sign-in refuse browsers that say they are embedded (Electron) or
@@ -76,8 +79,18 @@ const AGENT_UA = `${USER_AGENT} NODE-agent/${app.getVersion()} (+https://github.
 
 let win;
 let sidebarWidth = SIDEBAR_DEFAULT;
-let libraryOpen = false;
-const LIBRARY_W = 225;
+let libraryOpen = false; // the overlay menu (or first-run screen) covers the window: page views hidden
+// Full screen hides the toolbar (immersive). It comes back while the pointer
+// is at the top edge, or while the renderer holds it (address bar or find
+// bar in use, a menu open). A page's own full screen (a video) takes the
+// whole window and never shows the toolbar.
+let immersive = false;
+let chromeShown = true;
+let chromeHold = false; // the renderer is using the toolbar (address bar, find bar, menu)
+let popupHold = false; // a native menu from the toolbar is open
+let htmlFullId = null;
+let chromePoll = null;
+let chromeHideTimer = null;
 let layout = "focus"; // focus | mosaic
 const tabs = new Map();
 let activeId = null;
@@ -165,13 +178,70 @@ function chromeBounds() {
 
 function contentRect() {
   const { width, height } = chromeBounds();
-  const right = libraryOpen ? LIBRARY_W : sidebarWidth;
+  if (htmlFullId) return { x: 0, y: 0, width, height };
+  const top = immersive && !chromeShown ? 0 : CHROME_TOP;
   return {
     x: 0,
-    y: CHROME_TOP,
-    width: Math.max(280, width - right),
-    height: Math.max(200, height - CHROME_TOP),
+    y: top,
+    width: Math.max(280, width - sidebarWidth),
+    height: Math.max(200, height - top),
   };
+}
+
+// ---- Full screen: hide the toolbar ----
+function setChromeShown(on) {
+  clearTimeout(chromeHideTimer);
+  chromeHideTimer = null;
+  if (chromeShown === on) return;
+  chromeShown = on;
+  sendUi("chrome", { immersive, shown: on });
+  applyLayout();
+}
+
+// The page views cover the renderer, so it gets no mouse events over the
+// page: read the pointer position from the system instead.
+function pollChrome() {
+  if (!win || !immersive || htmlFullId || chromeHold || popupHold || libraryOpen) return;
+  const p = screen.getCursorScreenPoint();
+  const b = win.getContentBounds();
+  const inside = p.x >= b.x && p.x < b.x + b.width && p.y >= b.y && p.y < b.y + b.height;
+  const y = p.y - b.y;
+  if (!chromeShown) {
+    if (inside && y <= 2) setChromeShown(true);
+    return;
+  }
+  if (inside && y <= CHROME_TOP + 16) {
+    clearTimeout(chromeHideTimer);
+    chromeHideTimer = null;
+  } else if (!chromeHideTimer) {
+    chromeHideTimer = setTimeout(() => setChromeShown(false), 400);
+  }
+}
+
+function enterImmersive() {
+  immersive = true;
+  chromeShown = true;
+  sendUi("chrome", { immersive: true, shown: true, hint: true });
+  applyLayout();
+  clearInterval(chromePoll);
+  chromePoll = setInterval(pollChrome, 100);
+  // Show the toolbar with its hint for a moment, then hide it.
+  clearTimeout(chromeHideTimer);
+  chromeHideTimer = setTimeout(() => {
+    chromeHideTimer = null;
+    if (!chromeHold && !popupHold) setChromeShown(false);
+  }, 1800);
+}
+
+function leaveImmersive() {
+  immersive = false;
+  clearInterval(chromePoll);
+  chromePoll = null;
+  clearTimeout(chromeHideTimer);
+  chromeHideTimer = null;
+  chromeShown = true;
+  sendUi("chrome", { immersive: false, shown: true });
+  applyLayout();
 }
 
 // Tabs that are not on screen are hidden (not just sized to 0x0), so Chromium
@@ -839,6 +909,15 @@ function createTab(url, opts = {}) {
   win.contentView.addChildView(view);
   tab.attached = true;
   attachListeners(tab);
+  // A page's own full screen (a video) fills the window, above the toolbar.
+  view.webContents.on("enter-html-full-screen", () => {
+    htmlFullId = id;
+    applyLayout();
+  });
+  view.webContents.on("leave-html-full-screen", () => {
+    if (htmlFullId === id) htmlFullId = null;
+    applyLayout();
+  });
   if (!opts.background || !activeId) activeId = id;
   if (opts.sleeping && activeId !== id) {
     // Restored tab: the page loads when the tab is first opened.
@@ -869,6 +948,7 @@ function closeTab(id) {
     }
   }
   tabs.delete(id);
+  if (htmlFullId === id) htmlFullId = null;
   if (tab.attached) win.contentView.removeChildView(tab.view);
   // WebContentsView does not free its page on removal; close it explicitly.
   // Closing a page while a video is playing crashed Electron (seen on Linux),
@@ -1484,6 +1564,8 @@ function buildMenu() {
           click: () => activeWc()?.canGoForward() && activeWc().goForward(),
         },
         { label: "Toggle Mosaic", accelerator: "CmdOrCtrl+Shift+M", click: () => sendUi("toggle-layout") },
+        { label: "Show or Hide Suggestions", accelerator: "CmdOrCtrl+Shift+.", click: () => sendUi("toggle-suggest") },
+        { label: "Menu: Library, History, Settings", accelerator: "CmdOrCtrl+,", click: () => sendUi("open-menu", { section: "settings" }) },
         { type: "separator" },
         { label: "Next Tab", accelerator: "Ctrl+Tab", click: () => stepTab(1) },
         { label: "Previous Tab", accelerator: "Ctrl+Shift+Tab", click: () => stepTab(-1) },
@@ -1599,6 +1681,8 @@ function createWindow() {
     if (cmd === "browser-forward") gestureNav(tabs.get(activeId), "forward");
   });
   win.on("resize", applyLayout);
+  win.on("enter-full-screen", enterImmersive);
+  win.on("leave-full-screen", leaveImmersive);
   win.webContents.on("console-message", (details) => {
     if (details.level === "error") log().error(`interface: ${details.message} (${details.sourceId?.split("/").pop()}:${details.lineNumber})`);
   });
@@ -1721,10 +1805,53 @@ ipcMain.handle("layout:sidebar", (_e, w) => {
   sidebarWidth = Math.max(160, Math.min(360, Number(w) || SIDEBAR_DEFAULT));
   applyLayout();
 });
-ipcMain.handle("layout:library", (_e, open) => {
+// Space the suggestions widget takes on the right; 0 when it is collapsed.
+ipcMain.handle("layout:panel", (_e, w) => {
+  sidebarWidth = Math.max(0, Math.min(PANEL_MAX, Math.round(Number(w) || 0)));
+  applyLayout();
+  return sidebarWidth;
+});
+// opts.snapshot: also return pictures of the visible pages, taken before they
+// are hidden, so the overlay menu can show them dimmed behind it.
+ipcMain.handle("layout:library", async (_e, open, opts = {}) => {
+  const shots = [];
+  if (open && opts.snapshot && !libraryOpen) {
+    for (const tab of tabs.values()) {
+      if (!tab.attached) continue;
+      try {
+        const img = await tab.view.webContents.capturePage();
+        if (!img.isEmpty()) shots.push({ src: "data:image/jpeg;base64," + img.toJPEG(70).toString("base64"), rect: tab.view.getBounds() });
+      } catch (_) {}
+    }
+  }
   libraryOpen = Boolean(open);
   applyLayout();
-  return libraryOpen;
+  return opts.snapshot ? { open: libraryOpen, shots } : libraryOpen;
+});
+ipcMain.handle("window:fullscreen", (_e, on) => {
+  if (!win) return false;
+  win.setFullScreen(on == null ? !win.isFullScreen() : Boolean(on));
+  return win.isFullScreen();
+});
+// The renderer keeps the toolbar on screen in full screen while it is in use.
+ipcMain.on("chrome:hold", (_e, on) => {
+  chromeHold = Boolean(on);
+  if (chromeHold && immersive && !chromeShown) setChromeShown(true);
+});
+// Capture tools in one native menu under the toolbar button: a native menu
+// draws over the page views, an HTML menu would be hidden behind them.
+ipcMain.handle("menu:capture", (_e, x, y) => {
+  if (!win) return;
+  const pick = (action) => () => sendUi("capture", { action });
+  const menu = Menu.buildFromTemplate([
+    { label: "Screenshot", accelerator: "CmdOrCtrl+Shift+S", registerAccelerator: false, click: pick("shot") },
+    { label: "Save Page", click: pick("save") },
+    { label: "Save Media", click: pick("media") },
+    { type: "separator" },
+    { label: "Picture in Picture", accelerator: "CmdOrCtrl+Shift+P", registerAccelerator: false, click: pick("pip") },
+  ]);
+  popupHold = true;
+  menu.popup({ window: win, x: Math.round(x), y: Math.round(y), callback: () => (popupHold = false) });
 });
 ipcMain.on("tab:activity", (_e, id) => {
   const tab = tabs.get(String(id));
