@@ -137,6 +137,8 @@ const PORT = 47699;
   log("Claude app config file:", cfg.file.replace(require("os").homedir(), "~"), "| entry runs NODE as Node:", JSON.parse(cfg.config).mcpServers.node.env.ELECTRON_RUN_AS_NODE === "1");
 
   // 9. Stop switch.
+  await ui.keyboard.press("Escape"); // close the menu (Settings) so the toolbar is reachable
+  await sleep(300);
   await ui.click("#agent-btn");
   await sleep(500);
   await fetch(`http://127.0.0.1:${PORT}/mcp`).then(() => log("server after Stop: still answering"), () => log("server after Stop: closed"));
