@@ -1,6 +1,6 @@
 # NODE Browser: Chromium Build
 
-Last updated: 2026-10-18. Status: step N01 written and checked without a Mac; first Mac build to run. Code in `browser/` (see `browser/README.md`).
+Last updated: 2026-10-20. Status: step N01 written and checked without a Mac, with the NODE UI kit in the panel; first Mac build to run. Code in `browser/` (see `browser/README.md`).
 
 ## Decision (2026-10-18)
 
@@ -21,6 +21,7 @@ Pinned to ungoogled-chromium-macos `152.0.7977.64-1.1` (`browser/base.env`): Chr
 | Feature | In the Chromium build | Step |
 | --- | --- | --- |
 | Keywords, suggestions, search sources, Talk | Built-in extension side panel, same `core/` code | N01 (done in code), N02 for pins, hides, AI ideas |
+| Interface (NODE UI kit: icon buttons, panel tabs, menu) | Side panel with the kit's tabs; menu as a NODE page in a tab (`menu.html`); toolbar button with the kit's `suggest` icon. Spec: `browser/extension/UI-SPEC.md` | N01 (done in code 2026-10-20); Mosaic, Sound and Capture buttons come with N02 and N05 |
 | Autoplay with sound, 4-tab limit, center on click | Built-in extension content script and service worker; autoplay default patch | N01 |
 | Google sign-in | Works: it is a real Chromium browser, not an embedded framework | N01 (to confirm on the Mac) |
 | Bookmarks, history, find, zoom, PiP, downloads, print, passwords, extensions | Chromium's own | N01 |
@@ -39,7 +40,7 @@ The Google window (B52) is not needed in the Chromium build.
 
 | ID | Step | Effort | Status |
 | --- | --- | --- | --- |
-| N01 | Base and first patches: ungoogled-chromium 152, branding (NODE Chromium, own bundle ID and profile folder), NODE panel as a built-in component extension with a fixed ID, autoplay with sound by default; macOS build and signing scripts; patch check and extension test in CI | M | Code done 2026-10-18. Patches apply to Chromium 152 (`check_patches.py`); the extension passes 7 checks in ungoogled-chromium 152 for Linux. **To do on the Mac:** first full build, then the checks below |
+| N01 | Base and first patches: ungoogled-chromium 152, branding (NODE Chromium, own bundle ID and profile folder), NODE panel as a built-in component extension with a fixed ID, autoplay with sound by default; macOS build and signing scripts; patch check and extension test in CI | M | Code done 2026-10-18. Patches apply to Chromium 152 (`check_patches.py`); the extension passes 29 checks in ungoogled-chromium 152 for Linux (7 for features, 22 for the UI kit). **To do on the Mac:** first full build, then the checks below |
 | N02 | Panel parity with the Electron sidebar: pins and hides, Trail and sessions, Library, Ask AI, AI query ideas, site rules, Settings, sound per tab and Sound: all | L | Not started |
 | N03 | Look and defaults: app icon, NODE wording instead of Chromium in menus and dialogs, NODE start page, Brave Search default, ad blocking | M | Not started |
 | N04 | Agents: MCP server, logged-out reader and research agent through a native helper | L | Not started |
@@ -59,7 +60,22 @@ Build with `browser/build.sh` (see `browser/README.md`; about 150 GB free and se
 4. A Wikipedia article gives keywords and results (add a Brave key in the panel's Settings).
 5. YouTube starts playing with sound; five video tabs: four play, the oldest pauses and resumes when opened.
 6. Google sign-in works in a normal tab (accounts.google.com, then Gmail).
-7. Whether the NODE toolbar button is shown (Chromium may hide toolbar buttons of component extensions; if so, N03 adds one).
+7. Whether the NODE toolbar button is shown (Chromium may hide toolbar buttons of component extensions; if so, N03 adds one). It should show the suggestions-panel outline, black in light mode and white in dark mode, with the tooltip "Suggestions panel".
+8. The panel looks like the kit (`browser/extension/UI-SPEC.md`, section 5): Suggest and Talk tabs at the top, menu button on the right. The menu button opens the NODE menu in a tab; Esc closes it. A Brave key saved under Menu → Settings gives Brave results in the panel.
+
+## Interface (NODE UI kit, 2026-10-20)
+
+The kit from PR #1 (Electron) is in `browser/extension/src/ui/` (`node-ui.css`, `node-ui.js`, icons, fonts) and its spec in `browser/extension/UI-SPEC.md`. How it maps onto Chromium:
+
+| Kit part | In the Chromium build |
+| --- | --- |
+| Suggestions panel with tabs | The side panel (`sidepanel.html`), `.panel.fill` because Chromium draws the frame and close button. Tabs: Suggest and Talk. Ask and Agent are added when their panes exist (N02, N04). |
+| Menu (Library, Bookmarks, History, Downloads, Trail, Settings, Help) | `menu.html` in a tab, opened from the panel's menu button (the open menu tab is reused). `#section` opens a section; Esc or × closes the tab. Bookmarks, History and Downloads open Chromium's own pages; Settings has the Brave key, the playback line and a link to the browser's settings; Library, Trail and Help are placeholders until N02 and N07. |
+| Shortcuts in the menu (⌘, ⌘Y ⌘⇧B) | Not shown: in this build those keys open Chromium's own settings, history and bookmarks bar. |
+| Toolbar | Chromium's own buttons stay. NODE has one extension button (opens the panel) with the kit's `suggest` icon (PNG, made by `browser/extension/make-toolbar-icons.js`). Mosaic, Sound and Capture buttons are added when those features exist here (N02, N05). |
+| Full screen | Chromium's own; no work needed on the Mac. |
+
+If `test/e2e/22-ui-refresh.js` (PR #1) and `22-chromium-build.js` both end up on main, rename one to `23-`.
 
 Record results in this doc and in `05-changelog.md`.
 
