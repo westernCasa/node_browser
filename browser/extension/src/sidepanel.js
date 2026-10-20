@@ -21,10 +21,13 @@ const keywordContext = new KeywordContext();
 let pane = "suggest";
 let lastUrl = "";
 
-async function loadSettings() {
-  const saved = (await chrome.storage.local.get("providers")).providers || {};
+// Settings are edited on the menu page (menu.html); the panel only reads them.
+function applyProviders(saved = {}) {
   for (const [id, conf] of Object.entries(saved)) settings.providers[id] = { ...settings.providers[id], ...conf };
-  $("brave-key").value = settings.providers.brave?.key || "";
+}
+
+async function loadSettings() {
+  applyProviders((await chrome.storage.local.get("providers")).providers);
 }
 
 async function currentTab() {
@@ -116,25 +119,33 @@ async function refreshTalk() {
   }));
 }
 
-function show(name) {
-  pane = name;
-  for (const p of ["suggest", "talk", "settings"]) {
-    $(`${p}-pane`).hidden = p !== name;
-    $(`tab-${p}`).classList.toggle("active", p === name);
+// Panel tabs (NODE UI kit): click or left / right arrow keys.
+NodeUI.init();
+NodeUI.panelTabs(document.querySelector(".panel-tabs"), (id) => {
+  pane = id.replace(/^pane-/, "");
+  if (pane === "talk") refreshTalk();
+  if (pane === "suggest" && lastUrl) refreshSuggest(true);
+});
+
+// The menu (Library, Trail, Settings, Help) is a NODE page in a tab. Reuse
+// the tab if it is already open.
+$("open-menu").addEventListener("click", () => openMenu());
+async function openMenu(section = "") {
+  const base = chrome.runtime.getURL("menu.html");
+  const url = section ? `${base}#${section}` : base;
+  const [open] = await chrome.tabs.query({ url: `${base}*` }).catch(() => []);
+  if (open) {
+    await chrome.tabs.update(open.id, { active: true, ...(section ? { url } : {}) });
+    await chrome.windows.update(open.windowId, { focused: true }).catch(() => {});
+  } else {
+    await chrome.tabs.create({ url });
   }
-  if (name === "talk") refreshTalk();
-  if (name === "suggest") refreshSuggest(true);
-  if (name === "settings") chrome.runtime.sendMessage({ type: "playback-state" }).then((s) => ($("playback-line").textContent = `Playing: ${s.playing.length} of 4 tabs · paused by the limit: ${s.pausedByLimit.length}`));
 }
 
-$("tab-suggest").addEventListener("click", () => show("suggest"));
-$("tab-talk").addEventListener("click", () => show("talk"));
-$("tab-settings").addEventListener("click", () => show("settings"));
-$("save-settings").addEventListener("click", async () => {
-  const key = $("brave-key").value.trim();
-  settings.providers.brave = { ...settings.providers.brave, key, enabled: Boolean(key) };
-  await chrome.storage.local.set({ providers: { brave: { key, enabled: Boolean(key) } } });
-  show("suggest");
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== "local" || !changes.providers) return;
+  applyProviders(changes.providers.newValue);
+  if (pane === "suggest") refreshSuggest(true);
 });
 
 chrome.tabs.onActivated.addListener(() => pane === "suggest" && refreshSuggest());

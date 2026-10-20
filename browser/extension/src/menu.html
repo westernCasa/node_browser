@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>NODE menu</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="ui/node-ui.css" />
+  <link rel="stylesheet" href="panel.css" />
+</head>
+<body class="menu-page">
+  <!-- NODE UI kit (SPEC.md section 6), Chromium build: the menu as a NODE page
+       in a tab. Same markup as the Electron overlay without the scrim; closing
+       the menu closes the tab. The address's #section opens that section. -->
+  <div class="menu-overlay" id="menu">
+    <div class="menu-panel" role="dialog" aria-modal="true" aria-labelledby="menu-title">
+      <div class="menu-head">
+        <h1 id="menu-title">Menu</h1>
+        <span class="menu-esc">Esc</span>
+        <button class="tb" id="menu-close" data-tip="Close menu" data-keys="Esc" data-menu-close><svg class="ic" aria-hidden="true" focusable="false"><use href="#i-close"/></svg></button>
+      </div>
+      <div class="menu-body">
+        <!-- No shortcuts listed: in the Chromium build, Cmd/Ctrl+, Cmd/Ctrl+Y
+             and Cmd/Ctrl+Shift+B belong to Chromium's own pages. -->
+        <nav class="menu-nav" aria-label="Menu sections">
+          <button class="mnav" data-section="library"><svg class="ic" aria-hidden="true" focusable="false"><use href="#i-library"/></svg><span>Library</span><kbd></kbd></button>
+          <button class="mnav" data-section="bookmarks"><svg class="ic" aria-hidden="true" focusable="false"><use href="#i-bookmarks"/></svg><span>Bookmarks</span><kbd></kbd></button>
+          <button class="mnav" data-section="history"><svg class="ic" aria-hidden="true" focusable="false"><use href="#i-history"/></svg><span>History</span><kbd></kbd></button>
+          <button class="mnav" data-section="downloads"><svg class="ic" aria-hidden="true" focusable="false"><use href="#i-download"/></svg><span>Downloads</span><kbd></kbd></button>
+          <button class="mnav" data-section="trail"><svg class="ic" aria-hidden="true" focusable="false"><use href="#i-trail"/></svg><span>Trail</span><kbd></kbd></button>
+          <button class="mnav" data-section="settings"><svg class="ic" aria-hidden="true" focusable="false"><use href="#i-settings"/></svg><span>Settings</span><kbd></kbd></button>
+          <button class="mnav" data-section="help"><svg class="ic" aria-hidden="true" focusable="false"><use href="#i-help"/></svg><span>Help</span><kbd></kbd></button>
+        </nav>
+        <div class="menu-content" id="menu-content">
+          <section data-pane="library" hidden>
+            <p class="kicker">Menu</p>
+            <h2 class="h2">Library</h2>
+            <p class="help">Screenshots, saved pages and media. Coming to the Chromium build with step N02.</p>
+          </section>
+          <section data-pane="bookmarks" hidden>
+            <p class="kicker">Menu</p>
+            <h2 class="h2">Bookmarks</h2>
+            <p class="help">Bookmarks are kept by the browser.</p>
+            <button class="chip" data-open="chrome://bookmarks">Open bookmarks</button>
+          </section>
+          <section data-pane="history" hidden>
+            <p class="kicker">Menu</p>
+            <h2 class="h2">History</h2>
+            <p class="help">History is kept by the browser.</p>
+            <button class="chip" data-open="chrome://history">Open history</button>
+          </section>
+          <section data-pane="downloads" hidden>
+            <p class="kicker">Menu</p>
+            <h2 class="h2">Downloads</h2>
+            <p class="help">Downloads are kept by the browser.</p>
+            <button class="chip" data-open="chrome://downloads">Open downloads</button>
+          </section>
+          <section data-pane="trail" hidden>
+            <p class="kicker">Menu</p>
+            <h2 class="h2">Trail</h2>
+            <p class="help">The pages and keywords of a research session. Coming to the Chromium build with step N02.</p>
+          </section>
+          <section data-pane="settings" hidden>
+            <p class="kicker">Menu</p>
+            <h2 class="h2">Settings</h2>
+            <div class="source">
+              <label class="field"><span>Brave Search API key</span><input type="password" id="brave-key" autocomplete="off" /></label>
+              <p class="help">Without a key, web results come from DuckDuckGo.</p>
+              <button class="chip" id="save-settings">Save</button>
+              <p class="state" id="settings-state" role="status"></p>
+            </div>
+            <p class="kicker sub">Playback</p>
+            <p class="help" id="playback-line"></p>
+            <p class="kicker sub">Browser</p>
+            <p class="help">Passwords, privacy, search engine and other browser settings are in the browser's own settings.</p>
+            <button class="chip" data-open="chrome://settings">Open browser settings</button>
+          </section>
+          <section data-pane="help" hidden>
+            <p class="kicker">Menu</p>
+            <h2 class="h2">Help</h2>
+            <p class="telemetry" id="help-version"></p>
+            <p class="help">Diagnostics and updates come to the Chromium build with step N07.</p>
+          </section>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="ui/icons/icons.js"></script>
+  <script src="ui/node-ui.js"></script>
+  <script src="toolbar-icon.js"></script>
+  <script src="menu.js"></script>
+</body>
+</html>

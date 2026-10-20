@@ -4,7 +4,8 @@
 // (--load-extension); the manifest key gives it the same fixed ID it has as a
 // component in the NODE build. Checks the ID, suggestions from the page
 // (shared keyword and search code), Talk, autoplay with sound and the 4-tab
-// playback limit across real tabs, and center on click. That it is hidden from
+// playback limit across real tabs, center on click, and the NODE UI kit (panel
+// tabs, icon tooltips, the menu page). That it is hidden from
 // chrome://extensions and cannot be removed needs the NODE build itself.
 //
 // Needs a Chromium binary of the same version as the NODE base, for example
@@ -63,6 +64,87 @@ const check = (name, ok, detail = "") => {
   check("search results shown", cards > 0, `${cards} cards · ${await panel.textContent("#suggest-status")}`);
   await panel.setViewportSize({ width: 360, height: 800 });
   await panel.screenshot({ path: path.join(os.tmpdir(), "node-chromium-panel.png") });
+
+  // NODE UI kit: panel tabs (click and arrow keys), every icon button names itself.
+  const sel = () => panel.$$eval(".ptab", (t) => t.map((x) => `${x.id}:${x.getAttribute("aria-selected")}:${document.getElementById(x.getAttribute("aria-controls")).hidden ? "hidden" : "shown"}`).join(" "));
+  check("panel tabs: Suggest and Talk, Suggest selected", (await sel()) === "tab-suggest:true:shown tab-talk:false:hidden", await sel());
+  check("settings are not in the panel any more", !(await panel.$("#settings-pane, #brave-key, .rail-head")));
+  await panel.click("#tab-talk");
+  check("click selects a tab", (await sel()) === "tab-suggest:false:hidden tab-talk:true:shown", await sel());
+  await panel.press("#tab-talk", "ArrowLeft");
+  const focused = await panel.evaluate(() => document.activeElement.id);
+  check("left arrow moves to the previous tab and focuses it", (await sel()) === "tab-suggest:true:shown tab-talk:false:hidden" && focused === "tab-suggest", `${await sel()} · focus ${focused}`);
+  await panel.keyboard.press("ArrowRight");
+  check("right arrow moves to the next tab", (await sel()).startsWith("tab-suggest:false"), await sel());
+  await panel.keyboard.press("ArrowRight");
+  check("arrow keys wrap around", (await sel()).startsWith("tab-suggest:true"), await sel());
+  const unnamed = await panel.$$eval(".tb, .ptab", (b) => b.filter((x) => !x.title || (x.classList.contains("tb") && !x.getAttribute("aria-label"))).map((x) => x.outerHTML.slice(0, 60)));
+  check("every icon button in the panel has a tooltip and a name", unnamed.length === 0, unnamed.join(" | ") || (await panel.$$eval(".tb, .ptab", (b) => b.map((x) => x.title).join(" | "))));
+  check("the panel uses the kit's icons", (await panel.$$eval(".panel-tabs svg use", (u) => u.every((x) => document.querySelector(x.getAttribute("href"))))) && (await panel.$$eval(".panel-tabs svg use", (u) => u.length)) === 3);
+  check("toolbar button uses the suggest icon and names itself", await sw.evaluate(async () => (await chrome.action.getTitle({})) === "Suggestions panel" && chrome.runtime.getManifest().action.default_icon[16].includes("suggest")));
+
+  // The menu button opens the menu page in a tab, and reuses it.
+  const menuUrl = `chrome-extension://${extId}/menu.html`;
+  const [menu] = await Promise.all([ctx.waitForEvent("page"), panel.click("#open-menu")]);
+  await menu.waitForLoadState();
+  check("menu button opens the menu page", menu.url().startsWith(menuUrl), menu.url());
+  await panel.click("#open-menu");
+  await sleep(800);
+  const menuTabs = ctx.pages().filter((p) => p.url().startsWith(menuUrl)).length;
+  check("a second click reuses the menu tab", menuTabs === 1, `${menuTabs} menu tabs`);
+
+  // Menu sections: #section opens that section, focus goes to its row.
+  const state = () => menu.evaluate(() => ({
+    current: document.querySelector('.mnav[aria-current="page"]')?.dataset.section,
+    focus: document.activeElement?.dataset?.section,
+    shown: [...document.querySelectorAll("[data-pane]")].filter((s) => !s.hidden).map((s) => s.dataset.pane).join(","),
+    hash: location.hash,
+  }));
+  await menu.goto(`${menuUrl}#settings`);
+  await sleep(500);
+  let st = await state();
+  check("menu opens on #settings with focus on its row", st.current === "settings" && st.focus === "settings" && st.shown === "settings", JSON.stringify(st));
+  const rows = await menu.$$eval(".mnav", (b) => b.map((x) => x.dataset.section).join(","));
+  check("menu sections in order", rows === "library,bookmarks,history,downloads,trail,settings,help", rows);
+  const visited = [];
+  for (const name of rows.split(",")) {
+    await menu.click(`.mnav[data-section="${name}"]`);
+    st = await state();
+    visited.push(st.current === name && st.shown === name && st.hash === `#${name}` ? name : `${name}✗`);
+  }
+  check("every section opens from its row and updates the address", !visited.join().includes("✗"), visited.join(" "));
+  await menu.evaluate(() => (location.hash = "#history"));
+  await sleep(300);
+  st = await state();
+  check("changing #section in the address opens that section", st.current === "history" && st.shown === "history", JSON.stringify(st));
+  const menuUnnamed = await menu.$$eval(".tb", (b) => b.filter((x) => !x.title || !x.getAttribute("aria-label")).length);
+  check("menu close button has a tooltip and a name", menuUnnamed === 0 && (await menu.getAttribute("#menu-close", "title")).startsWith("Close menu"), await menu.getAttribute("#menu-close", "title"));
+  // Tab and Shift+Tab stay inside the menu.
+  await menu.click('.mnav[data-section="settings"]');
+  let outside = 0;
+  for (let i = 0; i < 14; i++) {
+    await menu.keyboard.press(i < 10 ? "Tab" : "Shift+Tab");
+    if (!(await menu.evaluate(() => Boolean(document.activeElement?.closest(".menu-panel"))))) outside++;
+  }
+  check("Tab and Shift+Tab stay inside the menu", outside === 0, `${outside} steps outside`);
+
+  // Settings moved to the menu: the key is saved where the panel reads it.
+  await menu.click('.mnav[data-section="settings"]');
+  await menu.fill("#brave-key", "test-key");
+  await menu.click("#save-settings");
+  await sleep(300);
+  const savedKey = await panel.evaluate(async () => (await chrome.storage.local.get("providers")).providers?.brave?.key);
+  check("Brave key saved from the menu reaches the panel's storage", savedKey === "test-key", `${savedKey} · ${await menu.textContent("#settings-state")}`);
+  await menu.fill("#brave-key", "");
+  await menu.click("#save-settings");
+  await menu.setViewportSize({ width: 1200, height: 800 });
+  await menu.screenshot({ path: path.join(os.tmpdir(), "node-chromium-menu.png") });
+
+  // Esc closes the menu, which in the Chromium build closes its tab.
+  check("menu is still open before Esc", !menu.isClosed());
+  const closed = menu.waitForEvent("close", { timeout: 3000 }).then(() => true, () => false);
+  await menu.keyboard.press("Escape").catch(() => {}); // the tab closes during the key press
+  check("Esc closes the menu tab", await closed);
 
   // Talk (on a public-looking address mapped to the test server).
   await article.goto("http://talk.example/article.html");

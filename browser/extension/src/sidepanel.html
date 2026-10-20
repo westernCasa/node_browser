@@ -1,43 +1,38 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <title>NODE</title>
   <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="ui/node-ui.css" />
   <link rel="stylesheet" href="panel.css" />
 </head>
-<body>
-  <aside class="rail" id="rail">
-    <div class="rail-head">
-      <div>
-        <p class="kicker">Next pages</p>
-        <h1>Suggestions</h1>
-      </div>
-      <div class="rail-actions">
-        <button class="chip active" id="tab-suggest">Suggest</button>
-        <button class="chip" id="tab-talk">Talk</button>
-        <button class="chip" id="tab-settings">Settings</button>
-      </div>
+<body class="sidepanel">
+  <!-- NODE UI kit (SPEC.md section 5): Chromium draws the panel frame and its
+       own close button, so the right end of the tab bar is the menu button.
+       Ask and Agent tabs are added when those panes exist (N02, N04). -->
+  <aside class="panel fill" id="panel" aria-label="Suggestions">
+    <div class="panel-tabs" role="tablist" aria-label="Suggestions panel">
+      <button class="ptab" id="tab-suggest" role="tab" aria-selected="true" aria-controls="pane-suggest" title="Suggestions: next pages to read"><svg class="ic" aria-hidden="true" focusable="false"><use href="#i-suggest"/></svg><span>Suggest</span></button>
+      <button class="ptab" id="tab-talk" role="tab" aria-selected="false" aria-controls="pane-talk" title="Talk: discussion of this page on Hacker News and Bluesky"><svg class="ic" aria-hidden="true" focusable="false"><use href="#i-talk"/></svg><span>Talk</span></button>
+      <button class="tb panel-collapse" id="open-menu" data-tip="Menu: library, trail, settings"><svg class="ic" aria-hidden="true" focusable="false"><use href="#i-menu"/></svg></button>
     </div>
-    <section id="suggest-pane">
+    <section id="pane-suggest" role="tabpanel" aria-labelledby="tab-suggest">
+      <p class="telemetry" id="suggest-status"></p>
+      <p class="kicker">Keywords</p>
       <div class="keys" id="keys"></div>
-      <div class="status" id="suggest-status"></div>
+      <p class="kicker">Next pages</p>
       <div id="results"></div>
     </section>
-    <section id="talk-pane" hidden>
+    <section id="pane-talk" role="tabpanel" aria-labelledby="tab-talk" hidden>
       <p class="help">Opening Talk sends this page's address to Hacker News search and Bluesky search.</p>
       <div id="talk-status" class="state"></div>
       <div id="talk-list"></div>
     </section>
-    <section id="settings-pane" hidden>
-      <div class="source">
-        <label class="field"><span>Brave Search API key</span><input type="password" id="brave-key" /></label>
-        <p class="help">Without a key, web results come from DuckDuckGo.</p>
-        <button class="chip wide" id="save-settings">Save</button>
-      </div>
-      <p class="help" id="playback-line"></p>
-    </section>
   </aside>
+  <script src="ui/icons/icons.js"></script>
+  <script src="ui/node-ui.js"></script>
+  <script src="toolbar-icon.js"></script>
   <script src="sidepanel.js"></script>
 </body>
 </html>

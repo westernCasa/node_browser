@@ -46,7 +46,11 @@ const manifest = {
   description: "NODE's research panel: suggestions from the page you are reading, autoplay in up to 4 tabs, center on click, Talk.",
   key: KEY,
   icons: { 128: "icon.png" },
-  action: { default_title: "NODE" },
+  // Toolbar button: the kit's `suggest` icon; it opens the NODE side panel.
+  action: {
+    default_title: "Suggestions panel",
+    default_icon: { 16: "ui/icons/png/suggest-on-light-16.png", 32: "ui/icons/png/suggest-on-light-32.png" },
+  },
   commands: { _execute_action: { suggested_key: { default: "Alt+Shift+N" }, description: "Open the NODE panel" } },
   side_panel: { default_path: "sidepanel.html" },
   background: { service_worker: "background.js", type: "module" },
@@ -97,8 +101,9 @@ for (const entry of ["background.js", "sidepanel.js"]) {
   });
 }
 
-fs.copyFileSync(path.join(SRC, "sidepanel.html"), path.join(OUT, "sidepanel.html"));
-fs.copyFileSync(path.join(SRC, "panel.css"), path.join(OUT, "panel.css"));
+for (const f of ["sidepanel.html", "panel.css", "menu.html", "menu.js", "toolbar-icon.js"]) fs.copyFileSync(path.join(SRC, f), path.join(OUT, f));
+// NODE UI kit: node-ui.css, node-ui.js, icons/ (SVG, sprite, toolbar PNGs), fonts/.
+fs.cpSync(path.join(SRC, "ui"), path.join(OUT, "ui"), { recursive: true });
 fs.copyFileSync(path.join(ROOT, "renderer", "styles.css"), path.join(OUT, "styles.css"));
 for (const f of fs.readdirSync(path.join(ROOT, "renderer", "fonts"))) fs.copyFileSync(path.join(ROOT, "renderer", "fonts", f), path.join(OUT, "fonts", f));
 fs.copyFileSync(path.join(ROOT, "build", "icon.png"), path.join(OUT, "icon.png"));

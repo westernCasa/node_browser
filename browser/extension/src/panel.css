@@ -1,5 +1,18 @@
-/* Side panel layout on top of the desktop stylesheet (styles.css). */
-html, body { overflow: auto; height: auto; min-height: 100%; }
-.rail { width: 100%; border-left: 0; padding: 12px; }
+/* NODE Chromium build: what the NODE UI kit (ui/node-ui.css) does not cover.
+   Load order: styles.css (desktop components: keyword chips, cards, Talk
+   rows, fields), ui/node-ui.css (tokens, panel tabs, menu), then this file. */
+
+/* The desktop stylesheet fixes the window height; extension pages scroll. */
+html, body.sidepanel { height: auto; min-height: 100%; overflow: auto; }
+body.menu-page { background: var(--surface); }
+
+/* Suggest tab */
+.panel .kicker { margin: 14px 0 6px; }
+#suggest-status.telemetry { margin: 0; font: 13px/20px var(--mono); }
 .card { display: block; text-decoration: none; color: var(--ink); border: 1px solid var(--line); padding: 10px; margin-bottom: 8px; }
-body { background: var(--surface-raised); } .rail { min-height: 100vh; }
+
+/* Menu page sections */
+.menu-content .help { max-width: 560px; }
+.menu-content .chip { margin-top: 4px; }
+.menu-content .source { max-width: 560px; }
+.menu-content .kicker.sub { margin: 20px 0 6px; }
