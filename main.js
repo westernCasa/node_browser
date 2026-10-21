@@ -180,7 +180,8 @@ function chromeBounds() {
 function contentRect() {
   const { width, height } = chromeBounds();
   if (htmlFullId) return { x: 0, y: 0, width, height };
-  const top = immersive && !chromeShown ? 0 : CHROME_TOP;
+  // Full screen: the page always starts at the top; the toolbar slides over it.
+  const top = immersive ? 0 : CHROME_TOP;
   return {
     x: 0,
     y: top,
@@ -190,13 +191,15 @@ function contentRect() {
 }
 
 // ---- Full screen: hide the toolbar ----
-// Motion 09: the toolbar slides up out of view and back down, and the page
-// moves with it on the same cubic-bezier curve. Electron's own view animation
-// only has four named curves, so the main process steps the page view along
-// the curve itself. These must match renderer/styles.css (body.immersive
-// .shell) and docs/motion/tokens.md:
-//   coming down: --motion-slow (320 ms), --ease-enter cubic-bezier(0, 0, 0.2, 1)
-//   going up:    --motion-base (200 ms), --ease-exit  cubic-bezier(0.4, 0, 1, 1)
+// Motion 09, like Safari: in full screen the page fills the window and never
+// moves. The toolbar is shown in its own layer above the page (a copy of the
+// window's toolbar, renderer/chrome-overlay.html) that slides down over the
+// page and back up. Timing is in the overlay's CSS (renderer/styles.css,
+// body.chrome-overlay): down --motion-base with --ease-enter, up
+// --motion-fast with --ease-exit.
+//
+// The suggestions widget (motion 10) moves the page on a cubic-bezier curve
+// in this process; these must match --ease-enter and --ease-exit.
 const EASE_ENTER = [0, 0, 0.2, 1];
 const EASE_EXIT = [0.4, 0, 1, 1];
 
@@ -250,30 +253,81 @@ function slideViews(items, duration, curve, { moveOnly = false } = {}) {
   frame();
 }
 
+// The toolbar layer: created on entering full screen, attached above the
+// pages only while the toolbar is shown (so it never takes clicks meant for
+// the page), and given the latest copy of the toolbar from the window.
+let overlay = null;
+let overlayAttached = false;
+let overlayTimer = null;
+let overlayHold = false; // a field in the toolbar layer has focus
+let lastMirror = null;
+
+function ensureOverlay() {
+  if (overlay && !overlay.webContents.isDestroyed()) return overlay;
+  overlay = new WebContentsView({
+    webPreferences: { preload: path.join(__dirname, "preload-overlay.js"), contextIsolation: true, nodeIntegration: false, sandbox: true },
+  });
+  overlay.setBackgroundColor("#00000000");
+  overlay.webContents.on("did-finish-load", () => {
+    if (lastMirror) overlay.webContents.send("overlay:mirror", lastMirror);
+    if (overlayAttached && chromeShown && immersive) overlay.webContents.send("overlay:show", true);
+  });
+  overlay.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  overlay.webContents.on("will-navigate", (e) => e.preventDefault());
+  overlay.webContents.loadFile(path.join(__dirname, "renderer", "chrome-overlay.html"));
+  return overlay;
+}
+
+function overlayBounds() {
+  const { width } = chromeBounds();
+  return { x: 0, y: 0, width, height: CHROME_TOP };
+}
+
+// Keep the layer above the pages after a layout change re-adds them.
+function raiseOverlay() {
+  if (!overlayAttached || !overlay) return;
+  win.contentView.addChildView(overlay);
+  overlay.setBounds(overlayBounds());
+}
+
+function showOverlay(on, { instant = false } = {}) {
+  clearTimeout(overlayTimer);
+  overlayTimer = null;
+  if (on) {
+    ensureOverlay();
+    overlay.setBounds(overlayBounds());
+    if (!overlayAttached) {
+      win.contentView.addChildView(overlay);
+      overlayAttached = true;
+    } else raiseOverlay();
+    overlay.webContents.send("overlay:show", true);
+    return;
+  }
+  if (!overlay || !overlayAttached) return;
+  overlay.webContents.send("overlay:show", false);
+  const detach = () => {
+    overlayTimer = null;
+    if (!overlayAttached || (chromeShown && immersive && !htmlFullId)) return;
+    win.contentView.removeChildView(overlay);
+    overlayAttached = false;
+  };
+  if (instant) detach();
+  else overlayTimer = setTimeout(detach, MOTION_FAST + 40); // after the slide up
+}
+
 function setChromeShown(on) {
   clearTimeout(chromeHideTimer);
   chromeHideTimer = null;
   if (chromeShown === on) return;
   chromeShown = on;
   sendUi("chrome", { immersive, shown: on });
-  const attached = () => [...tabs.values()].filter((t) => t.attached);
-  // Where each page is now (mid-slide if the last change has not finished).
-  const before = new Map(attached().map((t) => [t, t.view.getBounds()]));
-  applyLayout();
-  if (systemPreferences.getAnimationSettings().prefersReducedMotion || htmlFullId) return;
-  const items = attached()
-    .filter((t) => before.has(t))
-    .map((t) => ({ view: t.view, from: before.get(t), to: t.view.getBounds() }))
-    .filter(({ from, to }) => from.y !== to.y || from.height !== to.height);
-  if (!items.length) return;
-  for (const { view, from } of items) view.setBounds(from);
-  slideViews(items, on ? MOTION_SLOW : MOTION_BASE, on ? EASE_ENTER : EASE_EXIT, { moveOnly: items.length === 1 });
+  showOverlay(on && immersive && !htmlFullId);
 }
 
 // The page views cover the renderer, so it gets no mouse events over the
 // page: read the pointer position from the system instead.
 function pollChrome() {
-  if (!win || !immersive || htmlFullId || chromeHold || popupHold || libraryOpen) return;
+  if (!win || !immersive || htmlFullId || chromeHold || overlayHold || popupHold || libraryOpen) return;
   const p = screen.getCursorScreenPoint();
   const b = win.getContentBounds();
   const inside = p.x >= b.x && p.x < b.x + b.width && p.y >= b.y && p.y < b.y + b.height;
@@ -295,13 +349,14 @@ function enterImmersive() {
   chromeShown = true;
   sendUi("chrome", { immersive: true, shown: true, hint: true });
   applyLayout();
+  showOverlay(!htmlFullId);
   clearInterval(chromePoll);
   chromePoll = setInterval(pollChrome, 100);
   // Show the toolbar with its hint for a moment, then hide it.
   clearTimeout(chromeHideTimer);
   chromeHideTimer = setTimeout(() => {
     chromeHideTimer = null;
-    if (!chromeHold && !popupHold) setChromeShown(false);
+    if (!chromeHold && !overlayHold && !popupHold) setChromeShown(false);
   }, 1800);
 }
 
@@ -312,6 +367,8 @@ function leaveImmersive() {
   clearTimeout(chromeHideTimer);
   chromeHideTimer = null;
   chromeShown = true;
+  overlayHold = false;
+  showOverlay(false, { instant: true });
   sendUi("chrome", { immersive: false, shown: true });
   applyLayout();
 }
@@ -346,8 +403,14 @@ function mosaicIds() {
 
 // opts.animate: "enter" | "exit" | "move", passed only by the Mosaic toggle
 // and by opening or closing a tab in Mosaic. Every other caller leaves it out.
-function applyLayout({ animate } = {}) {
+// Every layout change ends with the full-screen toolbar layer back on top.
+function applyLayout(opts) {
   if (!win) return;
+  layoutViews(opts);
+  raiseOverlay();
+}
+
+function layoutViews({ animate } = {}) {
   stopViewSlide(); // a slide in progress (toolbar, suggestions widget) restarts from here
   applyAudio();
   const anim = motionFor(animate);
@@ -985,6 +1048,7 @@ function createTab(url, opts = {}) {
   // A page's own full screen (a video) fills the window, above the toolbar.
   view.webContents.on("enter-html-full-screen", () => {
     htmlFullId = id;
+    showOverlay(false, { instant: true }); // a video's own full screen never shows the toolbar
     applyLayout();
   });
   view.webContents.on("leave-html-full-screen", () => {
@@ -1920,6 +1984,32 @@ ipcMain.handle("window:fullscreen", (_e, on) => {
   if (!win) return false;
   win.setFullScreen(on == null ? !win.isFullScreen() : Boolean(on));
   return win.isFullScreen();
+});
+// Full-screen toolbar layer: the window sends a copy of its toolbar; the
+// layer sends clicks and typing back, and holds the toolbar while a field
+// has focus. The window asks the layer to focus a field (Cmd+L, Cmd+F).
+ipcMain.on("chrome:mirror", (e, m) => {
+  if (e.sender !== win?.webContents || !m || typeof m.html !== "string") return;
+  if (lastMirror?.sprite && !m.sprite) m.sprite = lastMirror.sprite;
+  lastMirror = m;
+  if (overlay && !overlay.webContents.isDestroyed()) overlay.webContents.send("overlay:mirror", m);
+});
+ipcMain.on("overlay:event", (e, msg) => {
+  if (!overlay || e.sender !== overlay.webContents || !msg || !Array.isArray(msg.path)) return;
+  sendUi("overlay-event", { event: msg });
+});
+ipcMain.on("overlay:hold", (e, on) => {
+  if (!overlay || e.sender !== overlay.webContents) return;
+  overlayHold = Boolean(on);
+  if (overlayHold && immersive && !chromeShown) setChromeShown(true);
+});
+ipcMain.on("chrome:focus-overlay", (e, fieldPath) => {
+  if (e.sender !== win?.webContents || !immersive || htmlFullId || !Array.isArray(fieldPath)) return;
+  overlayHold = true; // until the layer reports the field lost focus
+  if (!chromeShown) setChromeShown(true);
+  else showOverlay(true);
+  overlay.webContents.focus();
+  overlay.webContents.send("overlay:focus", fieldPath);
 });
 // The renderer keeps the toolbar on screen in full screen while it is in use.
 ipcMain.on("chrome:hold", (_e, on) => {

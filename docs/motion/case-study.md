@@ -140,31 +140,32 @@ The spec mentioned collapsing a wrapper; cards have no wrapper element, so the c
 
 ## 09. Full-screen toolbar
 
-**Decision note.** In full screen the toolbar gets out of the way, and it comes back when the pointer reaches the top edge. Before, it vanished and reappeared in one frame, and the page jumped by 96px each time, which made it hard to tell what had moved. Now the toolbar slides up out of view and the page rises with it, and on the way back the toolbar slides down and pushes the page down. Because the toolbar and the page move as one piece, the eye reads it as the window opening and closing at the top rather than two things changing. Coming down takes longer (320ms, ease-enter) because the toolbar arrives to be used; going up is quicker (200ms, ease-exit) because it is leaving.
+**Decision note.** In full screen the toolbar gets out of the way and comes back when the pointer reaches the top edge. The first version moved the whole page down and up with the toolbar, and Sven found it dizzying: the text he was reading jumped 96px every time he went near the top. Safari does it differently, and NODE now copies it. The page fills the window and never moves; the toolbar slides down over the top of the page and back up. Only the toolbar moves, so the eye stays on the text.
 
-**Before.** The toolbar row collapsed to 0 and the page view jumped from y 96 to y 0 (and back) in one frame.
+**Before (first version).** The interface and the page slid down 96px together (320ms) and back up (200ms).
 
 **After.**
 
 | Moment | What moves | Timing |
 | --- | --- | --- |
-| Toolbar hides (1.8 s after entering full screen, or the pointer leaves the top) | The whole interface slides up 96px; the page view rises to the top on the same curve. | 200ms, `--ease-exit` cubic-bezier(0.4, 0, 1, 1) |
-| Toolbar shows (pointer at the top edge) | The interface slides down 96px; the page view moves down with it. | 320ms, `--ease-enter` cubic-bezier(0, 0, 0.2, 1) |
-| Leaving full screen | No slide: the layout is restored at once while macOS animates the window. | — |
-| Reduced motion | No movement; the toolbar fades in at `--motion-fast`. | 120ms |
+| Entering full screen | The page fills the window at once; the toolbar stays on top of it for 1.8 s with the hint, then slides up. | — |
+| Toolbar shows (pointer at the top edge, Cmd+L, Cmd+F) | The toolbar slides down over the top of the page. The page does not move. | 200ms, `--ease-enter` cubic-bezier(0, 0, 0.2, 1) |
+| Toolbar hides (pointer more than 16px below it for 400ms) | The toolbar slides up off the page. | 120ms, `--ease-exit` cubic-bezier(0.4, 0, 1, 1) |
+| Leaving full screen | The layout is restored at once while macOS animates the window. | — |
+| A video's own full screen | The toolbar never shows. | — |
+| Reduced motion | No movement; the toolbar fades in and out. | 120ms |
 
-**How it is built.** `renderer/styles.css`: in full screen the `.shell` (toolbar, widget and the space for the page) moves with `transform: translateY(-96px)`, so only transform animates. While the toolbar is hidden the shell is 96px taller, so the widget still reaches the bottom of the window; on the way down the height shrinks back only after the slide (`height 0s linear 320ms`), so the widget's bottom edge never jumps. The toolbar becomes `visibility: hidden` only after it has left, so Tab cannot land on it. `main.js`: Electron's own view animation only offers four named curves, so `setChromeShown()` steps the page view along the same cubic-bezier itself (`cubicBezier()`, `slideViews()`, about 60 steps a second). In Focus only the page's position changes during the slide, at the taller of the two heights, and it is resized once at the end, so the page does not re-lay itself out on every frame. Mosaic tiles change height row by row, so they resize as they go. A new layout change (a tab switch, a window resize) stops the slide and puts everything where it belongs.
+**How it is built.** NODE's pages are native views drawn above the window's HTML, so HTML can never cover a page. In full screen the toolbar therefore gets its own layer above the pages: a small transparent view (`renderer/chrome-overlay.html`, 96px tall) created by `main.js`. The window keeps the real toolbar (moved out of view) and sends the layer a copy of it whenever something changes (`sendMirror()` in `app.js`, checked every 120ms and sent only on change). Clicks, double-clicks, middle-clicks and typing in the layer are sent back and replayed on the real toolbar, matched by position, so every button keeps its one set of behaviour. When Cmd+L or Cmd+F puts the cursor in a real field during full screen, it goes to the layer's copy instead, which is the one on screen. The layer is attached only while the toolbar is shown, so it never takes clicks meant for the page. The slide is CSS inside the layer (`body.chrome-overlay .chrome`).
 
-**Test results.**
+**What is not carried over.** Dragging tabs to reorder them does not work in the full-screen toolbar; it does outside full screen.
 
-- Linux (Electron 44, virtual display): test 22 samples the page view every 10ms. Going up it passes through 12 positions between 96 and 0, always in one direction; coming down 17. A separate measurement of the page view against the toolbar's transform: they start within about one frame of each other (−5 to +14ms across runs) and stay within 3 to 12px. That spread is timing noise between the two processes, not a fixed delay.
-- Mac: *to do on Sven's Mac.* Check that the page and the toolbar look like one piece moving, with no gap showing between them, on a normal page and on a playing video.
+**Test results.** Linux (test 22): the page view stays at y 0 and full height through the whole hide and show (sampled every 10ms); partway through the show the toolbar is at −71px (moving down); a button in the layer toggles the suggestions widget and the layer shows the new state; Cmd+L puts the cursor in the layer's address bar, typing reaches the real address bar, the toolbar stays while typing, and Enter opens the page. Mac: *to do on Sven's Mac.*
 
 **Three checks.**
 
-1. *State not covered:* the pointer touching the top edge and leaving again within 200ms reverses the slide from wherever it is; check it does not stutter.
-2. *Timing:* the two halves run in different processes (CSS in the window, the page view in `main.js`); on a busy page the page view may trail the toolbar by a frame.
-3. *Accessibility:* with Reduce motion on, the toolbar appears and disappears without moving, and keyboard focus never lands on the hidden toolbar.
+1. *State not covered:* on a Mac, the system menu bar also slides down at the top edge in full screen and may cover the tab row; check whether the tab row is still usable.
+2. *Timing:* the copy can lag the real toolbar by up to 120ms (for example a tab title changing while the toolbar is shown).
+3. *Accessibility:* with Reduce motion on, the toolbar fades instead of sliding; keyboard focus in the toolbar keeps it on screen.
 
 ## 10. Suggestions widget
 

@@ -40,7 +40,7 @@ Electron's `View.setBounds(bounds, { animate })` only offers four curves: `linea
 
 They are close in feel but not identical curves.
 
-The full-screen toolbar (09) uses the real cubic-bezier curves instead: `main.js` steps the page view along them itself (`cubicBezier()`), because the page has to move exactly with the toolbar, which uses the CSS tokens.
+The suggestions widget (10) uses the real cubic-bezier curves instead: `main.js` steps the page view along them itself (`cubicBezier()`, `slideViews()`), because the page edge has to move exactly with the widget, which uses the CSS tokens. The full-screen toolbar (09) slides in its own layer with CSS, so it uses the CSS tokens directly.
 
 | Constant in `main.js` | Value | Must match |
 | --- | --- | --- |
@@ -53,7 +53,7 @@ The full-screen toolbar (09) uses the real cubic-bezier curves instead: `main.js
   - colour and border fades on state changes;
   - `height` for a list closing a gap;
   - `clip-path` for the single-line type-out;
-  - tab window bounds in Mosaic (08) and in full screen (09): native views can only be moved and resized, not transformed.
+  - tab window bounds in Mosaic (08) and when the suggestions widget opens or closes (10): native views can only be moved and resized, not transformed.
 - Exits are faster than entrances.
 - Motion follows the confirmed state, not the click.
 - Animate on user action only.

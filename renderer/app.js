@@ -2849,7 +2849,9 @@ const captureActions = { shot: "shot-btn", save: "save-btn", media: "media-btn",
 document.getElementById("capture-btn").addEventListener("click", (e) => {
   if (!api?.captureMenu) return;
   const r = e.currentTarget.getBoundingClientRect();
-  api.captureMenu(r.left, r.bottom + 4);
+  // In full screen the real toolbar is moved out of view and its copy is shown at the top.
+  const shift = document.body.classList.contains("immersive") ? chromeHeader.offsetHeight : 0;
+  api.captureMenu(r.left, r.bottom + 4 + shift);
 });
 
 // ---- Full screen: the toolbar hides and comes back at the top edge ----
@@ -2859,6 +2861,7 @@ let hintTimer = null;
 fullBtn.addEventListener("click", () => api?.toggleFullscreen?.());
 
 function paintChrome(msg) {
+  if (msg.immersive !== document.body.classList.contains("immersive")) mirrorWhileImmersive(msg.immersive);
   document.body.classList.toggle("immersive", msg.immersive);
   document.body.classList.toggle("chrome-hidden", msg.immersive && !msg.shown);
   fullBtn.innerHTML = icon(msg.immersive ? "exit-fullscreen" : "fullscreen");
@@ -2872,7 +2875,76 @@ function paintChrome(msg) {
   if (!msg.immersive) chromeHint.hidden = true;
 }
 
+// ---- Full-screen toolbar layer (motion 09) ----
+// In full screen the toolbar is shown in its own layer above the page
+// (chrome-overlay.html, made by main.js). This window keeps the real toolbar
+// (moved out of view) and sends the layer a copy of it whenever it changes;
+// the layer sends clicks and typing back here. Elements are matched by their
+// position under the toolbar.
+const chromeHeader = document.querySelector("header.chrome");
+let mirrorTimer = null;
+let mirrorLast = "";
+let spriteSent = false;
+function headerPath(el) {
+  const path = [];
+  while (el && el !== chromeHeader) {
+    if (!el.parentElement) return null;
+    path.unshift([...el.parentElement.children].indexOf(el));
+    el = el.parentElement;
+  }
+  return el === chromeHeader ? path : null;
+}
+const headerAt = (path) => path.reduce((el, i) => el?.children[i], chromeHeader);
+function sendMirror() {
+  const html = chromeHeader.innerHTML;
+  const values = [...chromeHeader.querySelectorAll("input")].map((el) => [headerPath(el), el.value]);
+  const key = html + JSON.stringify(values);
+  if (key === mirrorLast && spriteSent) return;
+  mirrorLast = key;
+  const m = { html, values };
+  if (!spriteSent) {
+    m.sprite = document.querySelector("body > svg")?.outerHTML || "";
+    spriteSent = true;
+  }
+  api?.chromeMirror?.(m);
+}
+function mirrorWhileImmersive(on) {
+  clearInterval(mirrorTimer);
+  mirrorTimer = null;
+  if (!on) return;
+  sendMirror();
+  mirrorTimer = setInterval(sendMirror, 120); // cheap: sends only when something changed
+}
+// A field in the real toolbar got focus in full screen (Cmd+L, Cmd+F, Tab):
+// type in the layer's copy instead, which is the one on screen.
+chromeHeader.addEventListener("focusin", (e) => {
+  if (!document.body.classList.contains("immersive") || e.target.tagName !== "INPUT" || !api?.focusOverlayField) return;
+  const path = headerPath(e.target);
+  sendMirror();
+  e.target.blur();
+  if (path) api.focusOverlayField(path);
+});
+function overlayEvent(ev) {
+  const el = headerAt(ev.path || []);
+  if (!el) return;
+  const mods = { shiftKey: ev.shiftKey, metaKey: ev.metaKey, ctrlKey: ev.ctrlKey, altKey: ev.altKey };
+  if (ev.type === "input") {
+    el.value = ev.value;
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  } else if (ev.type === "keydown") {
+    if (typeof ev.value === "string") el.value = ev.value;
+    if (ev.key === "Enter" && el.form) el.form.requestSubmit();
+    else el.dispatchEvent(new KeyboardEvent("keydown", { key: ev.key, bubbles: true, cancelable: true, ...mods }));
+  } else if (["click", "dblclick", "auxclick", "contextmenu"].includes(ev.type)) {
+    // The real toolbar sits one toolbar-height above the window in full screen.
+    const y = (ev.y || 0) - chromeHeader.offsetHeight;
+    el.dispatchEvent(new MouseEvent(ev.type, { bubbles: true, cancelable: true, button: ev.button || 0, detail: ev.detail || 1, clientX: ev.x || 0, clientY: y, ...mods }));
+  }
+  sendMirror();
+}
+
 api?.onCommand?.((msg) => {
+  if (msg.cmd === "overlay-event") return overlayEvent(msg.event || {});
   if (msg.cmd === "capture") document.getElementById(captureActions[msg.action])?.click();
   else if (msg.cmd === "chrome") paintChrome(msg);
   else if (msg.cmd === "toggle-suggest") setPanelOpen(!panelOpen, { focus: true, animate: true });

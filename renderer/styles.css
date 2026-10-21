@@ -818,31 +818,27 @@ svg.brand path { fill: var(--ink); }
 }
 .chrome-hint { font: 12px/16px var(--mono); color: var(--ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 8px; max-width: 50%; }
 
-/* Full screen (motion 09): the whole shell slides up by the toolbar's height,
-   so the toolbar leaves at the top and the suggestions widget moves up with
-   the page; main.js moves the page view on the same curve and timing.
-   Going up: --motion-base, --ease-exit. Coming down: --motion-slow,
-   --ease-enter. The shell is taller by the toolbar's height while it is
-   hidden; on the way down it shrinks back only after the slide, so the
-   widget's bottom edge never jumps. The hidden toolbar is made invisible
-   after it has left, so Tab cannot reach it. */
-body.immersive .shell {
-  transform: translateY(0);
-  height: 100%;
-  transition: transform var(--motion-slow) var(--ease-enter), height 0s linear var(--motion-slow);
+/* Full screen (motion 09, like Safari): the page fills the window and never
+   moves. The real toolbar is moved out of view for the whole of full screen,
+   and the shell is taller by the toolbar's height so the suggestions widget
+   reaches the bottom. The toolbar the user sees is the layer below
+   (chrome-overlay.html), above the page. */
+body.immersive .shell { transform: translateY(-96px); height: calc(100% + 96px); } /* CHROME_TOP in main.js */
+
+/* The full-screen toolbar layer: slides down over the page (--motion-base,
+   --ease-enter) and back up (--motion-fast, --ease-exit). Reduced motion:
+   it fades in and out instead. */
+html:has(> body.chrome-overlay), body.chrome-overlay { background: transparent; overflow: hidden; }
+body.chrome-overlay .chrome {
+  -webkit-app-region: no-drag;
+  height: 96px;
+  transform: translateY(-100%);
+  transition: transform var(--motion-fast) var(--ease-exit);
 }
-body.chrome-hidden .shell {
-  transform: translateY(-96px); /* toolbar height: CHROME_TOP in main.js */
-  height: calc(100% + 96px);
-  transition: transform var(--motion-base) var(--ease-exit), height 0s;
-}
-body.immersive .chrome { visibility: visible; transition: visibility 0s; }
-body.chrome-hidden .chrome { visibility: hidden; transition: visibility 0s linear var(--motion-base); }
+body.chrome-overlay.shown .chrome { transform: none; transition: transform var(--motion-base) var(--ease-enter); }
 @media (prefers-reduced-motion: reduce) {
-  /* No movement: the toolbar is in place or not, and fades in. */
-  body.immersive .shell, body.chrome-hidden .shell { transition: none; }
-  body.immersive .chrome { opacity: 1; transition: opacity var(--motion-fast) var(--ease-enter); }
-  body.chrome-hidden .chrome { opacity: 0; transition: none; }
+  body.chrome-overlay .chrome { transform: none; opacity: 0; transition: opacity var(--motion-fast) var(--ease-exit); }
+  body.chrome-overlay.shown .chrome { opacity: 1; transition: opacity var(--motion-fast) var(--ease-enter); }
 }
 
 /* ---- Suggestions widget: floats beside the page ---- */

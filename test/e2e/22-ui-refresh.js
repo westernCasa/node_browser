@@ -131,23 +131,32 @@ const shoot = (name) => {
   await ui.click("#menu-close");
   await sleep(300);
 
-  // 5. Full screen: toolbar hides, page fills the window, returns at the top edge.
+  // 5. Full screen, like Safari: the page fills the window and never moves; the
+  // toolbar is a layer above the page that slides down over it and back up.
+  const pageView = () => app.evaluate(({ BrowserWindow, webContents }) => {
+    const w = BrowserWindow.getAllWindows()[0];
+    const ov = webContents.getAllWebContents().find((c) => c.getURL().endsWith("chrome-overlay.html"));
+    const kids = w.contentView.children;
+    const layer = kids.find((v) => v.webContents === ov);
+    return { page: kids.find((v) => v !== layer)?.getBounds(), layer: layer ? layer.getBounds() : null, layerOnTop: Boolean(layer) && kids[kids.length - 1] === layer, h: w.getContentSize()[1] };
+  });
+  const inLayer = (js) => app.evaluate(({ webContents }, code) => webContents.getAllWebContents().find((c) => c.getURL().endsWith("chrome-overlay.html"))?.executeJavaScript(code), js);
   await app.evaluate(({ BrowserWindow, screen }) => {
     globalThis.__cursor = { x: 700, y: 500 };
     screen.getCursorScreenPoint = () => globalThis.__cursor;
     BrowserWindow.getAllWindows()[0].emit("enter-full-screen");
   });
-  await sleep(300);
+  await sleep(600);
   check("hint shown on entering full screen", await ui.$eval("#chrome-hint", (e) => !e.hidden && e.textContent.length > 10));
-  await sleep(1500); // the toolbar stays 1.8 s after entering, then slides up
+  let st = await pageView();
+  check("page fills the window at once, the toolbar layer is on top of it", st.page.y === 0 && st.page.height === st.h && st.layerOnTop && st.layer.height === 96, JSON.stringify(st));
+  check("the layer shows a copy of the toolbar", (await inLayer("document.body.classList.contains('shown') && !!document.querySelector('#omni') && !!document.querySelector('#menu-btn') && document.querySelector('#chrome-hint').textContent.length > 10")) === true);
   await startSampling();
-  await sleep(900);
-  let s = slide(await stopSampling(), 96, 0);
-  check("toolbar slides up: the page moves through in-between positions", s.steps >= 5 && s.oneWay && s.end === 0, JSON.stringify(s));
-  let v = (await views())[0];
-  check("toolbar hidden: page starts at the top", v.y === 0, JSON.stringify(v));
-  check("page fills the window height once the slide ends", v.height === 900, JSON.stringify(v));
-  check("renderer slides the shell up with the toolbar", (await ui.evaluate(() => getComputedStyle(document.querySelector(".shell")).transform)).includes("-96"));
+  await sleep(1800); // the toolbar stays 1.8 s after entering, then slides up
+  const ys = await stopSampling();
+  st = await pageView();
+  check("toolbar hides: the page never moved", ys.every((y) => y === 0) && st.page.y === 0 && st.page.height === st.h, `${new Set(ys).size} page positions`);
+  check("the hidden toolbar layer is removed, so it takes no clicks", st.layer === null, JSON.stringify(st));
   check("renderer marks the toolbar hidden", await ui.evaluate(() => document.body.classList.contains("chrome-hidden")));
   shoot("05-fullscreen-hidden");
   await app.evaluate(({ BrowserWindow }) => {
@@ -155,27 +164,63 @@ const shoot = (name) => {
     globalThis.__cursor = { x: b.x + 600, y: b.y + 1 };
   });
   await startSampling();
-  await sleep(700);
-  s = slide(await stopSampling(), 0, 96);
-  check("toolbar slides down: the page moves through in-between positions", s.steps >= 8 && s.oneWay && s.end === 96, JSON.stringify(s));
-  v = (await views())[0];
-  check("pointer at the top edge shows the toolbar", v.y === 96 && v.height === 804, JSON.stringify(v));
-  const shellCss = await ui.evaluate(() => getComputedStyle(document.querySelector(".shell")).transitionTimingFunction);
-  check("toolbar comes down on the --ease-enter cubic-bezier", shellCss.startsWith("cubic-bezier(0, 0, 0.2, 1)"), shellCss);
+  await sleep(120);
+  const midway = await inLayer("new DOMMatrix(getComputedStyle(document.querySelector('header.chrome')).transform).m42");
+  await sleep(400);
+  const ys2 = await stopSampling();
+  st = await pageView();
+  check("pointer at the top edge: the toolbar slides down over the page", midway < 0 && midway > -96 && st.layerOnTop, `toolbar at ${Math.round(midway)}px partway`);
+  check("the page stays where it is", ys2.every((y) => y === 0) && st.page.y === 0 && st.page.height === st.h, JSON.stringify(st.page));
+  const curve = await inLayer("getComputedStyle(document.querySelector('header.chrome')).transitionTimingFunction");
+  check("it comes down on the --ease-enter cubic-bezier", String(curve).startsWith("cubic-bezier(0, 0, 0.2, 1)"), curve);
   shoot("06-fullscreen-revealed");
+
+  // Clicks and typing in the layer reach the real toolbar.
+  const panelBefore = await ui.evaluate(() => document.getElementById("suggest-toggle").getAttribute("aria-pressed"));
+  await inLayer("document.querySelector('#suggest-toggle').click()");
+  await sleep(500);
+  const panelAfter = await ui.evaluate(() => document.getElementById("suggest-toggle").getAttribute("aria-pressed"));
+  check("a button in the layer works (suggestions toggle)", panelBefore !== panelAfter, `${panelBefore} → ${panelAfter}`);
+  await sleep(300);
+  check("the layer shows the new state", (await inLayer("document.querySelector('#suggest-toggle').getAttribute('aria-pressed')")) === panelAfter);
+  await inLayer("document.querySelector('#suggest-toggle').click()");
+  await sleep(500);
+  await ui.evaluate(() => document.getElementById("omni").focus()); // as Cmd+L does
+  await sleep(400);
+  check("Cmd+L in full screen puts the cursor in the layer's address bar", (await inLayer("document.activeElement?.id")) === "omni");
+  await app.evaluate(({ webContents }) => {
+    const ov = webContents.getAllWebContents().find((c) => c.getURL().endsWith("chrome-overlay.html"));
+    for (const ch of "http://127.0.0.1:8765/other.html?fs=1") ov.sendInputEvent({ type: "char", keyCode: ch });
+  });
+  await sleep(300);
+  check("typing there reaches the real address bar", (await ui.inputValue("#omni")) === "http://127.0.0.1:8765/other.html?fs=1", await ui.inputValue("#omni"));
   await app.evaluate(({ BrowserWindow }) => {
     const b = BrowserWindow.getAllWindows()[0].getContentBounds();
     globalThis.__cursor = { x: b.x + 600, y: b.y + 500 };
   });
-  await sleep(1100);
-  check("pointer moving down hides it again", (await views())[0].y === 0);
+  await sleep(900);
+  check("the toolbar stays while the address bar is in use", (await pageView()).layerOnTop);
+  await app.evaluate(({ webContents }) => {
+    const ov = webContents.getAllWebContents().find((c) => c.getURL().endsWith("chrome-overlay.html"));
+    ov.sendInputEvent({ type: "keyDown", keyCode: "Return" });
+    ov.sendInputEvent({ type: "char", keyCode: "\r" });
+    ov.sendInputEvent({ type: "keyUp", keyCode: "Return" });
+  });
+  await sleep(2500);
+  const url = await app.evaluate(({ BrowserWindow, webContents }) => {
+    const w = BrowserWindow.getAllWindows()[0];
+    return w.contentView.children[0].webContents?.getURL();
+  });
+  check("Enter in the layer's address bar opens the page", /other\.html\?fs=1/.test(url || ""), url);
+  check("after Enter the toolbar slides away again", (await pageView()).layer === null);
   await ui.evaluate(() => window.scout.holdChrome(true));
-  await sleep(300);
-  check("address bar in use keeps the toolbar", (await views())[0].y === 96);
+  await sleep(400);
+  check("address bar in use keeps the toolbar", (await pageView()).layerOnTop);
   await ui.evaluate(() => window.scout.holdChrome(false));
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].emit("leave-full-screen"));
   await sleep(300);
-  check("leaving full screen restores the layout", (await views())[0].y === 96 && !(await ui.evaluate(() => document.body.classList.contains("immersive"))));
+  st = await pageView();
+  check("leaving full screen restores the layout", st.page.y === 96 && st.layer === null && !(await ui.evaluate(() => document.body.classList.contains("immersive"))), JSON.stringify(st));
 
   await app.close();
   console.log(failed ? `${failed} checks failed` : "all checks passed");

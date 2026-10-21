@@ -14,6 +14,8 @@ contextBridge.exposeInMainWorld("scout", {
   setPanelWidth: (w, opts) => ipcRenderer.invoke("layout:panel", w, opts),
   toggleFullscreen: (on) => ipcRenderer.invoke("window:fullscreen", on),
   holdChrome: (on) => ipcRenderer.send("chrome:hold", on),
+  chromeMirror: (m) => ipcRenderer.send("chrome:mirror", m),
+  focusOverlayField: (path) => ipcRenderer.send("chrome:focus-overlay", path),
   captureMenu: (x, y) => ipcRenderer.invoke("menu:capture", x, y),
   extract: (id) => ipcRenderer.invoke("page:extract", id),
   suggest: (keywords, excludeUrl) => ipcRenderer.invoke("suggest:search", keywords, excludeUrl),

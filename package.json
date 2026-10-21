@@ -52,6 +52,7 @@
     "files": [
       "main.js",
       "preload.js",
+      "preload-overlay.js",
       "view-preload.js",
       "fs-storage.js",
       "adblock.js",

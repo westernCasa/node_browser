@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>NODE toolbar</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<!-- Full screen only (motion 09): the toolbar in its own layer above the page,
+     so it can slide down over the page the way Safari's does, without moving
+     the page. The content is a copy of the window's toolbar (renderer/app.js
+     sends it); clicks and typing go back to the real toolbar. -->
+<body class="chrome-overlay">
+  <div id="sprite" hidden></div>
+  <header class="chrome" id="bar"></header>
+  <script src="chrome-overlay.js"></script>
+</body>
+</html>
