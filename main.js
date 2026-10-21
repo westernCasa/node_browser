@@ -189,13 +189,85 @@ function contentRect() {
 }
 
 // ---- Full screen: hide the toolbar ----
+// Motion 09: the toolbar slides up out of view and back down, and the page
+// moves with it on the same cubic-bezier curve. Electron's own view animation
+// only has four named curves, so the main process steps the page view along
+// the curve itself. These must match renderer/styles.css (body.immersive
+// .shell) and docs/motion/tokens.md:
+//   coming down: --motion-slow (320 ms), --ease-enter cubic-bezier(0, 0, 0.2, 1)
+//   going up:    --motion-base (200 ms), --ease-exit  cubic-bezier(0.4, 0, 1, 1)
+const EASE_ENTER = [0, 0, 0.2, 1];
+const EASE_EXIT = [0.4, 0, 1, 1];
+
+// CSS-style cubic-bezier(x1, y1, x2, y2): progress in time (0-1) → progress
+// in distance (0-1). Finds the curve's t for the given time by bisection.
+function cubicBezier([x1, y1, x2, y2]) {
+  const at = (a, b, t) => 3 * a * t * (1 - t) ** 2 + 3 * b * t * t * (1 - t) + t ** 3;
+  return (x) => {
+    if (x <= 0) return 0;
+    if (x >= 1) return 1;
+    let lo = 0;
+    let hi = 1;
+    for (let i = 0; i < 24; i++) {
+      const mid = (lo + hi) / 2;
+      if (at(x1, x2, mid) < x) lo = mid;
+      else hi = mid;
+    }
+    return at(y1, y2, (lo + hi) / 2);
+  };
+}
+
+let chromeTween = null;
+
+function stopChromeTween() {
+  if (!chromeTween) return;
+  clearTimeout(chromeTween.timer);
+  chromeTween = null;
+}
+
+// Move page views from their current bounds to the ones applyLayout() just
+// set. One page (Focus): only its position moves, at the taller of the two
+// heights, and it is resized once at the end, so the page does not re-layout
+// on every frame. Mosaic tiles change height row by row, so they resize as
+// they go. Any other layout change stops the slide (applyLayout).
+function slideViews(items, duration, curve) {
+  stopChromeTween();
+  const ease = cubicBezier(curve);
+  const moveOnly = items.length === 1;
+  const start = Date.now();
+  const lerp = (a, b, p) => Math.round(a + (b - a) * p);
+  const frame = () => {
+    const p = Math.min(1, (Date.now() - start) / duration);
+    const e = ease(p);
+    for (const { view, from, to } of items) {
+      if (p >= 1) view.setBounds(to);
+      else if (moveOnly) view.setBounds({ x: to.x, y: lerp(from.y, to.y, e), width: to.width, height: Math.max(from.height, to.height) });
+      else view.setBounds({ x: lerp(from.x, to.x, e), y: lerp(from.y, to.y, e), width: lerp(from.width, to.width, e), height: lerp(from.height, to.height, e) });
+    }
+    if (p < 1) chromeTween = { timer: setTimeout(frame, 16) };
+    else chromeTween = null;
+  };
+  frame();
+}
+
 function setChromeShown(on) {
   clearTimeout(chromeHideTimer);
   chromeHideTimer = null;
   if (chromeShown === on) return;
   chromeShown = on;
   sendUi("chrome", { immersive, shown: on });
+  const attached = () => [...tabs.values()].filter((t) => t.attached);
+  // Where each page is now (mid-slide if the last change has not finished).
+  const before = new Map(attached().map((t) => [t, t.view.getBounds()]));
   applyLayout();
+  if (systemPreferences.getAnimationSettings().prefersReducedMotion || htmlFullId) return;
+  const items = attached()
+    .filter((t) => before.has(t))
+    .map((t) => ({ view: t.view, from: before.get(t), to: t.view.getBounds() }))
+    .filter(({ from, to }) => from.y !== to.y || from.height !== to.height);
+  if (!items.length) return;
+  for (const { view, from } of items) view.setBounds(from);
+  slideViews(items, on ? MOTION_SLOW : MOTION_BASE, on ? EASE_ENTER : EASE_EXIT);
 }
 
 // The page views cover the renderer, so it gets no mouse events over the
@@ -276,6 +348,7 @@ function mosaicIds() {
 // and by opening or closing a tab in Mosaic. Every other caller leaves it out.
 function applyLayout({ animate } = {}) {
   if (!win) return;
+  stopChromeTween(); // a full-screen toolbar slide (setChromeShown) restarts from here
   applyAudio();
   const anim = motionFor(animate);
   // Back to Mosaic (or the library) before the exit finished: keep every tile.

@@ -55,6 +55,26 @@ const shoot = (name) => {
       return w.contentView.children.map((v) => v.getBounds());
     });
 
+  // Positions of the page view, sampled every 10 ms in the main process (motion 09).
+  const startSampling = () =>
+    app.evaluate(({ BrowserWindow }) => {
+      const w = BrowserWindow.getAllWindows()[0];
+      globalThis.__ys = [];
+      clearInterval(globalThis.__sampler);
+      globalThis.__sampler = setInterval(() => globalThis.__ys.push(w.contentView.children[0]?.getBounds().y), 10);
+    });
+  const stopSampling = () =>
+    app.evaluate(() => {
+      clearInterval(globalThis.__sampler);
+      return globalThis.__ys;
+    });
+  // Distinct positions between start and end, and whether they only go one way.
+  const slide = (ys, from, to) => {
+    const between = [...new Set(ys.filter((y) => y > Math.min(from, to) && y < Math.max(from, to)))];
+    const oneWay = ys.every((y, i) => i === 0 || (to > from ? y >= ys[i - 1] : y <= ys[i - 1]));
+    return { steps: between.length, oneWay, end: ys[ys.length - 1] };
+  };
+
   // 1. Icon toolbar: every toolbar button has a name and a tooltip, no visible words.
   const tb = await ui.$$eval(".nav > .tb:not([hidden]), .tabrow .tb", (els) => els.map((e) => ({ id: e.id, label: e.getAttribute("aria-label"), title: e.title, text: e.textContent.trim() })));
   check("toolbar buttons are icons with a name and tooltip", tb.length >= 9 && tb.every((b) => b.label && b.title && !/[a-z]{3}/i.test(b.text)), tb.map((b) => `${b.id}="${b.title}"`).join(" | "));
@@ -119,24 +139,35 @@ const shoot = (name) => {
   });
   await sleep(300);
   check("hint shown on entering full screen", await ui.$eval("#chrome-hint", (e) => !e.hidden && e.textContent.length > 10));
-  await sleep(2200);
+  await sleep(1500); // the toolbar stays 1.8 s after entering, then slides up
+  await startSampling();
+  await sleep(900);
+  let s = slide(await stopSampling(), 96, 0);
+  check("toolbar slides up: the page moves through in-between positions", s.steps >= 5 && s.oneWay && s.end === 0, JSON.stringify(s));
   let v = (await views())[0];
   check("toolbar hidden: page starts at the top", v.y === 0, JSON.stringify(v));
+  check("page fills the window height once the slide ends", v.height === 900, JSON.stringify(v));
+  check("renderer slides the shell up with the toolbar", (await ui.evaluate(() => getComputedStyle(document.querySelector(".shell")).transform)).includes("-96"));
   check("renderer marks the toolbar hidden", await ui.evaluate(() => document.body.classList.contains("chrome-hidden")));
   shoot("05-fullscreen-hidden");
   await app.evaluate(({ BrowserWindow }) => {
     const b = BrowserWindow.getAllWindows()[0].getContentBounds();
     globalThis.__cursor = { x: b.x + 600, y: b.y + 1 };
   });
-  await sleep(400);
+  await startSampling();
+  await sleep(700);
+  s = slide(await stopSampling(), 0, 96);
+  check("toolbar slides down: the page moves through in-between positions", s.steps >= 8 && s.oneWay && s.end === 96, JSON.stringify(s));
   v = (await views())[0];
-  check("pointer at the top edge shows the toolbar", v.y === 96, JSON.stringify(v));
+  check("pointer at the top edge shows the toolbar", v.y === 96 && v.height === 804, JSON.stringify(v));
+  const shellCss = await ui.evaluate(() => getComputedStyle(document.querySelector(".shell")).transitionTimingFunction);
+  check("toolbar comes down on the --ease-enter cubic-bezier", shellCss.startsWith("cubic-bezier(0, 0, 0.2, 1)"), shellCss);
   shoot("06-fullscreen-revealed");
   await app.evaluate(({ BrowserWindow }) => {
     const b = BrowserWindow.getAllWindows()[0].getContentBounds();
     globalThis.__cursor = { x: b.x + 600, y: b.y + 500 };
   });
-  await sleep(900);
+  await sleep(1100);
   check("pointer moving down hides it again", (await views())[0].y === 0);
   await ui.evaluate(() => window.scout.holdChrome(true));
   await sleep(300);

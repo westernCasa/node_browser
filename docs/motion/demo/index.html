@@ -111,6 +111,20 @@
   .tab.active { outline: 1px solid var(--signal); outline-offset: -1px; }
   .tab.hidden { display: none; }
   .note { font: 12px var(--mono); color: var(--ink-muted); margin: 10px 0 0; }
+  /* 09: full-screen toolbar. A small window: the shell (toolbar + page) slides up by the toolbar's height. */
+  .m09-win { position: relative; height: 260px; background: var(--surface); border: 1px solid var(--line); overflow: hidden; }
+  .m09-shell { height: 100%; display: grid; grid-template-rows: 48px 1fr; }
+  .m09-bar { display: flex; align-items: center; gap: 8px; padding: 0 12px; background: var(--surface-raised); border-bottom: 1px solid var(--line); font: 12px var(--mono); color: var(--ink-muted); }
+  .m09-bar .omni { flex: 1; height: 24px; border: 1px solid var(--line); display: flex; align-items: center; padding: 0 8px; }
+  .m09-page { background: #f4f4f2; color: #111; padding: 16px 20px; font: 14px/1.5 Georgia, serif; }
+  .m09-win.full .m09-shell { transform: translateY(0); height: 100%; transition: transform var(--motion-slow) var(--ease-enter), height 0s linear var(--motion-slow); }
+  .m09-win.full.hidden .m09-shell { transform: translateY(-48px); height: calc(100% + 48px); transition: transform var(--motion-base) var(--ease-exit), height 0s; }
+  .reduced .m09-win.full .m09-shell, .reduced .m09-win.full.hidden .m09-shell { transition: none; }
+  .reduced .m09-win.full .m09-bar { opacity: 1; transition: opacity var(--motion-fast) var(--ease-enter); }
+  .reduced .m09-win.full.hidden .m09-bar { opacity: 0; transition: none; }
+  @media (prefers-reduced-motion: reduce) {
+    .m09-win.full .m09-shell, .m09-win.full.hidden .m09-shell { transition: none; }
+  }
 </style>
 </head>
 <body>
@@ -180,6 +194,22 @@
     </div>
     <div class="stage" id="m08-stage" aria-label="Tab windows"></div>
     <p class="note">The real tab windows use Electron's built-in curves: ease-out stands in for --ease-enter and ease-in-out for --ease-move, so this page uses the same CSS keywords.</p>
+  </section>
+  <section id="m09" aria-labelledby="m09-title">
+    <p class="kicker">09 · Full-screen toolbar</p>
+    <h2 id="m09-title">The toolbar slides up and comes back down</h2>
+    <p>In full screen the toolbar leaves at the top and the page moves up with it (200ms, ease-exit: cubic-bezier(0.4, 0, 1, 1)). At the top edge it comes back down and pushes the page down (320ms, ease-enter: cubic-bezier(0, 0, 0.2, 1)). Reduced motion: no movement; the toolbar fades in.</p>
+    <div class="row">
+      <button class="chip" id="m09-replay">Replay</button>
+      <button class="chip" id="m09-toggle">Hide toolbar</button>
+    </div>
+    <div class="m09-win full" id="m09-win" aria-label="Window in full screen">
+      <div class="m09-shell">
+        <div class="m09-bar"><span>‹ ›</span><span class="omni">en.wikipedia.org/wiki/Memex</span></div>
+        <div class="m09-page"><b>Memex</b><br>The memex is a hypothetical electromechanical device for interacting with microform documents, described in Vannevar Bush's 1945 article "As We May Think".</div>
+      </div>
+    </div>
+    <p class="note">In NODE the page is a native view, so main.js moves it along the same curve frame by frame; the toolbar and the suggestions widget move with CSS.</p>
   </section>
 </main>
 <script>
@@ -454,6 +484,21 @@
     });
     reset();
     addEventListener("resize", () => apply());
+  })();
+  // 09: full-screen toolbar.
+  (() => {
+    const win = document.getElementById("m09-win");
+    const btn = document.getElementById("m09-toggle");
+    const set = (hidden) => {
+      win.classList.toggle("hidden", hidden);
+      btn.textContent = hidden ? "Show toolbar" : "Hide toolbar";
+    };
+    btn.addEventListener("click", () => set(!win.classList.contains("hidden")));
+    document.getElementById("m09-replay").addEventListener("click", () => {
+      set(false);
+      setTimeout(() => set(true), 300);
+      setTimeout(() => set(false), 300 + 200 + 900);
+    });
   })();
 </script>
 </body>

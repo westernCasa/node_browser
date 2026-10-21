@@ -137,3 +137,32 @@ The spec mentioned collapsing a wrapper; cards have no wrapper element, so the c
 1. *State not covered:* a page that navigates during the 200ms exit calls `applyLayout()` again; the other tiles stay until the timer, but the growing tile may jump to full size instead of finishing smoothly.
 2. *Timing:* Electron's `ease-out` is not exactly `--ease-enter`; compare the two in the demo and the app side by side.
 3. *Accessibility:* with Reduce motion on (macOS: System Settings → Accessibility → Display → Reduce motion), toggling Mosaic must change instantly, as before.
+
+## 09. Full-screen toolbar
+
+**Decision note.** In full screen the toolbar gets out of the way, and it comes back when the pointer reaches the top edge. Before, it vanished and reappeared in one frame, and the page jumped by 96px each time, which made it hard to tell what had moved. Now the toolbar slides up out of view and the page rises with it, and on the way back the toolbar slides down and pushes the page down. Because the toolbar and the page move as one piece, the eye reads it as the window opening and closing at the top rather than two things changing. Coming down takes longer (320ms, ease-enter) because the toolbar arrives to be used; going up is quicker (200ms, ease-exit) because it is leaving.
+
+**Before.** The toolbar row collapsed to 0 and the page view jumped from y 96 to y 0 (and back) in one frame.
+
+**After.**
+
+| Moment | What moves | Timing |
+| --- | --- | --- |
+| Toolbar hides (1.8 s after entering full screen, or the pointer leaves the top) | The whole interface slides up 96px; the page view rises to the top on the same curve. | 200ms, `--ease-exit` cubic-bezier(0.4, 0, 1, 1) |
+| Toolbar shows (pointer at the top edge) | The interface slides down 96px; the page view moves down with it. | 320ms, `--ease-enter` cubic-bezier(0, 0, 0.2, 1) |
+| Leaving full screen | No slide: the layout is restored at once while macOS animates the window. | — |
+| Reduced motion | No movement; the toolbar fades in at `--motion-fast`. | 120ms |
+
+**How it is built.** `renderer/styles.css`: in full screen the `.shell` (toolbar, widget and the space for the page) moves with `transform: translateY(-96px)`, so only transform animates. While the toolbar is hidden the shell is 96px taller, so the widget still reaches the bottom of the window; on the way down the height shrinks back only after the slide (`height 0s linear 320ms`), so the widget's bottom edge never jumps. The toolbar becomes `visibility: hidden` only after it has left, so Tab cannot land on it. `main.js`: Electron's own view animation only offers four named curves, so `setChromeShown()` steps the page view along the same cubic-bezier itself (`cubicBezier()`, `slideViews()`, about 60 steps a second). In Focus only the page's position changes during the slide, at the taller of the two heights, and it is resized once at the end, so the page does not re-lay itself out on every frame. Mosaic tiles change height row by row, so they resize as they go. A new layout change (a tab switch, a window resize) stops the slide and puts everything where it belongs.
+
+**Test results.**
+
+- Linux (Electron 44, virtual display): test 22 samples the page view every 10ms. Going up it passes through 12 positions between 96 and 0, always in one direction; coming down 17. A separate measurement of the page view against the toolbar's transform: they start within about one frame of each other (−5 to +14ms across runs) and stay within 3 to 12px. That spread is timing noise between the two processes, not a fixed delay.
+- Mac: *to do on Sven's Mac.* Check that the page and the toolbar look like one piece moving, with no gap showing between them, on a normal page and on a playing video.
+
+**Three checks.**
+
+1. *State not covered:* the pointer touching the top edge and leaving again within 200ms reverses the slide from wherever it is; check it does not stutter.
+2. *Timing:* the two halves run in different processes (CSS in the window, the page view in `main.js`); on a busy page the page view may trail the toolbar by a frame.
+3. *Accessibility:* with Reduce motion on, the toolbar appears and disappears without moving, and keyboard focus never lands on the hidden toolbar.
+
