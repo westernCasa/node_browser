@@ -9,7 +9,7 @@ body:
         Thanks for testing NODE. This survey takes about 5 minutes and decides what gets fixed and built next.
         Please answer after you have used NODE on at least 2 or 3 days.
 
-        Your answers are posted as a public issue on this repository.
+        Your answers are posted as a public issue on this repository. To answer anonymously, use the [anonymous survey](https://forms.gle/XuMGZUzScNYPyP319) instead.
 
   # About you
   - type: dropdown
