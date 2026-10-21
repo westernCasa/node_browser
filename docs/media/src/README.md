@@ -7,4 +7,5 @@ node docs/media/src/make-art.js     # illustrations: art.html -> site/img/*.jpg
 node docs/media/src/make-site.js    # demo pages and short videos
 node docs/media/src/make-shots.js   # runs NODE and captures raw/*.png
 node docs/media/src/make-frames.js  # frames them with frame.html -> docs/media/*.png
+node docs/media/src/make-case-study.js ~/node-case-study  # case-study stills (2x), GIFs and MP4s of each interaction
 ```
