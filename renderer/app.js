@@ -935,8 +935,11 @@ document.getElementById("key-form").addEventListener("submit", (e) => {
 // 03: the button changes once the main process confirms the new layout. The
 // new label rises into place; the old one is replaced at once.
 function paintLayout(animate = false) {
-  layoutBtn.classList.toggle("active", layout === "mosaic");
-  layoutBtn.innerHTML = `<span class="label">${layout === "mosaic" ? "Focus" : "Mosaic"}</span>`;
+  const mosaic = layout === "mosaic";
+  layoutBtn.classList.toggle("active", mosaic);
+  layoutBtn.setAttribute("aria-pressed", String(mosaic));
+  setTip(layoutBtn, mosaic ? "Focus: back to one tab" : "Mosaic: tile every tab");
+  layoutBtn.innerHTML = icon(mosaic ? "focus" : "mosaic", "label");
   if (animate) playOnce(layoutBtn.firstElementChild, "rise");
 }
 layoutBtn.addEventListener("click", async () => {
@@ -950,7 +953,9 @@ const soundBtn = document.getElementById("sound-btn");
 let soundAll = store.get("scout.soundAll", false);
 const paintSound = () => {
   soundBtn.classList.toggle("active", soundAll);
-  soundBtn.textContent = soundAll ? "Sound: all" : "Sound: one";
+  soundBtn.setAttribute("aria-pressed", String(soundAll));
+  setTip(soundBtn, soundAll ? "Sound: all playing tabs" : "Sound: this tab only");
+  soundBtn.innerHTML = icon(soundAll ? "sound-all" : "sound");
 };
 soundBtn.addEventListener("click", () => api?.setSoundAll?.(!soundAll));
 paintSound();
@@ -1013,8 +1018,9 @@ function renderDownloadsShelf(list) {
 function paintDownloads(msg) {
   const btn = document.getElementById("dl-btn");
   btn.hidden = !msg.active;
-  btn.textContent = `↓ ${msg.active}`;
-  if (!libraryEl.hidden && shelfFolder === "downloads") renderDownloadsShelf(msg.list);
+  document.getElementById("dl-count").textContent = msg.active;
+  setTip(btn, `Downloads in progress: ${msg.active}`);
+  if (menuOpen && menuSection === "downloads") renderDownloadsShelf(msg.list);
 }
 
 document.getElementById("dl-btn").addEventListener("click", () => {
@@ -1127,9 +1133,12 @@ async function renderBookmarksShelf() {
   input.focus();
 }
 
-async function openLibrary() {
-  libraryEl.hidden = false;
-  if (api?.setLibraryOpen) await api.setLibraryOpen(true);
+// The Library, Bookmarks, History and Downloads shelves live in the menu overlay.
+function openLibrary() {
+  return openMenu(["bookmarks", "history", "downloads"].includes(shelfFolder) ? shelfFolder : "library");
+}
+
+async function renderShelf() {
   if (shelfFolder === "history") {
     if (api?.historySearch) await renderHistoryShelf();
     return;
@@ -1146,7 +1155,7 @@ async function openLibrary() {
   const shown = shelfFolder === "all" ? rows : rows.filter((row) => row.folder === shelfFolder);
   libraryList.innerHTML = "";
   if (!shown.length) {
-    libraryList.innerHTML = `<p class="help">Nothing in this shelf yet. Shot, Save, or Media to add some.</p>`;
+    libraryList.innerHTML = `<p class="help">Nothing here yet. Use Capture in the toolbar to save a screenshot, the page or its media.</p>`;
     return;
   }
   for (const item of shown) {
@@ -1191,9 +1200,8 @@ async function openLibrary() {
   }
 }
 
-async function closeLibrary() {
-  libraryEl.hidden = true;
-  if (api?.setLibraryOpen) await api.setLibraryOpen(false);
+function closeLibrary() {
+  return closeMenu();
 }
 
 async function runShot() {
@@ -1249,8 +1257,6 @@ document.getElementById("media-btn").addEventListener("click", () => {
   if (!api?.grabMedia || !activeId) return;
   api.grabMedia(activeId).then(openLibrary).catch((e) => showNotice(errText(e)));
 });
-document.getElementById("library-btn").addEventListener("click", () => openLibrary());
-document.getElementById("library-close").addEventListener("click", () => closeLibrary());
 document.getElementById("shelf-filters").addEventListener("click", (e) => {
   const btn = e.target.closest("button");
   if (!btn) return;
@@ -1263,6 +1269,7 @@ document.getElementById("library-folder").addEventListener("click", () => api?.o
 window.addEventListener("keydown", (e) => {
   const t = e.target;
   if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
+  if (menuOpen) return; // S is a screenshot of the page, which the menu covers
   if (e.key.toLowerCase() === "s" && !e.metaKey && !e.ctrlKey && !e.altKey) {
     e.preventDefault();
     runShot().catch((err) => showNotice(errText(err)));
@@ -1492,9 +1499,12 @@ function paintAgentButtons() {
   const tab = tabs.find((t) => t.id === activeId);
   const shared = Boolean(tab?.agentShared);
   agentShareBtn.classList.toggle("shared", shared);
-  agentShareBtn.textContent = shared ? "Shared ◆" : "Share tab";
-  agentShareBtn.title = shared ? "AI agents can read this tab. Click to stop sharing it." : "Let AI agents connected to NODE read this tab";
-  agentBtn.textContent = `Agents ● ${agentState.log?.length ? agentState.log.length : ""}`.trim();
+  agentShareBtn.classList.toggle("active", shared);
+  agentShareBtn.setAttribute("aria-pressed", String(shared));
+  setTip(agentShareBtn, shared ? "Shared with agents. Click to stop sharing this tab" : "Share this tab with agents");
+  const n = agentState.log?.length || 0;
+  agentBtn.classList.add("on");
+  setTip(agentBtn, `Agents on${n ? ` (${n} requests)` : ""}. Click to stop them`);
 }
 
 function fillAgents(st) {
@@ -1777,26 +1787,27 @@ async function saveSources(rerender = true) {
   if (rerender) await renderSources();
 }
 
-async function openSources() {
-  renderRulesList();
-  if (!api?.getSettings) {
-    showNotice("Search sources can only be changed in the desktop app.");
-    return;
-  }
-  showPane("sources");
-  await renderSources();
+function openSources() {
+  return openMenu("settings");
 }
 
 function closeSources() {
-  showPane("suggest");
+  return closeMenu();
 }
 
 // One sidebar pane at a time: suggestions, trail or settings.
 function showPane(name) {
+  // Trail and Settings moved to the menu overlay.
+  if (name === "trail" || name === "sources") return openMenu(name === "sources" ? "settings" : "trail");
+  if (typeof closeMenu === "function" && menuOpen) closeMenu();
+  if (panelOpen === false) setPanelOpen(true); // undefined until the widget code below has run
+  for (const [id, pane] of [["suggest-tab", "suggest"], ["ask-btn", "ask"], ["agent-run-btn", "agent"], ["talk-btn", "talk"]]) {
+    const tab = document.getElementById(id);
+    tab.setAttribute("aria-selected", String(name === pane));
+    tab.tabIndex = name === pane ? 0 : -1;
+  }
   suggestPane.hidden = name !== "suggest";
   document.getElementById("ask-pane").hidden = name !== "ask";
-  sourcesPane.hidden = name !== "sources";
-  document.getElementById("trail-pane").hidden = name !== "trail";
   document.getElementById("agent-pane").hidden = name !== "agent";
   document.getElementById("talk-pane").hidden = name !== "talk";
   talkOpen = name === "talk";
@@ -1887,7 +1898,6 @@ document.getElementById("talk-btn").addEventListener("click", () => {
   showPane("talk");
   loadTalk(true);
 });
-document.getElementById("talk-back").addEventListener("click", () => showPane("suggest"));
 
 // ---- Research agent pane ----
 // thread: the reports of this line of questions, oldest first; a follow-up
@@ -2011,7 +2021,6 @@ async function startAgent(followUp = false) {
 }
 
 document.getElementById("agent-run-btn").addEventListener("click", openAgent);
-document.getElementById("agent-back").addEventListener("click", () => showPane("suggest"));
 document.getElementById("agent-form").addEventListener("submit", (e) => {
   e.preventDefault();
   startAgent();
@@ -2051,13 +2060,11 @@ document.getElementById("agent-mosaic").addEventListener("click", async () => {
 });
 document.getElementById("agent-library").addEventListener("click", () => document.getElementById("library-btn").click());
 
-document.getElementById("sources-btn").addEventListener("click", openSources);
 document.getElementById("rules-edit").addEventListener("click", () => api?.editRules?.());
 document.getElementById("rules-reload").addEventListener("click", async () => {
   const r = await api?.reloadRules?.();
   if (r) document.getElementById("rules-msg").textContent = `${r.count} rules loaded.` + (r.errors.length ? " Problems: " + r.errors.join(" ") : "");
 });
-document.getElementById("sources-back").addEventListener("click", closeSources);
 document.getElementById("sources-save").addEventListener("click", async () => {
   await saveSources(true);
   sourcesMsg.textContent = "Saved. " + sourcesMsg.textContent.replace(/^Saved\. /, "");
@@ -2074,6 +2081,7 @@ let findTabId = null;
 function openFind() {
   if (!api?.findStart || !activeId) return;
   findbar.hidden = false;
+  holdChrome("find", true);
   findInput.focus();
   findInput.select();
   if (findInput.value) runFind(true, false);
@@ -2097,6 +2105,7 @@ function stepFind(forward) {
 
 function closeFind() {
   findbar.hidden = true;
+  holdChrome("find", false);
   findCount.textContent = "";
   if (findTabId) api.findStop(findTabId);
   findTabId = null;
@@ -2128,10 +2137,11 @@ async function paintStar({ animate = false } = {}) {
   const tab = tabs.find((t) => t.id === activeId);
   starUrl = tab?.url || "";
   const on = api?.bookmarkHas && /^https?:/i.test(starUrl) ? await api.bookmarkHas(starUrl) : false;
-  starBtn.innerHTML = `<span class="glyph">${on ? "★" : "☆"}</span>`;
+  starBtn.innerHTML = `<span class="glyph">${icon("star")}</span>`;
   if (animate) playOnce(starBtn.firstElementChild, on ? "save" : "unsave");
   starBtn.classList.toggle("on", on);
-  starBtn.title = on ? "Bookmarked. Click to remove (Cmd/Ctrl+D)" : "Bookmark this page (Cmd/Ctrl+D)";
+  starBtn.setAttribute("aria-pressed", String(on));
+  setTip(starBtn, on ? "Bookmarked. Click to remove" : "Bookmark this page");
 }
 async function toggleBookmark() {
   const tab = tabs.find((t) => t.id === activeId);
@@ -2263,12 +2273,6 @@ async function renderTrail() {
   }
 }
 
-document.getElementById("trail-btn").addEventListener("click", async () => {
-  if (!api?.researchGet) return showNotice("The research trail needs the desktop app.");
-  showPane("trail");
-  await renderTrail();
-});
-document.getElementById("trail-back").addEventListener("click", () => showPane("suggest"));
 let renameTimer = null;
 sessionName.addEventListener("input", () => {
   clearTimeout(renameTimer);
@@ -2501,7 +2505,6 @@ async function sendAsk(question) {
 }
 
 document.getElementById("ask-btn").addEventListener("click", openAsk);
-document.getElementById("ask-back").addEventListener("click", () => showPane("suggest"));
 document.getElementById("ask-clear").addEventListener("click", () => {
   ask.messages = [];
   renderAsk();
@@ -2561,3 +2564,275 @@ function renderHiddenList() {
   }
 }
 renderHiddenList();
+
+// ---- Toolbar icons, suggestions widget, menu overlay, full screen ----
+// Toolbar buttons are icons. Each one names itself (and its shortcut) in a
+// tooltip on hover, through the native title, and to screen readers through
+// aria-label. Rules of thumb used: recognition over recall (every icon has a
+// name one hover away), progressive disclosure (the widget and the menu are
+// one click away, behind named controls).
+
+// "var" and function declarations: earlier parts of this file paint buttons
+// before this part runs.
+var menuOpen = false;
+var menuSection = "library";
+var panelOpen = true;
+
+function icon(name, cls = "") {
+  return `<svg class="ic${cls ? " " + cls : ""}" aria-hidden="true"><use href="#i-${name}"/></svg>`;
+}
+
+// "mod+shift+M" → "⌘⇧M" on a Mac, "Ctrl+Shift+M" elsewhere.
+function keyLabel(keys) {
+  if (!keys) return "";
+  const mac = /Mac/.test(navigator.platform);
+  if (keys === "ctrl+mod+F" && !mac) return "F11"; // the system's full-screen key
+  const parts = keys.split("+");
+  const key = parts.pop();
+  const names = mac
+    ? { mod: "⌘", shift: "⇧", ctrl: "⌃", alt: "⌥" }
+    : { mod: "Ctrl", shift: "Shift", ctrl: "Ctrl", alt: "Alt" };
+  const mods = parts.map((m) => names[m] || m);
+  const shown = key.length === 1 ? key.toUpperCase() : key;
+  return mac ? mods.join("") + shown : [...mods, shown].join("+");
+}
+
+function setTip(btn, tip) {
+  if (!btn) return;
+  if (tip) btn.dataset.tip = tip;
+  const keys = keyLabel(btn.dataset.keys);
+  btn.setAttribute("aria-label", btn.dataset.tip);
+  btn.title = keys ? `${btn.dataset.tip}  (${keys})` : btn.dataset.tip;
+  if (keys) btn.setAttribute("aria-keyshortcuts", btn.dataset.keys.replace(/mod/g, /Mac/.test(navigator.platform) ? "Meta" : "Control"));
+}
+document.querySelectorAll("[data-tip]").forEach((b) => setTip(b));
+document.querySelectorAll(".mnav").forEach((b) => (b.querySelector("kbd").textContent = keyLabel(b.dataset.keys)));
+paintLayout();
+
+// In full screen the toolbar stays on screen while one of these is in use.
+var chromeHolds = new Set();
+function holdChrome(key, on) {
+  if (on) chromeHolds.add(key);
+  else chromeHolds.delete(key);
+  api?.holdChrome?.(chromeHolds.size > 0);
+}
+omni.addEventListener("focus", () => holdChrome("omni", true));
+omni.addEventListener("blur", () => holdChrome("omni", false));
+
+// ---- Suggestions widget: floats beside the page, collapses to the toolbar ----
+const railEl = document.getElementById("rail");
+const shellEl = document.querySelector(".shell");
+const suggestToggle = document.getElementById("suggest-toggle");
+const suggestCollapse = document.getElementById("suggest-collapse");
+const PANEL_W = 340; // widget width
+const PANEL_GAP = 8; // space around it
+let seenWhileCollapsed = null; // result addresses on screen when it was collapsed
+
+function panelSpace() {
+  return panelOpen ? PANEL_W + PANEL_GAP * 2 : 0;
+}
+
+function sendPanelSpace() {
+  const w = panelSpace();
+  if (api?.setPanelWidth) api.setPanelWidth(w);
+  else api?.setSidebarWidth?.(w);
+}
+
+function resultUrls() {
+  return [...resultsEl.querySelectorAll(".card")].map((c) => c.__item?.url).filter(Boolean);
+}
+
+function paintSuggestCount() {
+  const count = document.getElementById("suggest-count");
+  const fresh = document.getElementById("suggest-new");
+  if (panelOpen) {
+    count.hidden = fresh.hidden = true;
+    suggestToggle.classList.remove("has-count");
+    return;
+  }
+  const urls = resultUrls();
+  const added = seenWhileCollapsed ? urls.filter((u) => !seenWhileCollapsed.has(u)).length : 0;
+  count.textContent = urls.length;
+  count.hidden = !urls.length;
+  fresh.textContent = `+${added}`;
+  fresh.hidden = !added;
+  suggestToggle.classList.toggle("has-count", urls.length > 0);
+  setTip(suggestToggle, `Show suggestions${urls.length ? `: ${urls.length} results` : ""}${added ? `, ${added} new` : ""}`);
+}
+new MutationObserver(() => panelOpen || paintSuggestCount()).observe(resultsEl, { childList: true });
+
+function setPanelOpen(on, { focus = false } = {}) {
+  panelOpen = Boolean(on);
+  store.set("node.panelOpen", panelOpen);
+  seenWhileCollapsed = panelOpen ? null : new Set(resultUrls());
+  railEl.hidden = !panelOpen;
+  shellEl.style.setProperty("--panel-space", `${panelSpace()}px`);
+  suggestToggle.classList.toggle("active", panelOpen);
+  suggestToggle.setAttribute("aria-pressed", String(panelOpen));
+  suggestCollapse.setAttribute("aria-expanded", String(panelOpen));
+  if (panelOpen) setTip(suggestToggle, "Hide suggestions");
+  paintSuggestCount();
+  sendPanelSpace();
+  if (focus) (panelOpen ? document.querySelector('.ptab[aria-selected="true"]') : suggestToggle)?.focus();
+}
+suggestToggle.addEventListener("click", () => setPanelOpen(!panelOpen));
+suggestCollapse.addEventListener("click", () => setPanelOpen(false, { focus: true }));
+document.getElementById("suggest-tab").addEventListener("click", () => showPane("suggest"));
+// Arrow keys move between the widget's tabs.
+document.querySelector(".panel-tabs").addEventListener("keydown", (e) => {
+  if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+  const tabsList = [...document.querySelectorAll(".ptab")];
+  const i = tabsList.indexOf(document.activeElement);
+  if (i < 0) return;
+  const next = tabsList[(i + (e.key === "ArrowRight" ? 1 : tabsList.length - 1)) % tabsList.length];
+  next.focus();
+  next.click();
+});
+setPanelOpen(store.get("node.panelOpen", true));
+showPane("suggest");
+
+// ---- Menu overlay: Library, Bookmarks, History, Downloads, Trail, Settings, Help ----
+const overlayEl = document.getElementById("menu-overlay");
+const menuPanel = document.getElementById("menu-panel");
+const menuShots = document.getElementById("menu-shots");
+const SHELF_TITLES = { library: "Library", bookmarks: "Bookmarks", history: "History", downloads: "Downloads" };
+let menuReturnFocus = null;
+
+function paintMenuNav() {
+  for (const b of document.querySelectorAll(".mnav")) {
+    const on = b.dataset.section === menuSection;
+    b.classList.toggle("active", on);
+    if (on) b.setAttribute("aria-current", "page");
+    else b.removeAttribute("aria-current");
+  }
+}
+
+async function renderMenuSection() {
+  const sec = menuSection;
+  const shelf = sec in SHELF_TITLES;
+  libraryEl.hidden = !shelf;
+  document.getElementById("trail-pane").hidden = sec !== "trail";
+  sourcesPane.hidden = sec !== "settings" && sec !== "help";
+  if (shelf) {
+    if (sec !== "library") shelfFolder = sec;
+    else if (["bookmarks", "history", "downloads"].includes(shelfFolder)) shelfFolder = "all";
+    document.getElementById("shelf-title").textContent = SHELF_TITLES[sec];
+    document.getElementById("shelf-filters").hidden = sec !== "library";
+    document.querySelectorAll("#shelf-filters .chip").forEach((c) => c.classList.toggle("active", c.dataset.folder === shelfFolder));
+    await renderShelf();
+  } else if (sec === "trail") {
+    await renderTrail();
+  } else {
+    renderRulesList();
+    await renderSources();
+    const scroller = document.getElementById("menu-content");
+    if (sec === "help") document.getElementById("help-box").scrollIntoView({ block: "start" });
+    else scroller.scrollTop = 0;
+  }
+}
+
+async function openMenu(section = menuSection) {
+  if ((section === "settings" || section === "help") && !api?.getSettings) return showNotice("Settings can only be changed in the desktop app.");
+  if (section === "trail" && !api?.researchGet) return showNotice("The research trail needs the desktop app.");
+  const opening = !menuOpen;
+  menuSection = section;
+  if (opening) {
+    menuOpen = true;
+    menuReturnFocus = document.activeElement;
+    overlayEl.hidden = false;
+    holdChrome("menu", true);
+    document.getElementById("menu-btn").setAttribute("aria-expanded", "true");
+    // The pages are native views drawn above this window's HTML: hide them,
+    // and show a picture of them dimmed behind the menu instead.
+    const r = api?.setLibraryOpen ? await api.setLibraryOpen(true, { snapshot: true }) : null;
+    menuShots.innerHTML = "";
+    for (const shot of r?.shots || []) {
+      const img = document.createElement("img");
+      img.alt = "";
+      img.src = shot.src;
+      Object.assign(img.style, { left: `${shot.rect.x}px`, top: `${shot.rect.y}px`, width: `${shot.rect.width}px`, height: `${shot.rect.height}px` });
+      menuShots.appendChild(img);
+    }
+  }
+  paintMenuNav();
+  await renderMenuSection();
+  if (opening && menuOpen) document.querySelector(".mnav.active")?.focus();
+}
+
+async function closeMenu() {
+  if (!menuOpen) return;
+  menuOpen = false;
+  overlayEl.hidden = true;
+  menuShots.innerHTML = "";
+  holdChrome("menu", false);
+  document.getElementById("menu-btn").setAttribute("aria-expanded", "false");
+  if (api?.setLibraryOpen) await api.setLibraryOpen(false);
+  const back = menuReturnFocus?.isConnected && !overlayEl.contains(menuReturnFocus) ? menuReturnFocus : document.getElementById("menu-btn");
+  back.focus();
+}
+
+document.getElementById("menu-btn").addEventListener("click", () => (menuOpen ? closeMenu() : openMenu()));
+document.getElementById("menu-close").addEventListener("click", () => closeMenu());
+document.getElementById("menu-scrim").addEventListener("click", () => closeMenu());
+document.querySelector(".menu-nav").addEventListener("click", (e) => {
+  const b = e.target.closest(".mnav");
+  if (b) openMenu(b.dataset.section);
+});
+// Esc closes the menu wherever focus is; Tab stays inside it while it is open.
+window.addEventListener("keydown", (e) => {
+  if (menuOpen && e.key === "Escape") {
+    e.preventDefault();
+    closeMenu();
+  }
+});
+overlayEl.addEventListener("keydown", (e) => {
+  if (e.key !== "Tab") return;
+  const items = [...menuPanel.querySelectorAll("button, input, select, textarea, a[href], [tabindex]:not([tabindex='-1'])")].filter(
+    (el) => !el.disabled && el.offsetParent !== null
+  );
+  if (!items.length) return;
+  const first = items[0];
+  const last = items[items.length - 1];
+  if (e.shiftKey && document.activeElement === first) {
+    e.preventDefault();
+    last.focus();
+  } else if (!e.shiftKey && document.activeElement === last) {
+    e.preventDefault();
+    first.focus();
+  }
+});
+
+// ---- Capture: one toolbar button, a native menu (it draws over the page) ----
+const captureActions = { shot: "shot-btn", save: "save-btn", media: "media-btn", pip: "pip-btn" };
+document.getElementById("capture-btn").addEventListener("click", (e) => {
+  if (!api?.captureMenu) return;
+  const r = e.currentTarget.getBoundingClientRect();
+  api.captureMenu(r.left, r.bottom + 4);
+});
+
+// ---- Full screen: the toolbar hides and comes back at the top edge ----
+const fullBtn = document.getElementById("fullscreen-btn");
+const chromeHint = document.getElementById("chrome-hint");
+let hintTimer = null;
+fullBtn.addEventListener("click", () => api?.toggleFullscreen?.());
+
+function paintChrome(msg) {
+  document.body.classList.toggle("immersive", msg.immersive);
+  document.body.classList.toggle("chrome-hidden", msg.immersive && !msg.shown);
+  fullBtn.innerHTML = icon(msg.immersive ? "exit-fullscreen" : "fullscreen");
+  setTip(fullBtn, msg.immersive ? "Exit full screen" : "Full screen");
+  if (msg.hint) {
+    chromeHint.textContent = `Toolbar hides in full screen. Move the pointer to the top edge to show it. ${keyLabel("ctrl+mod+F")} to exit.`;
+    chromeHint.hidden = false;
+    clearTimeout(hintTimer);
+    hintTimer = setTimeout(() => (chromeHint.hidden = true), 4000);
+  }
+  if (!msg.immersive) chromeHint.hidden = true;
+}
+
+api?.onCommand?.((msg) => {
+  if (msg.cmd === "capture") document.getElementById(captureActions[msg.action])?.click();
+  else if (msg.cmd === "chrome") paintChrome(msg);
+  else if (msg.cmd === "toggle-suggest") setPanelOpen(!panelOpen, { focus: true });
+  else if (msg.cmd === "open-menu") openMenu(msg.section || menuSection);
+});

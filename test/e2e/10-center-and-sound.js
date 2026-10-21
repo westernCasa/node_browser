@@ -80,10 +80,10 @@ const log = (...a) => console.log("•", ...a);
     app.evaluate(({ webContents }) =>
       webContents.getAllWebContents().filter((w) => w.getURL().includes("video-main")).sort((a, b) => a.id - b.id).map((w) => w.isAudioMuted())
     );
-  log("Sound: one — muted per video tab:", JSON.stringify(await muted()), "| button:", await ui.textContent("#sound-btn"));
+  log("Sound: one — muted per video tab:", JSON.stringify(await muted()), "| button:", await ui.getAttribute("#sound-btn", "aria-label"));
   await ui.click("#sound-btn");
   await sleep(600);
-  log("Sound: all — muted per video tab:", JSON.stringify(await muted()), "| button:", await ui.textContent("#sound-btn"));
+  log("Sound: all — muted per video tab:", JSON.stringify(await muted()), "| button:", await ui.getAttribute("#sound-btn", "aria-label"));
   await ui.click("#sound-btn");
   await sleep(600);
   log("back to Sound: one — muted per video tab:", JSON.stringify(await muted()));

@@ -52,11 +52,11 @@ async function launch() {
   log("dismissed result stays hidden after a new search:", !urls.some((x) => x.u === firstUrl), "| cards marked read:", urls.filter((x) => x.read).length);
 
   // A screenshot taken now goes in the trail, under the page it was taken on.
-  await ui.click("#shot-btn");
+  await ui.evaluate(() => document.querySelector('#shot-btn').click()); // in the menu overlay or the hidden Capture actions
   await sleep(1500);
   await ui.evaluate(() => closeLibrary?.()).catch(() => {});
   await sleep(500);
-  await ui.click("#trail-btn");
+  await ui.evaluate(() => document.querySelector('#trail-btn').click()); // in the menu overlay or the hidden Capture actions
   await sleep(1000);
   const caps = await ui.$$eval("#trail-list .cap img", (e) => e.map((x) => x.naturalWidth));
   log("captures in the trail:", caps.length, "| image loads:", caps.every((w) => w > 0));
@@ -79,7 +79,7 @@ async function launch() {
   ({ app, ui } = await launch());
   await sleep(1000);
   log("after restart, pinned:", (await ui.$$eval("#keys .key.pinned", (e) => e.map((x) => x.textContent.replace("×", "").trim()))).join(", "));
-  await ui.click("#trail-btn");
+  await ui.evaluate(() => document.querySelector('#trail-btn').click()); // in the menu overlay or the hidden Capture actions
   await sleep(800);
   log("after restart, session:", await ui.inputValue("#session-name"), "|", (await ui.$$eval("#trail-list .trail-row", (e) => e.length)), "pages");
   await ui.click("#session-new");

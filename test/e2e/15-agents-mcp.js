@@ -59,7 +59,7 @@ const PORT = 47699;
   st = await ui.evaluate(() => window.scout.setAgents(true));
   token = st.token;
   await sleep(300);
-  log("on:", st.running, "|", st.url, "| token length:", token.length, "| toolbar shows:", await ui.$eval("#agent-btn", (e) => !e.hidden && e.textContent));
+  log("on:", st.running, "|", st.url, "| token length:", token.length, "| toolbar shows:", await ui.$eval("#agent-btn", (e) => !e.hidden && e.getAttribute("aria-label")));
 
   // 3. Access checks.
   log("no token:", (await rpc("ping", {}, { authorization: "" })).status, "| wrong token:", (await rpc("ping", {}, { authorization: "Bearer nope-nope-nope-nope" })).status, "| from a web page (Origin):", (await rpc("ping", {}, { origin: "https://evil.example" })).status);
@@ -79,7 +79,7 @@ const PORT = 47699;
   const ids = await ui.evaluate(() => [...document.querySelectorAll("#tabs .tab")].map((e) => e.dataset.id));
   await ui.click("#agent-share-btn");
   await sleep(500);
-  log("share button after click:", await ui.$eval("#agent-share-btn", (e) => e.textContent), "| tab mark:", await ui.$$eval("#tabs .agent-mark", (e) => e.length));
+  log("share button after click:", await ui.$eval("#agent-share-btn", (e) => e.getAttribute("aria-label")), "| tab mark:", await ui.$$eval("#tabs .agent-mark", (e) => e.length));
   const list = await call("list_shared_tabs");
   log("shared tabs:", list.text.replace(/\n\s*/g, " "));
   const rt = await call("read_tab", { tab_id: ids[0] });
@@ -107,7 +107,7 @@ const PORT = 47699;
   await ui.press("#omni", "Enter");
   await sleep(2000);
   log("shared tabs after going to another site:", (await call("list_shared_tabs")).text.slice(0, 30));
-  await ui.click("#sources-btn");
+  await ui.evaluate(() => document.querySelector('#sources-btn').click()); // in the menu overlay or the hidden Capture actions
   await sleep(800);
   log("settings shows:", await ui.$eval("#agents-state", (e) => e.textContent), "| log rows:", await ui.$$eval("#agents-log div", (e) => e.length));
   log("command:", (await ui.$eval("#agents-cmd", (e) => e.value)).replace(token, "<token>"));
@@ -137,6 +137,8 @@ const PORT = 47699;
   log("Claude app config file:", cfg.file.replace(require("os").homedir(), "~"), "| entry runs NODE as Node:", JSON.parse(cfg.config).mcpServers.node.env.ELECTRON_RUN_AS_NODE === "1");
 
   // 9. Stop switch.
+  await ui.keyboard.press("Escape"); // close the menu (Settings) so the toolbar is reachable
+  await sleep(300);
   await ui.click("#agent-btn");
   await sleep(500);
   await fetch(`http://127.0.0.1:${PORT}/mcp`).then(() => log("server after Stop: still answering"), () => log("server after Stop: closed"));

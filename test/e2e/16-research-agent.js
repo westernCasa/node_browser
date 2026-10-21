@@ -65,7 +65,7 @@ const log = (...a) => console.log("•", ...a);
 
   // With the fake local model.
   await ui.evaluate(() => window.scout.setSettings({ ai: { enabled: false, provider: "local", local: { url: "http://127.0.0.1:8898/v1", model: "test-model" } } }));
-  await ui.click("#agent-back");
+  await ui.click("#suggest-tab");
   await ui.click("#agent-run-btn");
   await sleep(400);
   log("privacy line:", (await ui.textContent("#agent-privacy")).slice(0, 70));
@@ -118,7 +118,7 @@ const log = (...a) => console.log("•", ...a);
   // Sources in Mosaic.
   await ui.click("#agent-mosaic");
   await sleep(3000);
-  log("tabs after Open sources in Mosaic:", await ui.$$eval("#tabs .tab", (e) => e.length), "| layout button:", await ui.textContent("#layout-btn"));
+  log("tabs after Open sources in Mosaic:", await ui.$$eval("#tabs .tab", (e) => e.length), "| layout button:", await ui.getAttribute("#layout-btn", "aria-label"));
 
   // Stop.
   await ui.click("#layout-btn");

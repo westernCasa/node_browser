@@ -24,7 +24,7 @@ const log = (...a) => console.log("•", ...a);
   const playing = () => app.evaluate(({ webContents }) => webContents.getAllWebContents().find((w) => w.getURL().includes("media.html")).executeJavaScript(`[...document.querySelectorAll("video,audio")].some((m) => !m.paused)`));
   log("media playing before any rule:", await playing());
 
-  await ui.click("#sources-btn");
+  await ui.evaluate(() => document.querySelector('#sources-btn').click()); // in the menu overlay or the hidden Capture actions
   await sleep(800);
   log("rules listed:", await ui.$$eval("#rules-list .rn", (e) => e.map((x) => x.textContent)).then((l) => l.join(" | ")));
   log("summary of the sign-in rule:", await ui.$$eval("#rules-list .rs", (e) => e.at(-1).textContent));
@@ -41,12 +41,16 @@ const log = (...a) => console.log("•", ...a);
   const added = fileRules().at(-1);
   log("saved to rules.json:", JSON.stringify(added));
   log("list now ends with:", await ui.$$eval("#rules-list .rs", (e) => e.at(-1).textContent));
+  await ui.keyboard.press("Escape"); // close the menu (Settings) so the toolbar is reachable
+  await sleep(300);
   await ui.click("#reload");
   await sleep(2500);
   log("media playing after reload with the rule:", await playing(), "| rule line:", await ui.textContent("#rule-line").catch(() => ""));
 
   // Invalid input is refused and nothing is written.
   const before = fs.readFileSync(rulesFile, "utf8");
+  await ui.evaluate(() => document.querySelector("#sources-btn").click()); // Settings again, in the menu
+  await sleep(800);
   await ui.click("#rule-add");
   await ui.fill("#rf-match", "/[unclosed/");
   await ui.click("#rf-save");

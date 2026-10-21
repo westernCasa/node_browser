@@ -60,7 +60,7 @@ const log = (...a) => console.log("•", ...a);
   // Local model at the fake server (AI query ideas left off: chat does not need them).
   await ui.evaluate(() => window.scout.setSettings({ ai: { enabled: false, provider: "local", local: { url: "http://127.0.0.1:8899/v1", model: "test-model" } } }));
   await ui.click("#ask-clear");
-  await ui.click("#ask-back");
+  await ui.click("#suggest-tab");
   await ui.click("#ask-btn");
   await sleep(500);
   log("privacy line:", await ui.textContent("#ask-privacy"));
@@ -77,7 +77,7 @@ const log = (...a) => console.log("•", ...a);
   log("follow-up carries the earlier exchange:", second.messages.some((m) => m.role === "assistant" && m.content.startsWith("Answer to: Summarize")), "| messages sent:", second.messages.length);
 
   // Page changes: conversation starts over.
-  await ui.click("#ask-back");
+  await ui.click("#suggest-tab");
   await ui.fill("#omni", `${BASE}/other.html`);
   await ui.press("#omni", "Enter");
   await sleep(2000);
