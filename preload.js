@@ -11,7 +11,7 @@ contextBridge.exposeInMainWorld("scout", {
   setLayout: (mode) => ipcRenderer.invoke("layout:set", mode),
   setSidebarWidth: (w) => ipcRenderer.invoke("layout:sidebar", w),
   setLibraryOpen: (open, opts) => ipcRenderer.invoke("layout:library", open, opts),
-  setPanelWidth: (w) => ipcRenderer.invoke("layout:panel", w),
+  setPanelWidth: (w, opts) => ipcRenderer.invoke("layout:panel", w, opts),
   toggleFullscreen: (on) => ipcRenderer.invoke("window:fullscreen", on),
   holdChrome: (on) => ipcRenderer.send("chrome:hold", on),
   captureMenu: (x, y) => ipcRenderer.invoke("menu:capture", x, y),

@@ -158,6 +158,7 @@ function refreshRule(tab, url) {
 // renderer/styles.css and docs/motion/tokens.md.
 const MOTION_SLOW = 320;
 const MOTION_BASE = 200;
+const MOTION_FAST = 120;
 
 // Electron only offers four easings. "ease-out" stands in for our
 // --ease-enter and "ease-in-out" for our --ease-move (see tokens.md).
@@ -217,23 +218,22 @@ function cubicBezier([x1, y1, x2, y2]) {
   };
 }
 
-let chromeTween = null;
+let viewSlide = null;
 
-function stopChromeTween() {
-  if (!chromeTween) return;
-  clearTimeout(chromeTween.timer);
-  chromeTween = null;
+function stopViewSlide() {
+  if (!viewSlide) return;
+  clearTimeout(viewSlide.timer);
+  viewSlide = null;
 }
 
 // Move page views from their current bounds to the ones applyLayout() just
-// set. One page (Focus): only its position moves, at the taller of the two
-// heights, and it is resized once at the end, so the page does not re-layout
-// on every frame. Mosaic tiles change height row by row, so they resize as
+// set, on a cubic-bezier curve. moveOnly: only the position changes during
+// the slide, at the larger size, and the page is resized once at the end, so
+// it does not re-lay itself out on every frame. Otherwise the views resize as
 // they go. Any other layout change stops the slide (applyLayout).
-function slideViews(items, duration, curve) {
-  stopChromeTween();
+function slideViews(items, duration, curve, { moveOnly = false } = {}) {
+  stopViewSlide();
   const ease = cubicBezier(curve);
-  const moveOnly = items.length === 1;
   const start = Date.now();
   const lerp = (a, b, p) => Math.round(a + (b - a) * p);
   const frame = () => {
@@ -241,11 +241,11 @@ function slideViews(items, duration, curve) {
     const e = ease(p);
     for (const { view, from, to } of items) {
       if (p >= 1) view.setBounds(to);
-      else if (moveOnly) view.setBounds({ x: to.x, y: lerp(from.y, to.y, e), width: to.width, height: Math.max(from.height, to.height) });
+      else if (moveOnly) view.setBounds({ x: lerp(from.x, to.x, e), y: lerp(from.y, to.y, e), width: Math.max(from.width, to.width), height: Math.max(from.height, to.height) });
       else view.setBounds({ x: lerp(from.x, to.x, e), y: lerp(from.y, to.y, e), width: lerp(from.width, to.width, e), height: lerp(from.height, to.height, e) });
     }
-    if (p < 1) chromeTween = { timer: setTimeout(frame, 16) };
-    else chromeTween = null;
+    if (p < 1) viewSlide = { timer: setTimeout(frame, 16) };
+    else viewSlide = null;
   };
   frame();
 }
@@ -267,7 +267,7 @@ function setChromeShown(on) {
     .filter(({ from, to }) => from.y !== to.y || from.height !== to.height);
   if (!items.length) return;
   for (const { view, from } of items) view.setBounds(from);
-  slideViews(items, on ? MOTION_SLOW : MOTION_BASE, on ? EASE_ENTER : EASE_EXIT);
+  slideViews(items, on ? MOTION_SLOW : MOTION_BASE, on ? EASE_ENTER : EASE_EXIT, { moveOnly: items.length === 1 });
 }
 
 // The page views cover the renderer, so it gets no mouse events over the
@@ -348,7 +348,7 @@ function mosaicIds() {
 // and by opening or closing a tab in Mosaic. Every other caller leaves it out.
 function applyLayout({ animate } = {}) {
   if (!win) return;
-  stopChromeTween(); // a full-screen toolbar slide (setChromeShown) restarts from here
+  stopViewSlide(); // a slide in progress (toolbar, suggestions widget) restarts from here
   applyAudio();
   const anim = motionFor(animate);
   // Back to Mosaic (or the library) before the exit finished: keep every tile.
@@ -1879,9 +1879,24 @@ ipcMain.handle("layout:sidebar", (_e, w) => {
   applyLayout();
 });
 // Space the suggestions widget takes on the right; 0 when it is collapsed.
-ipcMain.handle("layout:panel", (_e, w) => {
+// opts.animate "open" | "close" (motion 10): the page widens or narrows on
+// the same curve as the widget sliding in or out (renderer/styles.css .rail):
+// opening --motion-base with --ease-enter, closing --motion-fast with
+// --ease-exit. The page is resized on every step, as in Safari's sidebar.
+ipcMain.handle("layout:panel", (_e, w, opts = {}) => {
+  const attached = () => [...tabs.values()].filter((t) => t.attached);
+  const before = new Map(attached().map((t) => [t, t.view.getBounds()]));
   sidebarWidth = Math.max(0, Math.min(PANEL_MAX, Math.round(Number(w) || 0)));
   applyLayout();
+  const anim = opts.animate === "open" || opts.animate === "close" ? opts.animate : null;
+  if (!anim || systemPreferences.getAnimationSettings().prefersReducedMotion || htmlFullId) return sidebarWidth;
+  const items = attached()
+    .filter((t) => before.has(t))
+    .map((t) => ({ view: t.view, from: before.get(t), to: t.view.getBounds() }))
+    .filter(({ from, to }) => from.x !== to.x || from.width !== to.width);
+  if (!items.length) return sidebarWidth;
+  for (const { view, from } of items) view.setBounds(from);
+  slideViews(items, anim === "open" ? MOTION_BASE : MOTION_FAST, anim === "open" ? EASE_ENTER : EASE_EXIT);
   return sidebarWidth;
 });
 // opts.snapshot: also return pictures of the visible pages, taken before they

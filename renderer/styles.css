@@ -848,6 +848,19 @@ body.chrome-hidden .chrome { visibility: hidden; transition: visibility 0s linea
 /* ---- Suggestions widget: floats beside the page ---- */
 .shell { grid-template-columns: 1fr var(--panel-space, 356px); }
 .rail { margin: 8px; border: 1px solid var(--line); padding: 0 12px 12px; min-width: 0; }
+/* Motion 10: the widget slides in from the right edge (--motion-base,
+   --ease-enter) and out to it (--motion-fast, --ease-exit); main.js resizes
+   the page on the same curve, so the 8px gap between them holds. 100% + 16px
+   is the widget plus its margins: the whole column. */
+.rail { transition: transform var(--motion-base) var(--ease-enter); }
+.rail.arriving { transform: translateX(calc(100% + 16px)); transition: none; }
+.rail.leaving { transform: translateX(calc(100% + 16px)); transition: transform var(--motion-fast) var(--ease-exit); }
+@media (prefers-reduced-motion: reduce) {
+  /* No movement: the widget fades in; the page changes width at once. */
+  .rail { transition: opacity var(--motion-fast) var(--ease-enter); }
+  .rail.arriving { transform: none; opacity: 0; }
+  .rail.leaving { transform: none; opacity: 0; transition: opacity var(--motion-fast) var(--ease-exit); }
+}
 .panel-tabs {
   position: sticky; top: 0; z-index: 2;
   display: flex; align-items: stretch; height: 44px;
@@ -879,9 +892,12 @@ body.chrome-hidden .chrome { visibility: hidden; transition: visibility 0s linea
   width: min(1040px, calc(100vw - 32px)); height: min(720px, calc(100vh - 32px));
   display: flex; flex-direction: column;
   background: var(--surface); border: 1px solid var(--line);
-  animation: node-fade-in var(--motion-base) var(--ease-enter);
 }
-@media (prefers-reduced-motion: reduce) { .menu-panel { animation-duration: var(--motion-fast); } }
+/* Motion 11: scrim and panel fade in together over the page picture, and out
+   (faster) before the live pages come back (app.js openMenu / closeMenu). */
+#menu-overlay .menu-scrim, #menu-overlay .menu-panel { opacity: 0; transition: opacity var(--motion-fast) var(--ease-exit); }
+#menu-overlay.open .menu-scrim, #menu-overlay.open .menu-panel { opacity: 1; transition: opacity var(--motion-base) var(--ease-enter); }
+@media (prefers-reduced-motion: reduce) { #menu-overlay.open .menu-scrim, #menu-overlay.open .menu-panel { transition-duration: var(--motion-fast); } }
 .menu-head { height: 56px; flex: none; display: flex; align-items: center; gap: 12px; padding: 0 8px 0 20px; border-bottom: 1px solid var(--line); }
 .menu-head h1 { flex: 1; font: 600 15px/1 var(--sans); text-transform: uppercase; letter-spacing: 0.06em; }
 .menu-esc { font: 12px/1 var(--mono); color: var(--ink-muted); }

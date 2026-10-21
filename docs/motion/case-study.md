@@ -166,3 +166,42 @@ The spec mentioned collapsing a wrapper; cards have no wrapper element, so the c
 2. *Timing:* the two halves run in different processes (CSS in the window, the page view in `main.js`); on a busy page the page view may trail the toolbar by a frame.
 3. *Accessibility:* with Reduce motion on, the toolbar appears and disappears without moving, and keyboard focus never lands on the hidden toolbar.
 
+## 10. Suggestions widget
+
+**Decision note.** The widget takes 356px from the page when it opens and gives it back when it closes. Before, both happened in one frame, so the page text re-wrapped with no sign of why. Now the widget slides in from the right edge and the page narrows with it, as if the widget pushes the page aside; closing reverses it. The page edge stays 8px from the widget the whole way, so the two read as one movement. Opening uses `--motion-base` with `--ease-enter`; closing is quicker (`--motion-fast`, `--ease-exit`).
+
+**Before.** The widget appeared or disappeared at once, and the page jumped between 1084px and 1440px wide (on a 1440px window).
+
+**After.**
+
+| Moment | What moves | Timing |
+| --- | --- | --- |
+| Open (toolbar button, ⌘⇧., or a pane that needs it) | The widget slides in from off the right edge; the page narrows on the same curve. | 200ms, `--ease-enter` cubic-bezier(0, 0, 0.2, 1) |
+| Close (toolbar button, collapse button, ⌘⇧.) | The widget slides out to the right; the page widens on the same curve. The widget's column is removed after it has left. | 120ms, `--ease-exit` cubic-bezier(0.4, 0, 1, 1) |
+| Start-up | No animation: the widget is open or closed as it was left. | — |
+| Reduced motion | No movement: the widget fades in; the page changes width at once. | 120ms |
+
+**How it is built.** `renderer/app.js` `setPanelOpen(on, { animate })`: `.rail.arriving` puts the widget one column to the right with no transition, then removing it lets the `transform` transition run; `.rail.leaving` slides it out, and a timer hides it after `--motion-fast`. `main.js` `layout:panel` gets `animate: "open" | "close"` and moves the page with `slideViews()`, the same cubic-bezier stepper as 09. The page is resized on each step, the way Safari resizes the page when its sidebar opens.
+
+**Test results.** Linux: the page's right edge passes through 9 positions when closing and 13 when opening; the gap between the page and the widget stays between 4 and 14px (target 8) during the slide. Tests 22, 05, 12, 19 and 20 pass.
+
+**Three checks.**
+
+1. *State not covered:* clicking the toggle twice quickly restarts the slide from wherever the page edge is.
+2. *Timing:* heavy pages may re-lay themselves out slower than the slide; look for the page edge lagging behind the widget on a large article or a video page.
+3. *Accessibility:* with Reduce motion on, nothing moves; focus goes to the first widget tab when it opens from the keyboard and to the toolbar toggle when it closes.
+
+## 11. Menu fade
+
+**Decision note.** The menu covers the whole window, so it should arrive and leave without a cut. The page is replaced by a still picture of itself before the menu shows, so the picture can dim gradually under the scrim while the panel fades in. On the way out, the scrim and panel fade away first, and the live pages come back only once the picture underneath is fully visible again, so the swap back to the real page is invisible.
+
+**Before.** The scrim appeared at full darkness in one frame (only the panel faded in), and on close the menu vanished at once.
+
+**After.** Open: scrim and panel fade in together over 200ms (`--ease-enter`). Close (Esc, ×, click outside, a menu command): both fade out over 120ms (`--ease-exit`), then the live pages return. Opening again while it is fading out stops the close. Reduced motion: the same fades at 120ms.
+
+**Three checks.**
+
+1. *State not covered:* Capture → Screenshot opens the menu on Library while a page is loading; the picture should still match the page.
+2. *Timing:* on a slow machine the page picture may take longer than 200ms; the fade starts only once the picture is there.
+3. *Accessibility:* focus moves into the menu when it opens and back to the button that opened it as soon as it starts closing.
+

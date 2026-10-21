@@ -1800,7 +1800,7 @@ function showPane(name) {
   // Trail and Settings moved to the menu overlay.
   if (name === "trail" || name === "sources") return openMenu(name === "sources" ? "settings" : "trail");
   if (typeof closeMenu === "function" && menuOpen) closeMenu();
-  if (panelOpen === false) setPanelOpen(true); // undefined until the widget code below has run
+  if (panelOpen === false) setPanelOpen(true, { animate: true }); // undefined until the widget code below has run
   for (const [id, pane] of [["suggest-tab", "suggest"], ["ask-btn", "ask"], ["agent-run-btn", "agent"], ["talk-btn", "talk"]]) {
     const tab = document.getElementById(id);
     tab.setAttribute("aria-selected", String(name === pane));
@@ -2632,9 +2632,9 @@ function panelSpace() {
   return panelOpen ? PANEL_W + PANEL_GAP * 2 : 0;
 }
 
-function sendPanelSpace() {
+function sendPanelSpace(animate = null) {
   const w = panelSpace();
-  if (api?.setPanelWidth) api.setPanelWidth(w);
+  if (api?.setPanelWidth) api.setPanelWidth(w, { animate });
   else api?.setSidebarWidth?.(w);
 }
 
@@ -2661,22 +2661,48 @@ function paintSuggestCount() {
 }
 new MutationObserver(() => panelOpen || paintSuggestCount()).observe(resultsEl, { childList: true });
 
-function setPanelOpen(on, { focus = false } = {}) {
+// Motion 10: animate (user action only) slides the widget in from the right
+// edge or out to it, and main.js resizes the page on the same curve, so the
+// page edge and the widget move together. Closing keeps the widget's column
+// until it has left.
+let railTimer = null;
+function setPanelOpen(on, { focus = false, animate = false } = {}) {
+  const changed = panelOpen !== undefined && panelOpen !== Boolean(on);
   panelOpen = Boolean(on);
   store.set("node.panelOpen", panelOpen);
   seenWhileCollapsed = panelOpen ? null : new Set(resultUrls());
-  railEl.hidden = !panelOpen;
-  shellEl.style.setProperty("--panel-space", `${panelSpace()}px`);
+  const moving = animate && changed;
+  clearTimeout(railTimer);
+  railEl.classList.remove("arriving", "leaving");
+  if (panelOpen) {
+    railEl.hidden = false;
+    shellEl.style.setProperty("--panel-space", `${panelSpace()}px`);
+    if (moving) {
+      railEl.classList.add("arriving");
+      void railEl.offsetWidth; // start from off the right edge
+      railEl.classList.remove("arriving");
+    }
+  } else if (moving) {
+    railEl.classList.add("leaving");
+    railTimer = setTimeout(() => {
+      railEl.hidden = true;
+      railEl.classList.remove("leaving");
+      shellEl.style.setProperty("--panel-space", "0px");
+    }, motionMs("--motion-fast"));
+  } else {
+    railEl.hidden = true;
+    shellEl.style.setProperty("--panel-space", "0px");
+  }
   suggestToggle.classList.toggle("active", panelOpen);
   suggestToggle.setAttribute("aria-pressed", String(panelOpen));
   suggestCollapse.setAttribute("aria-expanded", String(panelOpen));
   if (panelOpen) setTip(suggestToggle, "Hide suggestions");
   paintSuggestCount();
-  sendPanelSpace();
+  sendPanelSpace(moving ? (panelOpen ? "open" : "close") : null);
   if (focus) (panelOpen ? document.querySelector('.ptab[aria-selected="true"]') : suggestToggle)?.focus();
 }
-suggestToggle.addEventListener("click", () => setPanelOpen(!panelOpen));
-suggestCollapse.addEventListener("click", () => setPanelOpen(false, { focus: true }));
+suggestToggle.addEventListener("click", () => setPanelOpen(!panelOpen, { animate: true }));
+suggestCollapse.addEventListener("click", () => setPanelOpen(false, { focus: true, animate: true }));
 document.getElementById("suggest-tab").addEventListener("click", () => showPane("suggest"));
 // Arrow keys move between the widget's tabs.
 document.querySelector(".panel-tabs").addEventListener("keydown", (e) => {
@@ -2731,6 +2757,10 @@ async function renderMenuSection() {
   }
 }
 
+// Motion 11: the menu fades in over a picture of the pages (scrim and panel,
+// --motion-base, --ease-enter) and fades out (--motion-fast, --ease-exit)
+// before the live pages come back, so nothing appears or vanishes in one frame.
+let menuCloseSeq = 0;
 async function openMenu(section = menuSection) {
   if ((section === "settings" || section === "help") && !api?.getSettings) return showNotice("Settings can only be changed in the desktop app.");
   if (section === "trail" && !api?.researchGet) return showNotice("The research trail needs the desktop app.");
@@ -2738,6 +2768,7 @@ async function openMenu(section = menuSection) {
   menuSection = section;
   if (opening) {
     menuOpen = true;
+    menuCloseSeq++; // a close still fading out stops here
     menuReturnFocus = document.activeElement;
     overlayEl.hidden = false;
     holdChrome("menu", true);
@@ -2745,13 +2776,19 @@ async function openMenu(section = menuSection) {
     // The pages are native views drawn above this window's HTML: hide them,
     // and show a picture of them dimmed behind the menu instead.
     const r = api?.setLibraryOpen ? await api.setLibraryOpen(true, { snapshot: true }) : null;
-    menuShots.innerHTML = "";
-    for (const shot of r?.shots || []) {
-      const img = document.createElement("img");
-      img.alt = "";
-      img.src = shot.src;
-      Object.assign(img.style, { left: `${shot.rect.x}px`, top: `${shot.rect.y}px`, width: `${shot.rect.width}px`, height: `${shot.rect.height}px` });
-      menuShots.appendChild(img);
+    if (r?.shots?.length) {
+      menuShots.innerHTML = "";
+      for (const shot of r.shots) {
+        const img = document.createElement("img");
+        img.alt = "";
+        img.src = shot.src;
+        Object.assign(img.style, { left: `${shot.rect.x}px`, top: `${shot.rect.y}px`, width: `${shot.rect.width}px`, height: `${shot.rect.height}px` });
+        menuShots.appendChild(img);
+      }
+    }
+    if (menuOpen) {
+      void overlayEl.offsetWidth;
+      overlayEl.classList.add("open");
     }
   }
   paintMenuNav();
@@ -2762,13 +2799,18 @@ async function openMenu(section = menuSection) {
 async function closeMenu() {
   if (!menuOpen) return;
   menuOpen = false;
-  overlayEl.hidden = true;
-  menuShots.innerHTML = "";
+  const seq = ++menuCloseSeq;
+  overlayEl.classList.remove("open");
   holdChrome("menu", false);
   document.getElementById("menu-btn").setAttribute("aria-expanded", "false");
-  if (api?.setLibraryOpen) await api.setLibraryOpen(false);
   const back = menuReturnFocus?.isConnected && !overlayEl.contains(menuReturnFocus) ? menuReturnFocus : document.getElementById("menu-btn");
   back.focus();
+  await new Promise((r) => setTimeout(r, motionMs("--motion-fast")));
+  if (seq !== menuCloseSeq) return; // opened again while fading out
+  if (api?.setLibraryOpen) await api.setLibraryOpen(false);
+  if (seq !== menuCloseSeq) return;
+  overlayEl.hidden = true;
+  menuShots.innerHTML = "";
 }
 
 document.getElementById("menu-btn").addEventListener("click", () => (menuOpen ? closeMenu() : openMenu()));
@@ -2833,6 +2875,6 @@ function paintChrome(msg) {
 api?.onCommand?.((msg) => {
   if (msg.cmd === "capture") document.getElementById(captureActions[msg.action])?.click();
   else if (msg.cmd === "chrome") paintChrome(msg);
-  else if (msg.cmd === "toggle-suggest") setPanelOpen(!panelOpen, { focus: true });
+  else if (msg.cmd === "toggle-suggest") setPanelOpen(!panelOpen, { focus: true, animate: true });
   else if (msg.cmd === "open-menu") openMenu(msg.section || menuSection);
 });
