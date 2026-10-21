@@ -838,6 +838,10 @@ body.chrome-overlay .chrome {
 /* --os-top: on a Mac the system menu bar and title bar slide down at the top
    edge too, so the toolbar comes to rest just below them (main.js osTop). */
 body.chrome-overlay.shown .chrome { transform: translateY(var(--os-top, 0px)); transition: transform var(--motion-base) var(--ease-enter); }
+/* The space under the macOS bars, in the toolbar's colour: when macOS takes
+   its bars away, this reads as the top of the toolbar, not a gap. */
+body.chrome-overlay .chrome { position: relative; }
+body.chrome-overlay .chrome::before { content: ""; position: absolute; left: 0; right: 0; bottom: 100%; height: var(--os-top, 0px); background: var(--bg-2); }
 @media (prefers-reduced-motion: reduce) {
   body.chrome-overlay .chrome { transform: translateY(var(--os-top, 0px)); opacity: 0; transition: opacity var(--motion-fast) var(--ease-exit); }
   body.chrome-overlay.shown .chrome { transform: translateY(var(--os-top, 0px)); opacity: 1; transition: opacity var(--motion-fast) var(--ease-enter); }

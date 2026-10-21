@@ -264,14 +264,16 @@ let lastMirror = null;
 
 // macOS: in full screen, the pointer at the top edge also makes the system
 // slide down its menu bar and the window's title bar over the top of the
-// window. NODE's toolbar then goes below them, as Safari's does (osTop).
+// window. NODE's toolbar then goes below them, as Safari's does (osTop), and
+// stays there until it hides. macOS takes its bars away on its own timing,
+// which apps cannot see, so the space they leave is filled in the
+// toolbar's colour (renderer/styles.css) instead of moving the toolbar.
 // Their heights are measured while the window is not in full screen:
 // title bar = window height minus content height; menu bar = how far the
 // screen's usable area starts below its top (0 if the menu bar auto-hides,
 // then 24, the standard height, is used).
 const macBars = { title: 28, menu: 24 };
 let osTop = 0; // where the toolbar sits while the system bars are showing
-let osTopTimer = null;
 
 function measureMacBars() {
   if (process.platform !== "darwin" || !win || win.isFullScreen()) return;
@@ -311,10 +313,7 @@ function ensureOverlay() {
 
 function overlayBounds() {
   const { width } = chromeBounds();
-  // While the toolbar is still moving up from below the system bars, keep
-  // the layer tall enough for it (macBarsHeight while osTopTimer runs).
-  const extra = osTop || (osTopTimer ? macBarsHeight() : 0);
-  return { x: 0, y: 0, width, height: CHROME_TOP + extra };
+  return { x: 0, y: 0, width, height: CHROME_TOP + osTop };
 }
 
 // Keep the layer above the pages after a layout change re-adds them.
@@ -380,22 +379,8 @@ function pollChrome() {
   // Shown with Cmd+L and then the pointer reaches the top: the system bars
   // come down now, so move the toolbar below them.
   if (inside && y <= 2 && !osTop && macBarsHeight()) {
-    clearTimeout(osTopTimer);
-    osTopTimer = null;
     osTop = macBarsHeight();
     showOverlay(true);
-  }
-  // The pointer has moved below the system bars, so macOS slides them away:
-  // the toolbar moves up with them, so no gap is left above it. The layer
-  // shrinks after the toolbar has moved, so it is not cut off on the way.
-  if (osTop && inside && y > osTop + 4) {
-    osTop = 0;
-    overlay?.webContents.send("overlay:offset", 0);
-    clearTimeout(osTopTimer);
-    osTopTimer = setTimeout(() => {
-      osTopTimer = null;
-      if (!osTop) raiseOverlay();
-    }, MOTION_BASE + 40);
   }
   if (inside && y <= osTop + CHROME_TOP + 16) {
     clearTimeout(chromeHideTimer);
