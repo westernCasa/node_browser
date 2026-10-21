@@ -32,7 +32,7 @@ Installers for macOS, Windows and Linux are on the [Releases page](https://githu
 
 ## Beta feedback
 
-NODE is in beta. If you have used it for a few days, please fill in the [beta feedback survey](https://github.com/westernCasa/node_browser/issues/new?template=beta-feedback.yml) (about 5 minutes). It decides what gets fixed and built next. No GitHub account, or prefer to answer privately? Use the [anonymous survey](https://forms.gle/XuMGZUzScNYPyP319) instead.
+NODE is in beta. If you have used it for a few days, please fill in the [beta feedback survey](https://github.com/westernCasa/node_browser/issues/new?template=beta-feedback.yml) (about 4 minutes). It decides what gets fixed and built next. No GitHub account, or prefer to answer privately? Use the [anonymous survey](https://forms.gle/XuMGZUzScNYPyP319) instead.
 
 Found a bug? Use Help → Report a Problem in NODE, or open a [bug report](https://github.com/westernCasa/node_browser/issues/new?template=bug-report.yml).
 

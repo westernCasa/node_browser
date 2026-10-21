@@ -1,17 +1,17 @@
 name: Beta feedback survey
-description: Tell us how NODE worked for your research (about 5 minutes).
+description: Tell us how NODE worked for your research (about 4 minutes).
 title: "Beta feedback"
 labels: ["beta-feedback"]
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for testing NODE. This survey takes about 5 minutes and decides what gets fixed and built next.
+        Thanks for testing NODE. This survey takes about 4 minutes and decides what gets fixed and built next.
         Please answer after you have used NODE on at least 2 or 3 days.
 
         Your answers are posted as a public issue on this repository. To answer anonymously, use the [anonymous survey](https://forms.gle/XuMGZUzScNYPyP319) instead.
 
-  # About you
+  # 1. About you
   - type: dropdown
     id: os
     attributes:
@@ -25,17 +25,6 @@ body:
     validations:
       required: true
   - type: dropdown
-    id: version
-    attributes:
-      label: Which version of NODE are you using?
-      description: Settings → Help shows the version.
-      options:
-        - 0.9.0
-        - 0.9.1 or later
-        - Not sure
-    validations:
-      required: true
-  - type: dropdown
     id: days
     attributes:
       label: How many days have you used NODE?
@@ -46,54 +35,25 @@ body:
         - 7 days or more
     validations:
       required: true
-  - type: checkboxes
-    id: research
-    attributes:
-      label: What do you mainly research?
-      options:
-        - label: Academic study or papers
-        - label: OSINT, investigations or journalism
-        - label: Work or market research
-        - label: A hobby or personal interest
-        - label: Software or AI development
-  - type: checkboxes
-    id: setup
-    attributes:
-      label: Which of these did you set up?
-      options:
-        - label: Brave Search API key
-        - label: Local model (Ollama or LM Studio)
-        - label: Grok API key
-        - label: None of these
 
-  # Does it work?
+  # 2. Does NODE work?
   - type: dropdown
-    id: install
+    id: works
     attributes:
-      label: How did installing and first setup go?
+      label: How well did installing and using NODE go?
       options:
-        - Easy
-        - Some trouble, but I worked it out
-        - I needed help or instructions
+        - No problems
+        - Some problems, but I worked around them
+        - A bug stopped me from finishing something
         - I gave up
     validations:
       required: true
-  - type: dropdown
-    id: blocking
-    attributes:
-      label: Did a bug stop you from finishing what you were doing?
-      options:
-        - Never
-        - Once
-        - More than once
-    validations:
-      required: true
 
-  # Does it help?
+  # 3. Does NODE help you research?
   - type: dropdown
     id: suggestions
     attributes:
-      label: How often did a suggestion lead to a page you actually read?
+      label: How often did a suggestion in the sidebar lead to a page you actually read?
       options:
         - Never
         - Sometimes
@@ -120,14 +80,13 @@ body:
     attributes:
       label: Which features did you use?
       options:
-        - label: Suggestions
+        - label: Suggestions sidebar
         - label: Pinning and hiding keywords
         - label: Trail (research sessions and export)
         - label: Mosaic (several tabs at once)
         - label: Research agent
         - label: Ask AI about the page
         - label: Talk (Hacker News and Bluesky discussions)
-        - label: MCP server for AI agents
         - label: Site rules
         - label: Library (Shot, Save, Media)
         - label: Google window
@@ -136,22 +95,21 @@ body:
     attributes:
       label: If you could keep only one feature, which would it be?
       options:
-        - Suggestions
+        - Suggestions sidebar
         - Pinning and hiding keywords
         - Trail
         - Mosaic
         - Research agent
         - Ask AI about the page
         - Talk
-        - MCP server for AI agents
         - Site rules
         - Library
         - Google window
-        - Something else (say below)
+        - Something else
     validations:
       required: true
 
-  # Would you keep using it?
+  # 4. Would you keep using it?
   - type: dropdown
     id: disappointed
     attributes:
@@ -181,7 +139,7 @@ body:
     attributes:
       label: What would need to change for NODE to be your main browser?
 
-  # Problems and follow-up
+  # 5. Problems and follow-up
   - type: textarea
     id: bug
     attributes:
@@ -194,8 +152,16 @@ body:
       description: "From 0.9.1: Settings → Help → Copy usage summary, then paste it here. Counts only: no pages, addresses or keywords."
       render: text
   - type: checkboxes
-    id: call
+    id: setup
     attributes:
-      label: Follow-up
+      label: Which of these did you set up? (optional)
       options:
-        - label: I am open to a 15-minute call. You can reply to this issue to set it up.
+        - label: Brave Search API key
+        - label: Local model (Ollama or LM Studio)
+        - label: Grok API key
+        - label: None of these
+  - type: input
+    id: reddit
+    attributes:
+      label: Can we contact you on Reddit for more feedback? If so, enter your Reddit username.
+      placeholder: u/
