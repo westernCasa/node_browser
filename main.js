@@ -1721,7 +1721,7 @@ function buildMenu() {
           label: "Report a Problem…",
           click: () => {
             clipboard.writeText(diagnostics());
-            createTab("https://github.com/westernCasa/node_browser/issues/new");
+            createTab("https://github.com/westernCasa/node_browser/issues/new?template=bug-report.yml");
             sendUi("notice", { message: "Diagnostics copied. Paste them into the issue, with what you were doing when it went wrong." });
           },
         },

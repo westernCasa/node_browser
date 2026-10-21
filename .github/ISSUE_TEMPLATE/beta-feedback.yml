@@ -1,0 +1,201 @@
+name: Beta feedback survey
+description: Tell us how NODE worked for your research (about 5 minutes).
+title: "Beta feedback"
+labels: ["beta-feedback"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing NODE. This survey takes about 5 minutes and decides what gets fixed and built next.
+        Please answer after you have used NODE on at least 2 or 3 days.
+
+        Your answers are posted as a public issue on this repository.
+
+  # About you
+  - type: dropdown
+    id: os
+    attributes:
+      label: Which computer do you use NODE on?
+      options:
+        - Windows
+        - Mac with Apple chip
+        - Mac with Intel chip
+        - Linux
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: version
+    attributes:
+      label: Which version of NODE are you using?
+      description: Settings → Help shows the version.
+      options:
+        - 0.9.0
+        - 0.9.1 or later
+        - Not sure
+    validations:
+      required: true
+  - type: dropdown
+    id: days
+    attributes:
+      label: How many days have you used NODE?
+      options:
+        - Less than 1 day
+        - 1 to 2 days
+        - 3 to 6 days
+        - 7 days or more
+    validations:
+      required: true
+  - type: checkboxes
+    id: research
+    attributes:
+      label: What do you mainly research?
+      options:
+        - label: Academic study or papers
+        - label: OSINT, investigations or journalism
+        - label: Work or market research
+        - label: A hobby or personal interest
+        - label: Software or AI development
+  - type: checkboxes
+    id: setup
+    attributes:
+      label: Which of these did you set up?
+      options:
+        - label: Brave Search API key
+        - label: Local model (Ollama or LM Studio)
+        - label: Grok API key
+        - label: None of these
+
+  # Does it work?
+  - type: dropdown
+    id: install
+    attributes:
+      label: How did installing and first setup go?
+      options:
+        - Easy
+        - Some trouble, but I worked it out
+        - I needed help or instructions
+        - I gave up
+    validations:
+      required: true
+  - type: dropdown
+    id: blocking
+    attributes:
+      label: Did a bug stop you from finishing what you were doing?
+      options:
+        - Never
+        - Once
+        - More than once
+    validations:
+      required: true
+
+  # Does it help?
+  - type: dropdown
+    id: suggestions
+    attributes:
+      label: How often did a suggestion lead to a page you actually read?
+      options:
+        - Never
+        - Sometimes
+        - Often
+        - Most of the time
+        - I did not use the suggestions
+    validations:
+      required: true
+  - type: dropdown
+    id: speed
+    attributes:
+      label: Compared with your usual browser, finding related sources in NODE was
+      options:
+        - Much slower
+        - Slower
+        - About the same
+        - Faster
+        - Much faster
+        - I did not compare
+    validations:
+      required: true
+  - type: checkboxes
+    id: features
+    attributes:
+      label: Which features did you use?
+      options:
+        - label: Suggestions
+        - label: Pinning and hiding keywords
+        - label: Trail (research sessions and export)
+        - label: Mosaic (several tabs at once)
+        - label: Research agent
+        - label: Ask AI about the page
+        - label: Talk (Hacker News and Bluesky discussions)
+        - label: MCP server for AI agents
+        - label: Site rules
+        - label: Library (Shot, Save, Media)
+        - label: Google window
+  - type: dropdown
+    id: keep-one
+    attributes:
+      label: If you could keep only one feature, which would it be?
+      options:
+        - Suggestions
+        - Pinning and hiding keywords
+        - Trail
+        - Mosaic
+        - Research agent
+        - Ask AI about the page
+        - Talk
+        - MCP server for AI agents
+        - Site rules
+        - Library
+        - Google window
+        - Something else (say below)
+    validations:
+      required: true
+
+  # Would you keep using it?
+  - type: dropdown
+    id: disappointed
+    attributes:
+      label: How would you feel if you could no longer use NODE?
+      options:
+        - Very disappointed
+        - Somewhat disappointed
+        - Not disappointed
+    validations:
+      required: true
+  - type: textarea
+    id: benefit
+    attributes:
+      label: What is the main benefit you get from NODE?
+  - type: dropdown
+    id: main-browser
+    attributes:
+      label: Did you use NODE as your main browser for a full day?
+      options:
+        - Yes, and I am still using it
+        - Yes, but I switched back
+        - "No"
+    validations:
+      required: true
+  - type: textarea
+    id: change
+    attributes:
+      label: What would need to change for NODE to be your main browser?
+
+  # Problems and follow-up
+  - type: textarea
+    id: bug
+    attributes:
+      label: What was the biggest bug or annoyance?
+      description: If you can, also use Help → Report a Problem in NODE so the diagnostics are attached.
+  - type: textarea
+    id: usage
+    attributes:
+      label: Usage summary (optional)
+      description: "From 0.9.1: Settings → Help → Copy usage summary, then paste it here. Counts only: no pages, addresses or keywords."
+      render: text
+  - type: checkboxes
+    id: call
+    attributes:
+      label: Follow-up
+      options:
+        - label: I am open to a 15-minute call. You can reply to this issue to set it up.

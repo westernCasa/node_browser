@@ -30,6 +30,12 @@ NODE was called Scout until October 2026. The bundle ID `app.scout.browser` and 
 
 Installers for macOS, Windows and Linux are on the [Releases page](https://github.com/westernCasa/node_browser/releases) once a version is published. NODE updates itself from there. Until the builds are signed, macOS asks you to right-click NODE → Open the first time. How releases are made: [docs/09-releasing.md](docs/09-releasing.md).
 
+## Beta feedback
+
+NODE is in beta. If you have used it for a few days, please fill in the [beta feedback survey](https://github.com/westernCasa/node_browser/issues/new?template=beta-feedback.yml) (about 5 minutes). It decides what gets fixed and built next.
+
+Found a bug? Use Help → Report a Problem in NODE, or open a [bug report](https://github.com/westernCasa/node_browser/issues/new?template=bug-report.yml).
+
 ## Run from source
 
 This is a desktop browser (Electron), not a website.
