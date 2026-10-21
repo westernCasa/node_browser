@@ -174,6 +174,13 @@ const shoot = (name) => {
   const curve = await inLayer("getComputedStyle(document.querySelector('header.chrome')).transitionTimingFunction");
   check("it comes down on the --ease-enter cubic-bezier", String(curve).startsWith("cubic-bezier(0, 0, 0.2, 1)"), curve);
   shoot("06-fullscreen-revealed");
+  // macOS: the system menu bar and title bar slide down too; the toolbar rests below them.
+  await app.evaluate(({ webContents }) => webContents.getAllWebContents().find((c) => c.getURL().endsWith("chrome-overlay.html")).send("overlay:offset", 52));
+  await sleep(400);
+  const below = await inLayer("new DOMMatrix(getComputedStyle(document.querySelector('header.chrome')).transform).m42");
+  check("with the macOS bars showing, the toolbar rests below them", Math.round(below) === 52, `toolbar top at ${below}px`);
+  await app.evaluate(({ webContents }) => webContents.getAllWebContents().find((c) => c.getURL().endsWith("chrome-overlay.html")).send("overlay:offset", 0));
+  await sleep(300);
 
   // Clicks and typing in the layer reach the real toolbar.
   const panelBefore = await ui.evaluate(() => document.getElementById("suggest-toggle").getAttribute("aria-pressed"));

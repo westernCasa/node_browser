@@ -149,7 +149,7 @@ The spec mentioned collapsing a wrapper; cards have no wrapper element, so the c
 | Moment | What moves | Timing |
 | --- | --- | --- |
 | Entering full screen | The page fills the window at once; the toolbar stays on top of it for 1.8 s with the hint, then slides up. | — |
-| Toolbar shows (pointer at the top edge, Cmd+L, Cmd+F) | The toolbar slides down over the top of the page. The page does not move. | 200ms, `--ease-enter` cubic-bezier(0, 0, 0.2, 1) |
+| Toolbar shows (pointer at the top edge, Cmd+L, Cmd+F) | The toolbar slides down over the top of the page. The page does not move. On a Mac, when the pointer brings it down, it rests just below the system menu bar and title bar, which come down at the same time. | 200ms, `--ease-enter` cubic-bezier(0, 0, 0.2, 1) |
 | Toolbar hides (pointer more than 16px below it for 400ms) | The toolbar slides up off the page. | 120ms, `--ease-exit` cubic-bezier(0.4, 0, 1, 1) |
 | Leaving full screen | The layout is restored at once while macOS animates the window. | — |
 | A video's own full screen | The toolbar never shows. | — |
@@ -163,7 +163,7 @@ The spec mentioned collapsing a wrapper; cards have no wrapper element, so the c
 
 **Three checks.**
 
-1. *State not covered:* on a Mac, the system menu bar also slides down at the top edge in full screen and may cover the tab row; check whether the tab row is still usable.
+1. *State not covered:* on a Mac, when the pointer reaches the top edge, macOS slides its menu bar and the window's title bar down over the window too. Found on Sven's Mac (2026-10-20): they covered the tab row and part of the address row. Fixed: when the pointer brings the toolbar down, it comes to rest just below those bars (`osTop` in `main.js`: title bar and menu bar heights measured while the window is not in full screen, 52pt on a 13-inch MacBook Air). Still to check: when the pointer moves down onto NODE's toolbar, macOS may slide its bars away and leave a gap above the toolbar until the toolbar hides.
 2. *Timing:* the copy can lag the real toolbar by up to 120ms (for example a tab title changing while the toolbar is shown).
 3. *Accessibility:* with Reduce motion on, the toolbar fades instead of sliding; keyboard focus in the toolbar keeps it on screen.
 

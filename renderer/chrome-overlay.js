@@ -52,6 +52,8 @@ addEventListener("mouseup", () => {
   if (pending) setTimeout(() => pending && apply(pending), 0);
 }, true);
 
+// macOS: the system menu bar and title bar are showing above; sit below them.
+api.onOffset((px) => document.body.style.setProperty("--os-top", `${px}px`));
 api.onShow((on) => {
   document.body.classList.toggle("shown", on);
   if (!on && bar.contains(document.activeElement)) document.activeElement.blur();

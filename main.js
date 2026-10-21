@@ -262,6 +262,35 @@ let overlayTimer = null;
 let overlayHold = false; // a field in the toolbar layer has focus
 let lastMirror = null;
 
+// macOS: in full screen, the pointer at the top edge also makes the system
+// slide down its menu bar and the window's title bar over the top of the
+// window. NODE's toolbar then goes below them, as Safari's does (osTop).
+// Their heights are measured while the window is not in full screen:
+// title bar = window height minus content height; menu bar = how far the
+// screen's usable area starts below its top (0 if the menu bar auto-hides,
+// then 24, the standard height, is used).
+const macBars = { title: 28, menu: 24 };
+let osTop = 0; // where the toolbar sits while the system bars are showing
+
+function measureMacBars() {
+  if (process.platform !== "darwin" || !win || win.isFullScreen()) return;
+  const title = win.getBounds().height - win.getContentBounds().height;
+  if (title > 0 && title < 80) macBars.title = title;
+  const d = screen.getDisplayMatching(win.getBounds());
+  const menu = d.workArea.y - d.bounds.y;
+  if (menu > 0 && menu < 80) macBars.menu = menu;
+}
+
+// How much of the window the system bars cover when they slide down. On a
+// screen with a camera notch the full-screen window may start below the
+// menu bar; then only the title bar covers it.
+function macBarsHeight() {
+  if (process.platform !== "darwin" || !win) return 0;
+  const cb = win.getContentBounds();
+  const d = screen.getDisplayMatching(cb);
+  return Math.max(0, d.bounds.y + macBars.menu - cb.y) + macBars.title;
+}
+
 function ensureOverlay() {
   if (overlay && !overlay.webContents.isDestroyed()) return overlay;
   overlay = new WebContentsView({
@@ -270,6 +299,7 @@ function ensureOverlay() {
   overlay.setBackgroundColor("#00000000");
   overlay.webContents.on("did-finish-load", () => {
     if (lastMirror) overlay.webContents.send("overlay:mirror", lastMirror);
+    overlay.webContents.send("overlay:offset", osTop);
     if (overlayAttached && chromeShown && immersive) overlay.webContents.send("overlay:show", true);
   });
   overlay.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
@@ -280,7 +310,7 @@ function ensureOverlay() {
 
 function overlayBounds() {
   const { width } = chromeBounds();
-  return { x: 0, y: 0, width, height: CHROME_TOP };
+  return { x: 0, y: 0, width, height: CHROME_TOP + osTop };
 }
 
 // Keep the layer above the pages after a layout change re-adds them.
@@ -295,6 +325,7 @@ function showOverlay(on, { instant = false } = {}) {
   overlayTimer = null;
   if (on) {
     ensureOverlay();
+    overlay.webContents.send("overlay:offset", osTop);
     overlay.setBounds(overlayBounds());
     if (!overlayAttached) {
       win.contentView.addChildView(overlay);
@@ -310,6 +341,7 @@ function showOverlay(on, { instant = false } = {}) {
     if (!overlayAttached || (chromeShown && immersive && !htmlFullId)) return;
     win.contentView.removeChildView(overlay);
     overlayAttached = false;
+    osTop = 0;
   };
   if (instant) detach();
   else overlayTimer = setTimeout(detach, MOTION_FAST + 40); // after the slide up
@@ -333,10 +365,21 @@ function pollChrome() {
   const inside = p.x >= b.x && p.x < b.x + b.width && p.y >= b.y && p.y < b.y + b.height;
   const y = p.y - b.y;
   if (!chromeShown) {
-    if (inside && y <= 2) setChromeShown(true);
+    if (inside && y <= 2) {
+      clearTimeout(overlayTimer); // still sliding away: it comes straight back
+      overlayTimer = null;
+      osTop = macBarsHeight(); // the system bars come down too (macOS)
+      setChromeShown(true);
+    }
     return;
   }
-  if (inside && y <= CHROME_TOP + 16) {
+  // Shown with Cmd+L and then the pointer reaches the top: the system bars
+  // come down now, so move the toolbar below them.
+  if (inside && y <= 2 && !osTop && macBarsHeight()) {
+    osTop = macBarsHeight();
+    showOverlay(true);
+  }
+  if (inside && y <= osTop + CHROME_TOP + 16) {
     clearTimeout(chromeHideTimer);
     chromeHideTimer = null;
   } else if (!chromeHideTimer) {
@@ -369,6 +412,7 @@ function leaveImmersive() {
   chromeShown = true;
   overlayHold = false;
   showOverlay(false, { instant: true });
+  osTop = 0;
   sendUi("chrome", { immersive: false, shown: true });
   applyLayout();
 }
@@ -1818,6 +1862,10 @@ function createWindow() {
     if (cmd === "browser-forward") gestureNav(tabs.get(activeId), "forward");
   });
   win.on("resize", applyLayout);
+  // Title and menu bar heights for the full-screen toolbar (macOS).
+  win.once("ready-to-show", measureMacBars);
+  win.on("resized", measureMacBars);
+  win.on("moved", measureMacBars);
   win.on("enter-full-screen", enterImmersive);
   win.on("leave-full-screen", leaveImmersive);
   win.webContents.on("console-message", (details) => {

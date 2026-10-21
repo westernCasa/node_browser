@@ -835,10 +835,12 @@ body.chrome-overlay .chrome {
   transform: translateY(-100%);
   transition: transform var(--motion-fast) var(--ease-exit);
 }
-body.chrome-overlay.shown .chrome { transform: none; transition: transform var(--motion-base) var(--ease-enter); }
+/* --os-top: on a Mac the system menu bar and title bar slide down at the top
+   edge too, so the toolbar comes to rest just below them (main.js osTop). */
+body.chrome-overlay.shown .chrome { transform: translateY(var(--os-top, 0px)); transition: transform var(--motion-base) var(--ease-enter); }
 @media (prefers-reduced-motion: reduce) {
-  body.chrome-overlay .chrome { transform: none; opacity: 0; transition: opacity var(--motion-fast) var(--ease-exit); }
-  body.chrome-overlay.shown .chrome { opacity: 1; transition: opacity var(--motion-fast) var(--ease-enter); }
+  body.chrome-overlay .chrome { transform: translateY(var(--os-top, 0px)); opacity: 0; transition: opacity var(--motion-fast) var(--ease-exit); }
+  body.chrome-overlay.shown .chrome { transform: translateY(var(--os-top, 0px)); opacity: 1; transition: opacity var(--motion-fast) var(--ease-enter); }
 }
 
 /* ---- Suggestions widget: floats beside the page ---- */
