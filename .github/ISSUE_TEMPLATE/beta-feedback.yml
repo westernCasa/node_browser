@@ -86,7 +86,8 @@ body:
         - label: Mosaic (several tabs at once)
         - label: Research agent
         - label: Ask AI about the page
-        - label: Talk (Hacker News and Bluesky discussions)
+        - label: Talk (Hacker News discussions)
+        - label: MCP server for AI agents
         - label: Site rules
         - label: Library (Shot, Save, Media)
         - label: Google window
@@ -102,6 +103,7 @@ body:
         - Research agent
         - Ask AI about the page
         - Talk
+        - MCP server for AI agents
         - Site rules
         - Library
         - Google window
