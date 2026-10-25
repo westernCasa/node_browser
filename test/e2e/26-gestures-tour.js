@@ -162,17 +162,28 @@ const zoomOf = (app, match) => app.evaluate(({ webContents }, m) => webContents.
   await app.evaluate(({ app }) => app.quit());
   await sleep(1500);
 
-  // The one-time offer (NODE_TOUR=1 stands for a normal start).
+  // The offer (NODE_TOUR=1 stands for a normal start). startTour above marked it
+  // answered, so start from scratch.
   ({ app, ui } = await launch({ NODE_TOUR: "1" }));
-  await sleep(2500);
-  const offerUd = await ui.evaluate(() => { try { localStorage.removeItem("node.tour"); } catch (_) {} return true; });
-  void offerUd;
+  await ui.evaluate(() => { try { localStorage.removeItem("node.tour"); } catch (_) {} });
+  await app.evaluate(({ app }) => app.quit());
+  await sleep(1500);
+  // Another notice first: the offer waits for it, then shows.
+  ({ app, ui } = await launch({ NODE_TOUR: "1" }));
+  await ui.evaluate(() => showNotice("Blocked a popup: http://example.com/ad.html", [{ label: "Open in new tab", run: () => {} }]));
+  await sleep(3500);
+  check("the offer waits while another notice is showing", /Blocked a popup/.test(await ui.textContent("#notice")));
+  await ui.click("#notice button:has-text('Dismiss')");
+  await sleep(3500);
+  check("...then shows", /2-minute tutorial/.test(await ui.textContent("#notice")));
+  // Replaced by another notice before an answer: it comes back next start.
+  await ui.evaluate(() => showNotice("Something else"));
   await app.evaluate(({ app }) => app.quit());
   await sleep(1500);
   ({ app, ui } = await launch({ NODE_TOUR: "1" }));
   await sleep(3000);
   const offer = await ui.textContent("#notice");
-  check("after an update, the tutorial is offered once", /2-minute tutorial/.test(offer) && (await ui.isVisible("#notice button:has-text('Start tutorial')")), offer.slice(0, 60));
+  check("an offer that was never answered comes back on the next start", /2-minute tutorial/.test(offer) && (await ui.isVisible("#notice button:has-text('Start tutorial')")), offer.slice(0, 60));
   await ui.click("#notice button:has-text('Not now')");
   await app.evaluate(({ app }) => app.quit());
   await sleep(1500);

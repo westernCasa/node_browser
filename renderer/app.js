@@ -3346,20 +3346,28 @@ coachEl.addEventListener("click", (e) => {
 });
 document.getElementById("tour-start")?.addEventListener("click", () => startTour());
 
-// Offered once: after an update to a version with the tutorial, or after setup.
-async function maybeTourPrompt(afterSetup = false) {
-  if (!api?.tourAuto || store.get("node.tour", "") === "seen") return;
+// Offered after an update to a version with the tutorial, or after setup,
+// until the user answers it (Start tutorial or Not now). Another notice in the
+// sidebar (the Brave key reminder, a blocked popup) goes first: the offer waits
+// until the sidebar is free, and if a later notice replaces it, it comes back
+// on the next start.
+const TOUR_OFFER = "New: pinch to move between one tab, Mosaic and all your tabs, and choose which tabs Mosaic shows. A 2-minute tutorial shows how.";
+async function maybeTourPrompt(afterSetup = false, tries = 0) {
+  if (!api?.tourAuto || store.get("node.tour", "") === "seen" || tourOn()) return;
   if (!(await api.tourAuto())) return;
   if (!afterSetup) {
     const settings = await api.getSettings();
     if (!settings.firstRunDone) return; // the setup screen offers it when it closes
   }
-  store.set("node.tour", "seen");
-  showNotice(
-    "New: pinch to move between one tab, Mosaic and all your tabs, and choose which tabs Mosaic shows. A 2-minute tutorial shows how.",
-    [{ label: "Start tutorial", run: () => startTour() }, { label: "Not now", run: () => {} }],
-    { dismiss: false }
-  );
+  if (!noticeEl.hidden || menuOpen || ovOpen) {
+    if (tries < 40) setTimeout(() => maybeTourPrompt(afterSetup, tries + 1).catch(() => {}), 3000);
+    return;
+  }
+  const answer = (run) => () => {
+    store.set("node.tour", "seen");
+    run();
+  };
+  showNotice(TOUR_OFFER, [{ label: "Start tutorial", run: answer(() => startTour()) }, { label: "Not now", run: answer(() => {}) }], { dismiss: false });
 }
 setTimeout(() => maybeTourPrompt().catch(() => {}), 2500);
 
