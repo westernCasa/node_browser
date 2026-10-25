@@ -26,15 +26,21 @@ jobs:
           sudo apt-get install -y xvfb
       - name: End-to-end tests
         run: |
+          set +e +o pipefail
           (cd test/e2e/site && python3 -m http.server 8765 >/dev/null 2>&1 &)
           sleep 1
           mkdir -p e2e-out
           for t in 01-basics 03-rules-and-fast-results 04-find-zoom-history 05-research-session 09-playback-limit 12-pip-bookmarks-adblock 13-ask-ai 15-agents-mcp 16-research-agent 17-talk 18-redteam 19-browser-basics 20-first-run-and-help 21-rules-editor 22-ui-refresh 23-beta-survey; do
             echo "::group::$t"
-            xvfb-run -a node test/e2e/$t.js "$PWD/e2e-out"
-            status=$?
+            xvfb-run -a node test/e2e/$t.js "$PWD/e2e-out" 2>&1 | tee e2e-out/$t.log
+            status=${PIPESTATUS[0]}
             echo "::endgroup::"
-            if [ "$status" != "0" ]; then echo "$t failed"; exit 1; fi
+            if [ "$status" != "0" ]; then
+              # Failed checks and the last lines as annotations, readable without the full log.
+              grep -E "✗|ERROR|Error" e2e-out/$t.log | head -8 | while IFS= read -r l; do echo "::error title=$t::$l"; done
+              echo "::error title=$t (end)::$(tail -3 e2e-out/$t.log | tr '\n' ' ')"
+              exit 1
+            fi
           done
       - uses: actions/upload-artifact@v4
         if: failure()
@@ -61,15 +67,21 @@ jobs:
       - name: End-to-end tests
         shell: bash
         run: |
+          set +e +o pipefail
           (cd test/e2e/site && python -m http.server 8765 --bind 127.0.0.1 >/dev/null 2>&1 &)
           sleep 2
           mkdir -p e2e-out
           for t in 01-basics 05-research-session 19-browser-basics 20-first-run-and-help 22-ui-refresh 23-beta-survey; do
             echo "::group::$t"
-            node test/e2e/$t.js "$PWD/e2e-out"
-            status=$?
+            node test/e2e/$t.js "$PWD/e2e-out" 2>&1 | tee e2e-out/$t.log
+            status=${PIPESTATUS[0]}
             echo "::endgroup::"
-            if [ "$status" != "0" ]; then echo "$t failed"; exit 1; fi
+            if [ "$status" != "0" ]; then
+              # Failed checks and the last lines as annotations, readable without the full log.
+              grep -E "✗|ERROR|Error" e2e-out/$t.log | head -8 | while IFS= read -r l; do echo "::error title=$t::$l"; done
+              echo "::error title=$t (end)::$(tail -3 e2e-out/$t.log | tr '\n' ' ')"
+              exit 1
+            fi
           done
       - uses: actions/upload-artifact@v4
         if: failure()
