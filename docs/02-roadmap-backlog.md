@@ -1,6 +1,6 @@
 # NODE Browser: Roadmap and Backlog
 
-Last updated: 2026-10-25 (B69 Mosaic tile choice and B71 tab overview built; B69 and B70 added from tester requests). The editable version (with status dropdowns) is in the review doc: https://claude.ai/code/artifact/b6ec4995-3117-41d0-a3c4-948c16e699fc
+Last updated: 2026-10-25 (B67-B71 merged into main after 0.9.1: keyword noise, agent reader lists, Mosaic tile choice, video loop, tab overview). The editable version (with status dropdowns) is in the review doc: https://claude.ai/code/artifact/b6ec4995-3117-41d0-a3c4-948c16e699fc
 
 ## Roadmap
 
@@ -88,7 +88,7 @@ Effort: XS under 1 hour, S half a day, M 1-2 days, L 3+ days. Finding IDs (C1, K
 | B67 | 4 | Keyword noise: leave out the signed-in user's own name taken from a site's interface (X showed "Isaac Sven Manzanarez" on every page), keyboard-shortcut help text ("shortcuts", "keyboard"), and image alt text or file names that describe interface graphics ("Brave Logo Small", "Snoo Map", "Google Button", "Semi Protection Shackle"). Add these cases to `test/keywords-eval.js`. Found in the MCP test (2026-10-18) | P1 | S | Done (PR #5 merged), not released |
 | B68 | 4.5 | Agent reader (`core/markdown.js`): See also, References, Further reading and Categories lists come back as empty bullets. Keep link-only and citation list items (link text, or drop the empty list). Found with `fetch_page` on a Wikipedia article (2026-10-18) | P2 | XS | Done (PR #5 merged), not released |
 | B69 | 4 | Mosaic: choose which tabs show, and at most 4 tiles. Right-click a tab → Show in Mosaic / Remove from Mosaic / Show All Tabs in Mosaic; chosen tabs carry a small Mosaic mark and are kept across restarts. Settings → Tabs → Tiles in Mosaic: up to 4 (default), 6, 9 or every tab. Opening a tab without a tile leaves Mosaic. Tester request on Reddit (2026-10-21), and Mosaic is the favourite feature in the first survey response | P1 | M | Done (PR #4 merged), not released |
-| B70 | 4 | Loop a section of a video, for example one minute, in a tab. Tester request on Reddit (2026-10-21) | P2 | M | Done on branch `video-loop` (PR #6), not released |
+| B70 | 4 | Loop a section of a video, for example one minute, in a tab. Tester request on Reddit (2026-10-21) | P2 | M | Done (PR #6 merged), not released |
 | B71 | 4 | Tab overview: zoom out to every open tab as a grid of pictures and pick the Mosaic tiles like selecting photos (click or Space picks, a check and a signal border mark picked tabs, Done shows them in Mosaic, Esc cancels). Opens with ⌘⇧\\ / Ctrl+Shift+\\, View → Choose Tabs for Mosaic…, right-click on the Mosaic button or on a tab. Sven's idea (2026-10-25), builds on B69 | P1 | M | Done (PR #4 merged), not released |
 | B60 | 5 | NODE for Chromium extension | — | — | Dropped 2026-10-14: missing must-have features |
 | B59 | 6 | Research agent v3: gated actions with confirmation (forms, downloads) | P2 | L | Not started |
