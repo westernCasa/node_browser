@@ -117,10 +117,14 @@ function toMarkdown(maxChars) {
     const lines = [];
     for (const li of el.children) {
       if (li.tagName.toLowerCase() !== "li" || hidden(li)) continue;
-      const own = document.createElement("div");
-      for (const ch of li.childNodes) if (!(ch.nodeType === 1 && /^(ul|ol)$/i.test(ch.tagName))) own.appendChild(ch.cloneNode(true));
-      lines.push(`${"  ".repeat(depth)}${ordered ? `${i++}.` : "-"} ${inline(own).trim()}`);
-      for (const sub of li.children) if (/^(ul|ol)$/i.test(sub.tagName)) lines.push(list(sub, depth + 1));
+      // The item's own content, read in place: copies outside the page have no
+      // style, so their links looked hidden and came back empty (B68).
+      const own = { childNodes: [...li.childNodes].filter((ch) => !(ch.nodeType === 1 && /^(ul|ol)$/i.test(ch.tagName))) };
+      const text = inline(own).trim();
+      const subs = [...li.children].filter((sub) => /^(ul|ol)$/i.test(sub.tagName)).map((sub) => list(sub, depth + 1)).filter(Boolean);
+      if (!text && !subs.length) continue; // nothing readable: no empty bullet
+      if (text) lines.push(`${"  ".repeat(depth)}${ordered ? `${i++}.` : "-"} ${text}`);
+      lines.push(...subs);
     }
     return lines.join("\n");
   };
