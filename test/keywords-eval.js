@@ -166,5 +166,49 @@ for (const c of cases) {
   check("Bot-check page gives no keywords", res.blocked && !res.ranked.length, `| blocked=${res.blocked}`);
 }
 
+// B67: interface graphics, keyboard-shortcut help and the signed-in user's own
+// name stay out of the keywords (found in the MCP test, 2026-10-18).
+{
+  const res = analyzePage(
+    {
+      url: "https://en.wikipedia.org/wiki/Geothermal_gradient",
+      title: "Geothermal gradient - Wikipedia",
+      headings: ["Geothermal gradient", "Variations"],
+      blocks: [
+        "Geothermal gradient is the rate of change in temperature with respect to increasing depth in Earth's interior. Away from tectonic plate boundaries it is about 25 degrees Celsius per kilometre of depth.",
+        "Heat flow in the crust comes from radiogenic decay of uranium, thorium and potassium, and from the cooling of the mantle.",
+        "Keyboard shortcuts",
+        "Press ? to view keyboard shortcuts",
+      ],
+      names: ["Semi Protection Shackle", "Wikipedia Logo"],
+      mediaMeta: ["Semi Protection Shackle", "Brave Logo Small", "Google Button | Snoo Map", "Geothermal gradient map of the United States"],
+    },
+    { context: new KeywordContext(), limit: 12 }
+  );
+  const terms = res.ranked.map((r) => r.term.toLowerCase());
+  const bad = terms.filter((t) => /shackle|protection|logo|button|snoo|brave|keyboard|shortcut/.test(t));
+  check("Interface graphics and shortcut help left out", !bad.length && terms.includes("geothermal"), "| " + terms.slice(0, 8).join(", ") + (bad.length ? " | should not have: " + bad.join(", ") : ""));
+}
+{
+  const ctx = new KeywordContext();
+  const xPage = (n, text) => ({
+    url: `https://x.com/someone/status/${n}`,
+    title: `${text.split(" ").slice(0, 4).join(" ")} / X`,
+    headings: ["Post"],
+    blocks: [text],
+    names: ["Isaac Sven Manzanarez", ...(n === 4 ? ["Hello Games"] : [])],
+    mediaMeta: ["Isaac Sven Manzanarez"],
+  });
+  analyzePage(xPage(1, "Sourdough hydration above 80 percent needs strong flour and long cold fermentation to hold its shape."), { context: ctx });
+  analyzePage(xPage(2, "Volcanic geothermal fields in Iceland supply most of the heat for homes in Reykjavik."), { context: ctx });
+  analyzePage(xPage(3, "Procedural generation in games creates planets from seeds instead of storing every world by hand."), { context: ctx });
+  const res = analyzePage(xPage(4, "Hello Games shipped another No Man's Sky update with new procedural planets and creature types."), { context: ctx });
+  const terms = res.ranked.slice(0, 8).map((r) => r.term.toLowerCase());
+  check("Signed-in user's name left out after 3 pages of a site", !terms.some((t) => /isaac|sven|manzanarez/.test(t)) && terms.some((t) => t.includes("hello games") || t.includes("procedural")), "| " + terms.join(", "));
+  // The same name, as the subject of a page (in its title), still counts.
+  const about = analyzePage({ url: "https://x.com/isaac", title: "Isaac Sven Manzanarez (@isaac) / X", headings: ["Isaac Sven Manzanarez"], blocks: ["Designer and DJ. Posts about research tools and browsers."], names: ["Isaac Sven Manzanarez"] }, { context: ctx });
+  check("...but still counts when the page is about that person", about.ranked.slice(0, 5).some((r) => /isaac sven manzanarez/i.test(r.term)), "| " + about.ranked.slice(0, 5).map((r) => r.term).join(", "));
+}
+
 console.log(failed ? `${failed} failed` : "all passed");
 process.exit(failed ? 1 : 0);

@@ -32,7 +32,7 @@ const WEB_NOISE = new Set(
   original source sources external links link references reference citation citations needed wikipedia
   encyclopedia wiki talk help portal contents random contribute tools languages create toggle hide show
   jump list lists category categories file media advertisement ads sponsored learn today yesterday min mins
-  ago min read minutes hours days week weeks month months year years`.split(/\s+/)
+  ago min read minutes hours days week weeks month months year years shortcut shortcuts hotkey hotkeys`.split(/\s+/)
 );
 
 // Very common English words that are rarely useful as research keywords on their own.
@@ -182,6 +182,22 @@ function isInterfaceText(s, maxWords = 12) {
   return UI_START.test(t) || UI_SENTENCE.test(t);
 }
 
+// Image alt text and file names that describe the site's own graphics
+// ("Brave Logo Small", "Google Button", "Semi Protection Shackle", "Snoo Map")
+// rather than the page's topic (B67).
+const UI_GRAPHIC = /\b(logos?|icons?|buttons?|btn|badges?|avatars?|sprites?|favicon|wordmark|glyphs?|placeholder|spinner|chevron|caret|shackle|padlock|snoo|profile (photo|picture|image)|user ?pic)\b/i;
+// Keyboard-shortcut help ("Keyboard shortcuts", "Press ? to view keyboard shortcuts").
+const SHORTCUT_TEXT = /\b(?:press\s+\S+\s+to\s+(?:open|view|see|show)\s+)?(?:keyboard\s+shortcuts?|shortcut\s+keys?|hot\s?keys?)\b/gi;
+
+function withoutUiGraphics(list) {
+  const out = [];
+  for (const item of list || []) {
+    const parts = String(item).split(" | ").filter((p) => clean(p) && !UI_GRAPHIC.test(p));
+    if (parts.length) out.push(parts.join(" | "));
+  }
+  return out;
+}
+
 const blockKey = (s) => clean(s).toLowerCase().slice(0, 160);
 
 function hostOf(url) {
@@ -202,6 +218,7 @@ class KeywordContext {
     this.pagesPerHost = pagesPerHost;
     this.topicPages = topicPages;
     this.hosts = new Map(); // host -> Map(url -> Set(blockKey))
+    this.hostNames = new Map(); // host -> Map(url -> Set(name, lower case))
     this.pages = new Map(); // url -> { host, terms: string[] }, newest last
   }
 
@@ -217,6 +234,25 @@ class KeywordContext {
     const m = this.hosts.get(host);
     m.delete(url);
     m.set(url, new Set(keys));
+    while (m.size > this.pagesPerHost) m.delete(m.keys().next().value);
+  }
+
+  // Names that come with every page of a site whatever the page is about: the
+  // signed-in user's own name in the site's menus, the site's own name (B67).
+  // A name counts once it was on at least 3 other pages of the site, all of them.
+  siteNames(host, url) {
+    const others = [...(this.hostNames.get(host) || [])].filter(([u]) => u !== url).map(([, set]) => set);
+    if (others.length < 3) return new Set();
+    const [first, ...rest] = others;
+    return new Set([...first].filter((n) => rest.every((set) => set.has(n))));
+  }
+
+  rememberNames(host, url, names) {
+    if (!host) return;
+    if (!this.hostNames.has(host)) this.hostNames.set(host, new Map());
+    const m = this.hostNames.get(host);
+    m.delete(url);
+    m.set(url, new Set(names.map((n) => clean(n).toLowerCase()).filter(Boolean)));
     while (m.size > this.pagesPerHost) m.delete(m.keys().next().value);
   }
 
@@ -285,14 +321,18 @@ function analyzePage(page, opts = {}) {
   const url = page?.url || "";
   const host = hostOf(url);
   const furniture = ctx ? ctx.furniture(host, url) : new Set();
+  const siteNames = ctx ? ctx.siteNames(host, url) : new Set();
+  const rawNames = withoutUiGraphics(page?.names);
+  const pageNames = rawNames.filter((n) => !siteNames.has(clean(n).toLowerCase()));
+  const noShortcuts = (t) => clean(String(t || "").replace(SHORTCUT_TEXT, " "));
 
   // Body text: keep blocks that are neither interface text nor site furniture.
   const allBlocks = Array.isArray(page?.blocks) ? page.blocks.map(clean).filter(Boolean) : null;
-  const kept = allBlocks ? allBlocks.filter((b) => !furniture.has(blockKey(b)) && !isInterfaceText(b)) : null;
-  const headings = (page?.headings || []).map(clean).filter((h) => h && !furniture.has(blockKey(h)) && !isInterfaceText(h, 4));
+  const kept = allBlocks ? allBlocks.filter((b) => !furniture.has(blockKey(b)) && !isInterfaceText(b)).map(noShortcuts).filter(Boolean) : null;
+  const headings = (page?.headings || []).map(clean).filter((h) => h && !furniture.has(blockKey(h)) && !isInterfaceText(h, 4)).map(noShortcuts).filter(Boolean);
   const desc = clean(page?.description);
   const description = desc && !furniture.has("desc:" + blockKey(desc)) ? desc : "";
-  const bodyText = kept ? kept.join(" . ") : clean(page?.text);
+  const bodyText = kept ? kept.join(" . ") : noShortcuts(page?.text);
 
   const fields = {
     selection: clean(page?.selection),
@@ -300,9 +340,12 @@ function analyzePage(page, opts = {}) {
     title: coreTitle(page?.title),
     headings: headings.join(" . "),
     description,
-    names: (page?.names || []).join(" . "),
+    names: pageNames.join(" . "),
     text: bodyText,
-    media: [...(page?.mediaMeta || []), ...(page?.mediaLinks || [])].join(" . "),
+    media: withoutUiGraphics([...(page?.mediaMeta || []), ...(page?.mediaLinks || [])])
+      .map((m) => m.split(" | ").filter((part) => !siteNames.has(clean(part).toLowerCase())).join(" | "))
+      .filter(Boolean)
+      .join(" . "),
   };
 
   const words = tokens(`${fields.text} ${fields.headings} ${fields.focus}`, extraStop).length;
@@ -389,7 +432,13 @@ function analyzePage(page, opts = {}) {
   addPhrases(fields.headings, 3);
   addPhrases(fields.names, 2);
   addPhrases(bodyText, 1);
-  for (const n of page?.names || []) {
+  // The site's own names (the signed-in user's name) score only from the
+  // title, headings or a selection, never from menus and body text.
+  for (const key of siteNames) {
+    const inMain = [page?.title, fields.headings, fields.selection].some((t) => String(t || "").toLowerCase().includes(key));
+    if (!inMain) phraseCount.delete(key);
+  }
+  for (const n of pageNames) {
     const key = clean(n).toLowerCase();
     if (key.includes(" ") && !isInterfaceText(n, 6)) {
       phraseCount.set(key, (phraseCount.get(key) || 0) + 2);
@@ -430,6 +479,7 @@ function analyzePage(page, opts = {}) {
     for (const h of page?.headings || []) keys.push(blockKey(h));
     if (desc) keys.push("desc:" + blockKey(desc));
     ctx.rememberBlocks(host, url, keys);
+    ctx.rememberNames(host, url, rawNames);
     if (!thin) ctx.rememberTopic(host, url, ranked.slice(0, 8).map((r) => r.term));
   }
   return { ranked: blocked ? [] : ranked, thin, blocked, words };
