@@ -5,6 +5,8 @@ contextBridge.exposeInMainWorld("scout", {
   closeTab: (id) => ipcRenderer.invoke("tab:close", id),
   activateTab: (id) => ipcRenderer.invoke("tab:activate", id),
   setTabTile: (id, on) => ipcRenderer.invoke("tab:tile", id, on),
+  openOverview: () => ipcRenderer.invoke("overview:open"),
+  closeOverview: (ids) => ipcRenderer.invoke("overview:close", ids),
   tabMenu: (id, x, y) => ipcRenderer.invoke("tab:menu", id, x, y),
   navigate: (id, url) => ipcRenderer.invoke("tab:navigate", id, url),
   goBack: (id) => ipcRenderer.invoke("tab:back", id),

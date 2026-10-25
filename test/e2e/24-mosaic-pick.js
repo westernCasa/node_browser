@@ -96,6 +96,46 @@ const pressed = (ui) => ui.getAttribute("#layout-btn", "aria-pressed");
   check("other numbers are ignored", (await ui.evaluate(() => window.scout.getSettings())).mosaicMax === 9);
   await ui.evaluate(() => window.scout.setSettings({ mosaicMax: 4 }));
 
+  // Tab overview (B71): zoom out, pick tabs like photos, Done.
+  await ui.evaluate(() => openOverview());
+  await sleep(1200);
+  check("the overview opens with a card per tab", (await ui.$$eval("#ov-grid .ov-card", (els) => els.length)) === 6);
+  check("the pages are hidden under the overview", (await tiles(app)).length === 0);
+  check("cards have pictures of the pages", (await ui.$$eval("#ov-grid .ov-card img", (els) => els.filter((i) => i.src.startsWith("data:image/jpeg")).length)) >= 5);
+  check("the current tab has focus", await ui.evaluate(() => document.activeElement?.classList.contains("ov-card")));
+  for (const n of [5, 6, 2]) await ui.click(`.ov-card[data-id="${idOf(n)}"]`);
+  await sleep(300);
+  check("picked cards are marked selected", (await ui.$$eval('.ov-card[aria-selected="true"]', (els) => els.length)) === 3);
+  check("the count says 3 of 4", /3 of 4/.test(await ui.textContent("#ov-count")), await ui.textContent("#ov-count"));
+  await ui.click(`.ov-card[data-id="${idOf(6)}"]`);
+  check("clicking again unpicks", (await ui.$$eval('.ov-card[aria-selected="true"]', (els) => els.length)) === 2);
+  await ui.keyboard.press("Escape");
+  await sleep(800);
+  check("Esc closes it and changes nothing", !(await ui.isVisible("#overview")) && (await ui.evaluate(() => tabs.filter((x) => x.tile).length)) === 0);
+  await ui.evaluate(() => openOverview());
+  await sleep(1000);
+  for (const n of [1, 2, 3, 4]) await ui.click(`.ov-card[data-id="${idOf(n)}"]`);
+  await ui.click(`.ov-card[data-id="${idOf(5)}"]`, { force: true });
+  check("a fifth pick is refused", (await ui.$$eval('.ov-card[aria-selected="true"]', (els) => els.length)) === 4 && /holds 4/.test(await ui.textContent("#ov-count")));
+  check("cards that can't be picked are dimmed", (await ui.$$eval(".ov-card.blocked", (els) => els.length)) === 2);
+  // Keyboard: focus the first card, unpick it with Space, finish with Enter.
+  await ui.focus(`.ov-card[data-id="${idOf(1)}"]`);
+  await ui.keyboard.press("Space");
+  await ui.keyboard.press("ArrowRight");
+  check("arrow keys move between cards", await ui.evaluate((id) => document.activeElement?.dataset.id === id, idOf(2)));
+  await ui.keyboard.press("Enter");
+  await sleep(1500);
+  t = await tiles(app);
+  check("Done shows the picked tabs in Mosaic", t.join(",") === "2,3,4" && (await pressed(ui)) === "true", t.join(","));
+  check("Done saves the picks as Mosaic tiles", (await ui.evaluate(() => tabs.filter((x) => x.tile).map((x) => x.url.split("n=")[1]).join(","))) === "2,3,4");
+  await ui.evaluate(() => openOverview());
+  await sleep(1000);
+  await ui.click("#ov-clear");
+  await ui.click("#ov-done");
+  await sleep(1500);
+  t = await tiles(app);
+  check("Clear and Done: Mosaic shows its usual 4 tiles", t.length === 4 && (await ui.evaluate(() => tabs.filter((x) => x.tile).length)) === 0, t.join(","));
+
   // Chosen tiles survive a restart.
   await ui.evaluate((id) => window.scout.setTabTile(id, true), idOf(3));
   await sleep(1500);

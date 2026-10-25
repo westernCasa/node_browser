@@ -427,6 +427,7 @@ function leaveImmersive() {
 // setVisible(false) alone keeps it rendering at full frame rate.
 function hideView(tab) {
   if (!tab.attached) return;
+  if (!tab.sleeping && !libraryOpen) thumbOf(tab); // a picture for the tab overview, taken while still on screen
   win.contentView.removeChildView(tab.view);
   tab.attached = false;
 }
@@ -1803,6 +1804,7 @@ function buildMenu() {
           click: () => activeWc()?.canGoForward() && activeWc().goForward(),
         },
         { label: "Toggle Mosaic", accelerator: "CmdOrCtrl+Shift+M", click: () => sendUi("toggle-layout") },
+        { label: "Choose Tabs for Mosaic…", accelerator: "CmdOrCtrl+Shift+\\", click: () => sendUi("overview") },
         { label: "Show or Hide Suggestions", accelerator: "CmdOrCtrl+Shift+.", click: () => sendUi("toggle-suggest") },
         { label: "Menu: Library, History, Settings", accelerator: "CmdOrCtrl+,", click: () => sendUi("open-menu", { section: "settings" }) },
         { type: "separator" },
@@ -2170,6 +2172,51 @@ function setTile(id, on) {
   return true;
 }
 ipcMain.handle("tab:tile", (_e, id, on) => setTile(id, on));
+
+// ---- Tab overview (B71): zoom out to every tab and pick the Mosaic tiles ----
+// Pictures of tabs that are not on screen come from tab.thumb, taken when a
+// tab leaves the screen; tabs on screen are pictured when the overview opens.
+async function thumbOf(tab) {
+  try {
+    const img = await tab.view.webContents.capturePage();
+    if (!img.isEmpty()) {
+      const size = img.getSize();
+      tab.thumb = "data:image/jpeg;base64," + img.resize({ width: Math.min(640, size.width) }).toJPEG(72).toString("base64");
+    }
+  } catch (_) {}
+  return tab.thumb || "";
+}
+ipcMain.handle("overview:open", async () => {
+  const rect = contentRect();
+  const out = [];
+  for (const tab of tabs.values()) {
+    const thumb = tab.attached && !tab.sleeping ? await thumbOf(tab) : tab.thumb || "";
+    out.push({ ...tabState(tab), thumb, rect: tab.attached ? tab.view.getBounds() : null });
+  }
+  libraryOpen = true; // hide the page views under the overview
+  applyLayout();
+  return { tabs: out, activeId, layout, max: mosaicMax(), page: rect };
+});
+// ids: the tabs picked, in tab-strip order. None picked: Mosaic shows its usual tabs.
+ipcMain.handle("overview:close", (_e, ids) => {
+  if (Array.isArray(ids)) {
+    const pick = new Set(ids.map(String));
+    const max = mosaicMax() || Infinity;
+    let n = 0;
+    for (const t of tabs.values()) t.tile = pick.has(t.id) && n++ < max;
+    layout = "mosaic";
+    const shown = mosaicIds();
+    if (shown.length && !shown.includes(activeId)) activeId = shown[0];
+    wakeTab(tabs.get(activeId));
+    usage().count("mosaic");
+    saveSessionSoon();
+  }
+  libraryOpen = false;
+  applyLayout();
+  sendUi("layout", { mode: layout });
+  emitList();
+  return layout;
+});
 // Right-click on a tab in the tab strip: a native menu, so it draws over the pages.
 ipcMain.handle("tab:menu", (_e, id, x, y) => {
   const tab = tabs.get(String(id));
@@ -2192,6 +2239,7 @@ ipcMain.handle("tab:menu", (_e, id, x, y) => {
       },
     });
   }
+  items.push({ label: "Choose Tabs for Mosaic…", click: () => sendUi("overview") });
   items.push({ type: "separator" }, { label: "Close Tab", click: () => closeTab(tab.id) });
   popupHold = true;
   Menu.buildFromTemplate(items).popup({ window: win, x: Math.round(x), y: Math.round(y), callback: () => (popupHold = false) });

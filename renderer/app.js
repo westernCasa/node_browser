@@ -961,6 +961,11 @@ function paintLayout(animate = false) {
   layoutBtn.innerHTML = icon(mosaic ? "focus" : "mosaic", "label");
   if (animate) playOnce(layoutBtn.firstElementChild, "rise");
 }
+// Right-click the Mosaic button: the tab overview, to pick the tiles (B71).
+layoutBtn.addEventListener("contextmenu", (e) => {
+  e.preventDefault();
+  openOverview();
+});
 layoutBtn.addEventListener("click", async () => {
   const next = layout === "mosaic" ? "focus" : "mosaic";
   layout = api ? await api.setLayout(next) : next;
@@ -3009,4 +3014,211 @@ api?.onCommand?.((msg) => {
   else if (msg.cmd === "chrome") paintChrome(msg);
   else if (msg.cmd === "toggle-suggest") setPanelOpen(!panelOpen, { focus: true, animate: true });
   else if (msg.cmd === "open-menu") openMenu(msg.section || menuSection);
+  else if (msg.cmd === "overview") openOverview();
+});
+
+// ---- Tab overview (B71) ----
+// Zoom out to every open tab and pick which ones Mosaic shows, like selecting
+// photos: click (or Space) picks or unpicks a tab, Done shows the picked tabs
+// in Mosaic, Esc or Cancel leaves everything as it was. None picked + Done:
+// Mosaic shows its usual tabs (the first ones and the current one).
+const ovEl = document.getElementById("overview");
+const ovGrid = document.getElementById("ov-grid");
+const ovCount = document.getElementById("ov-count");
+const CHECK_SVG = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6.5l2.5 2.5L10 3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="square"/></svg>';
+let ovOpen = false;
+let ovMax = 4;
+let ovPicked = [];
+let ovReturnFocus = null;
+let ovCloseSeq = 0;
+
+function hostOf(url) {
+  try {
+    return new URL(url).host;
+  } catch (_) {
+    return url || "";
+  }
+}
+
+function paintOverview() {
+  const full = ovMax && ovPicked.length >= ovMax;
+  ovCount.textContent = ovPicked.length ? `${ovPicked.length} of ${ovMax || "all"} picked` : ovMax ? `Pick up to ${ovMax}` : "Pick any tabs";
+  ovCount.classList.toggle("full", Boolean(full));
+  for (const card of ovGrid.children) {
+    const on = ovPicked.includes(card.dataset.id);
+    card.setAttribute("aria-selected", String(on));
+    card.classList.toggle("blocked", Boolean(full && !on));
+    card.setAttribute("aria-disabled", String(Boolean(full && !on)));
+  }
+  document.getElementById("ov-clear").disabled = !ovPicked.length;
+}
+
+function toggleOverviewPick(id) {
+  const i = ovPicked.indexOf(id);
+  if (i >= 0) ovPicked.splice(i, 1);
+  else if (!ovMax || ovPicked.length < ovMax) ovPicked.push(id);
+  else {
+    ovCount.textContent = `Mosaic holds ${ovMax}. Unpick one first.`;
+    return;
+  }
+  paintOverview();
+}
+
+async function openOverview() {
+  if (ovOpen || !api?.openOverview) return;
+  if (menuOpen) await closeMenu();
+  ovOpen = true;
+  ovCloseSeq++;
+  ovReturnFocus = document.activeElement;
+  holdChrome("overview", true);
+  const r = await api.openOverview();
+  ovMax = r.max;
+  ovPicked = r.tabs.filter((t) => t.tile).map((t) => t.id);
+  ovGrid.innerHTML = "";
+  for (const t of r.tabs) {
+    const card = document.createElement("div");
+    card.className = "ov-card arriving";
+    card.dataset.id = t.id;
+    card.setAttribute("role", "option");
+    card.tabIndex = t.id === r.activeId ? 0 : -1;
+    const thumb = document.createElement("div");
+    thumb.className = "ov-thumb";
+    if (t.thumb) {
+      const img = document.createElement("img");
+      img.alt = "";
+      img.src = t.thumb;
+      thumb.appendChild(img);
+    } else {
+      const e = document.createElement("div");
+      e.className = "ov-empty";
+      e.textContent = t.sleeping ? "Asleep. Its picture appears after you open it." : hostOf(t.url) || "New tab";
+      thumb.appendChild(e);
+    }
+    const check = document.createElement("span");
+    check.className = "ov-check";
+    check.innerHTML = CHECK_SVG;
+    thumb.appendChild(check);
+    const meta = document.createElement("div");
+    meta.className = "ov-meta";
+    meta.innerHTML = `<span class="ov-title"></span><span class="ov-host"></span>`;
+    meta.firstChild.textContent = t.title || "New tab";
+    meta.lastChild.textContent = t.id === r.activeId ? "" : hostOf(t.url);
+    if (t.id === r.activeId) {
+      const now = document.createElement("span");
+      now.className = "ov-now";
+      now.textContent = "Current tab · " + hostOf(t.url);
+      meta.lastChild.replaceWith(now);
+    }
+    card.setAttribute("aria-label", `${t.title || "New tab"}, ${hostOf(t.url)}`);
+    card.append(thumb, meta);
+    ovGrid.appendChild(card);
+  }
+  paintOverview();
+  ovEl.hidden = false;
+  // Zoom out: the current tab's picture shrinks from where the page was into its card.
+  const active = ovGrid.querySelector(`.ov-card[data-id="${CSS.escape(r.activeId || "")}"]`);
+  const from = r.tabs.find((t) => t.id === r.activeId);
+  const target = active?.querySelector(".ov-thumb");
+  if (target && from?.thumb && !reducedMotion()) {
+    const page = from.rect || r.page;
+    const to = target.getBoundingClientRect();
+    const fly = document.createElement("img");
+    fly.className = "ov-fly";
+    fly.src = from.thumb;
+    Object.assign(fly.style, { left: `${to.left}px`, top: `${to.top}px`, width: `${to.width}px`, height: `${to.height}px` });
+    ovEl.appendChild(fly);
+    target.style.visibility = "hidden";
+    const sx = page.width / to.width;
+    const sy = page.height / to.height;
+    const anim = fly.animate(
+      [{ transform: `translate(${page.x - to.left}px, ${page.y - to.top}px) scale(${sx}, ${sy})` }, { transform: "none" }],
+      { duration: parseFloat(motionCurve("--motion-slow")) || 320, easing: motionCurve("--ease-enter") || "ease-out" }
+    );
+    const done = () => {
+      fly.remove();
+      target.style.visibility = "";
+    };
+    anim.onfinish = done;
+    anim.oncancel = done;
+  }
+  void ovEl.offsetWidth;
+  ovEl.classList.add("open");
+  requestAnimationFrame(() => ovGrid.querySelectorAll(".arriving").forEach((c) => c.classList.remove("arriving")));
+  (active || ovGrid.firstElementChild)?.focus();
+  active?.scrollIntoView({ block: "nearest" });
+}
+
+async function closeOverview(apply) {
+  if (!ovOpen) return;
+  ovOpen = false;
+  const seq = ++ovCloseSeq;
+  ovEl.querySelector(".ov-fly")?.remove();
+  const ids = apply ? [...ovGrid.children].map((c) => c.dataset.id).filter((id) => ovPicked.includes(id)) : null;
+  ovEl.classList.remove("open");
+  if (!reducedMotion()) await new Promise((r) => setTimeout(r, parseFloat(motionCurve("--motion-fast")) || 120));
+  if (seq !== ovCloseSeq) return; // opened again while fading out
+  ovEl.hidden = true;
+  ovGrid.innerHTML = "";
+  holdChrome("overview", false);
+  const mode = await api.closeOverview(ids);
+  if (apply) {
+    layout = mode;
+    paintLayout(true);
+  }
+  const back = ovReturnFocus?.isConnected ? ovReturnFocus : layoutBtn;
+  back.focus?.();
+}
+
+ovGrid.addEventListener("click", (e) => {
+  const card = e.target.closest(".ov-card");
+  if (!card) return;
+  card.focus();
+  toggleOverviewPick(card.dataset.id);
+});
+ovGrid.addEventListener("dblclick", (e) => {
+  // Double-click: pick the tab (if it is not picked yet) and finish.
+  const card = e.target.closest(".ov-card");
+  if (card && !ovPicked.includes(card.dataset.id)) toggleOverviewPick(card.dataset.id);
+  if (card) closeOverview(true);
+});
+document.getElementById("ov-done").addEventListener("click", () => closeOverview(true));
+document.getElementById("ov-cancel").addEventListener("click", () => closeOverview(false));
+document.getElementById("ov-clear").addEventListener("click", () => {
+  ovPicked = [];
+  paintOverview();
+});
+ovEl.addEventListener("keydown", (e) => {
+  const cards = [...ovGrid.children];
+  const card = e.target.closest?.(".ov-card");
+  if (e.key === "Escape") {
+    e.preventDefault();
+    return closeOverview(false);
+  }
+  if (e.key === "Enter" && !e.target.closest("button")) {
+    e.preventDefault();
+    return closeOverview(true);
+  }
+  if (card && (e.key === " " || e.key === "Spacebar")) {
+    e.preventDefault();
+    return toggleOverviewPick(card.dataset.id);
+  }
+  if (card && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(e.key)) {
+    e.preventDefault();
+    const i = cards.indexOf(card);
+    const cols = Math.max(1, cards.filter((c) => c.offsetTop === cards[0].offsetTop).length);
+    const step = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -cols, ArrowDown: cols }[e.key];
+    const j = e.key === "Home" ? 0 : e.key === "End" ? cards.length - 1 : Math.min(cards.length - 1, Math.max(0, i + step));
+    card.tabIndex = -1;
+    cards[j].tabIndex = 0;
+    cards[j].focus();
+    cards[j].scrollIntoView({ block: "nearest" });
+    return;
+  }
+  if (e.key === "Tab") {
+    // Tab moves between the grid and the buttons, and stays in the overview.
+    const stops = [...ovEl.querySelectorAll("button:not([disabled]), .ov-card[tabindex='0']")];
+    const i = stops.indexOf(document.activeElement);
+    e.preventDefault();
+    stops[(i + (e.shiftKey ? stops.length - 1 : 1)) % stops.length]?.focus();
+  }
 });
