@@ -35,6 +35,7 @@ const Rules = require("./core/rules");
 const AI = require("./core/ai");
 const Chat = require("./core/chat");
 const { ResearchStore } = require("./core/research");
+const { Usage } = require("./core/usage");
 const { HistoryStore } = require("./core/history");
 const { BookmarkStore } = require("./core/bookmarks");
 const { createAdblock } = require("./adblock");
@@ -782,6 +783,26 @@ async function checkForUpdatesFromMenu() {
   if (st.status === "current") sendUi("notice", { message: `NODE ${app.getVersion()} is the latest version.` });
   else if (st.status === "downloading" || st.status === "checking") sendUi("notice", { message: `Downloading NODE ${st.version || "update"} in the background. NODE will offer to restart when it is ready.` });
   else if (st.status !== "ready") sendUi("update-error", { message: st.error || "Could not check for updates." });
+}
+
+// ---- Usage summary for the beta survey (B64, core/usage.js) ----
+// Counts and days used, in userData/usage.json. Never sent anywhere.
+let usageStore = null;
+function usage() {
+  if (!usageStore) {
+    const file = path.join(app.getPath("userData"), "usage.json");
+    usageStore = new Usage({ read: () => (fs.existsSync(file) ? fs.readFileSync(file, "utf8") : null), write: (t) => fs.writeFileSync(file, t) });
+  }
+  return usageStore;
+}
+function systemName() {
+  const os = require("os");
+  if (process.platform === "darwin") return `macOS ${process.getSystemVersion()} (${process.arch})`;
+  if (process.platform === "win32") return `Windows ${os.release()} (${process.arch})`;
+  return `Linux ${os.release()} (${process.arch})`;
+}
+function usageSummary() {
+  return usage().summary({ version: app.getVersion(), os: systemName() });
 }
 
 // ---- Error log and diagnostics (B31, log.js) ----
@@ -1725,6 +1746,7 @@ function buildMenu() {
             sendUi("notice", { message: "Diagnostics copied. Paste them into the issue, with what you were doing when it went wrong." });
           },
         },
+        { label: "Take the Beta Survey…", click: () => createTab(require("./core/urls").SURVEY_URL) },
         { label: "Open Log Folder", click: () => shell.openPath(log().dir) },
         { type: "separator" },
         { label: "Check for Updates…", click: () => checkForUpdatesFromMenu() },
@@ -1902,6 +1924,7 @@ if (!PASSKEYS_ON) app.commandLine.appendSwitch("disable-blink-features", "WebAut
 app.commandLine.appendSwitch("disable-features", "PreloadMediaEngagementData");
 
 app.whenReady().then(() => {
+  usage().touch();
   protocol.handle("scoutlib", (request) => {
     try {
       // scoutlib://item/<id> (older pages used scoutlib://<id>/file).
@@ -1956,6 +1979,7 @@ app.whenReady().then(() => {
 
 app.on("window-all-closed", () => app.quit());
 app.on("will-quit", () => {
+  usageStore?.saveNow();
   companion?.stop();
   agentServer?.stop();
 });
@@ -1986,6 +2010,7 @@ ipcMain.handle("tab:reload", (_e, id) => tabs.get(id)?.view.webContents.reload()
 ipcMain.handle("layout:set", (_e, mode) => {
   const before = layout;
   layout = mode === "mosaic" ? "mosaic" : "focus";
+  if (layout === "mosaic" && before !== "mosaic") usage().count("mosaic");
   applyLayout(layout !== before ? { animate: layout === "mosaic" ? "enter" : "exit" } : {});
   return layout;
 });
@@ -2122,6 +2147,7 @@ ipcMain.handle("ai:ask", async (_e, id, question, history) => {
   if (!tab) return { ok: false, error: "No page open." };
   const ai = loadSettings().ai;
   if (!Chat.canChat(ai)) return { ok: false, error: "Set up a model first under Settings → AI: a local model (Ollama or LM Studio) or a Grok API key." };
+  usage().count("agentRuns");
   let page;
   try {
     page = await runInPage(tab.view.webContents, readableTextScript(Chat.PAGE_CHARS), true);
@@ -2130,6 +2156,7 @@ ipcMain.handle("ai:ask", async (_e, id, question, history) => {
   }
   try {
     const answer = await Chat.askPage({ question, page, history }, ai, { fetch: (...a) => globalThis.fetch(...a) });
+    usage().count("askQuestions");
     return { ok: true, answer, url: page.url, chars: page.text.length };
   } catch (err) {
     return { ok: false, error: String(err.message || err) };
@@ -2289,6 +2316,7 @@ ipcMain.handle("downloads:clear", () => {
 // Talk (social layer stage 1, core/talk.js): existing discussion of the page.
 // Called only while the Talk pane is open.
 ipcMain.handle("talk:get", async (_e, id) => {
+  usage().count("talk");
   const tab = tabs.get(id || activeId);
   if (!tab) return { off: "No page open.", hn: [], bluesky: [], errors: {} };
   const raw = tab.view.webContents.getURL();
@@ -2401,6 +2429,7 @@ function addRecord(folder, name, sourceUrl, note) {
   const kind = { screenshots: "shot", saves: "save", media: "media" }[folder];
   if (research && kind && /^https?:/i.test(sourceUrl || "")) {
     research.capture({ libraryId: item.id, kind, name, url: sourceUrl, title: folder === "media" ? "" : note });
+    usage().count("captures");
   }
   return item;
 }
@@ -2436,6 +2465,7 @@ ipcMain.handle("research:get", () => research.snapshot());
 ipcMain.handle("research:list", () => research.list());
 ipcMain.handle("research:new", (_e, name) => {
   research.create(name);
+  usage().count("sessions");
   return research.snapshot();
 });
 ipcMain.handle("research:switch", (_e, id) => {
@@ -2447,8 +2477,26 @@ ipcMain.handle("research:rename", (_e, name) => {
   return research.snapshot();
 });
 ipcMain.handle("research:pins", (_e, pins) => research.setPins(pins));
-ipcMain.handle("research:visit", (_e, url, title, keywords) => research.visit(url, title, keywords));
-ipcMain.handle("research:opened", (_e, item) => research.opened(item));
+ipcMain.handle("research:visit", (_e, url, title, keywords) => {
+  const before = research.current.trail.length;
+  research.visit(url, title, keywords);
+  if (research.current.trail.length > before) usage().count("trailPages");
+});
+ipcMain.handle("research:opened", (_e, item) => {
+  research.opened(item);
+  usage().count("suggestionsOpened");
+});
+// Counts the window reports (suggestions shown, pins, hides); core/usage.js
+// ignores any other name. Copy puts the summary on the clipboard.
+ipcMain.on("usage:count", (_e, name, n) => usage().count(String(name), n));
+ipcMain.handle("usage:days", () => usage().daysUsed());
+// The beta survey opens in a tab (B65).
+ipcMain.handle("survey:open", () => createTab(require("./core/urls").SURVEY_URL));
+ipcMain.handle("usage:copy", () => {
+  const text = usageSummary();
+  clipboard.writeText(text);
+  return text;
+});
 ipcMain.handle("research:dismiss", (_e, url) => research.dismiss(url));
 ipcMain.handle("research:undismiss", () => research.undismissAll());
 ipcMain.handle("research:export", () => {

@@ -29,7 +29,7 @@ jobs:
           (cd test/e2e/site && python3 -m http.server 8765 >/dev/null 2>&1 &)
           sleep 1
           mkdir -p e2e-out
-          for t in 01-basics 03-rules-and-fast-results 04-find-zoom-history 05-research-session 09-playback-limit 12-pip-bookmarks-adblock 13-ask-ai 15-agents-mcp 16-research-agent 17-talk 18-redteam 19-browser-basics 20-first-run-and-help 21-rules-editor; do
+          for t in 01-basics 03-rules-and-fast-results 04-find-zoom-history 05-research-session 09-playback-limit 12-pip-bookmarks-adblock 13-ask-ai 15-agents-mcp 16-research-agent 17-talk 18-redteam 19-browser-basics 20-first-run-and-help 21-rules-editor 22-ui-refresh 23-beta-survey; do
             echo "::group::$t"
             xvfb-run -a node test/e2e/$t.js "$PWD/e2e-out"
             status=$?
@@ -40,4 +40,39 @@ jobs:
         if: failure()
         with:
           name: e2e-screenshots
+          path: e2e-out/**/*.png
+
+  # Most beta testers are on Windows: run the unit tests and the core
+  # end-to-end suites there too.
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Unit tests
+        run: npm run test:unit
+      - name: Install Playwright for the end-to-end tests
+        run: npm install --no-save playwright@1.56.0
+      - name: End-to-end tests
+        shell: bash
+        run: |
+          (cd test/e2e/site && python -m http.server 8765 --bind 127.0.0.1 >/dev/null 2>&1 &)
+          sleep 2
+          mkdir -p e2e-out
+          for t in 01-basics 05-research-session 19-browser-basics 20-first-run-and-help 22-ui-refresh 23-beta-survey; do
+            echo "::group::$t"
+            node test/e2e/$t.js "$PWD/e2e-out"
+            status=$?
+            echo "::endgroup::"
+            if [ "$status" != "0" ]; then echo "$t failed"; exit 1; fi
+          done
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: e2e-screenshots-windows
           path: e2e-out/**/*.png
