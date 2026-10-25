@@ -181,12 +181,12 @@ for (const c of cases) {
         "Press ? to view keyboard shortcuts",
       ],
       names: ["Semi Protection Shackle", "Wikipedia Logo"],
-      mediaMeta: ["Semi Protection Shackle", "Brave Logo Small", "Google Button | Snoo Map", "Geothermal gradient map of the United States"],
+      mediaMeta: ["Semi Protection Shackle", "Brave Logo Small", "Google Button | Snoo Map", "Geothermal gradient map of the United States", "c797a184-4d96-ae77-91b2-dd82112c5274", "ae77 4d96 c797a184", "Airbus A380 cabin"],
     },
     { context: new KeywordContext(), limit: 12 }
   );
   const terms = res.ranked.map((r) => r.term.toLowerCase());
-  const bad = terms.filter((t) => /shackle|protection|logo|button|snoo|brave|keyboard|shortcut/.test(t));
+  const bad = terms.filter((t) => /shackle|protection|logo|button|snoo|brave|keyboard|shortcut|^[0-9a-f]*\d[0-9a-f]*$/.test(t));
   check("Interface graphics and shortcut help left out", !bad.length && terms.includes("geothermal"), "| " + terms.slice(0, 8).join(", ") + (bad.length ? " | should not have: " + bad.join(", ") : ""));
 }
 {

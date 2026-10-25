@@ -73,13 +73,22 @@ function isUseful(tok, extraStop) {
   if (tok.length < 3 || tok.length > 40) return false;
   if (/^\d+$/.test(tok) && !/^(1[5-9]|20)\d\d$/.test(tok)) return false; // keep years 1500-2099
   if (/^\d/.test(tok) && !/^\d{4}$/.test(tok) && !/[a-z]/.test(tok)) return false;
+  // Hex ids from addresses and file names ("c797a184", "ae77"): letters a-f
+  // mixed with digits. Short model names ("a380", "f150") stay.
+  if (/^[0-9a-f]{4,}$/.test(tok) && /\d/.test(tok) && /[a-f]/.test(tok)) {
+    const digits = tok.replace(/[a-f]/g, "").length;
+    if (tok.length >= 8 || (digits >= 2 && tok.length - digits >= 2)) return false;
+  }
   if (STOP.has(tok) || WEB_NOISE.has(tok) || extraStop.has(tok)) return false;
   return true;
 }
 
+// Ids like 3f2a9c1e-4d96-ae77-… (blob and upload addresses) are never keywords.
+const UUID_RE = /\b[0-9a-f]{8}[-_ ][0-9a-f]{4}[-_ ][0-9a-f]{4}[-_ ][0-9a-f]{4}[-_ ][0-9a-f]{12}\b/gi;
+
 function tokens(text, extraStop) {
   const out = [];
-  for (const m of String(text || "").matchAll(TOKEN_RE)) {
+  for (const m of String(text || "").replace(UUID_RE, " ").matchAll(TOKEN_RE)) {
     const t = normToken(m[0]);
     if (isUseful(t, extraStop)) out.push(t);
   }
