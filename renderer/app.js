@@ -187,6 +187,14 @@ function renderTabs() {
     el.className = "tab" + (t.id === activeId ? " active" : "") + (t.sleeping ? " asleep" : "");
     if (t.sleeping) el.title = "Asleep to save memory. Opens again when you click it.";
     el.innerHTML = `<span title="${escapeHtml(t.url || "")}">${escapeHtml(t.title || "New tab")}</span>`;
+    if (t.tile) {
+      // Chosen for Mosaic (B69).
+      const m = document.createElement("i");
+      m.className = "tile-mark";
+      m.innerHTML = icon("mosaic");
+      m.title = "Shown in Mosaic. Right-click to remove.";
+      el.appendChild(m);
+    }
     if (t.agentShared) {
       const m = document.createElement("i");
       m.className = "agent-mark";
@@ -228,6 +236,10 @@ function renderTabs() {
     });
     el.appendChild(x);
     el.addEventListener("click", () => (api ? api.activateTab(t.id) : demoActivate(t.id)));
+    el.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      api?.tabMenu?.(t.id, e.clientX, e.clientY);
+    });
     // Middle-click closes the tab (as in Chrome, Firefox and Safari).
     el.addEventListener("auxclick", (e) => {
       if (e.button !== 1) return;
@@ -945,7 +957,7 @@ function paintLayout(animate = false) {
   const mosaic = layout === "mosaic";
   layoutBtn.classList.toggle("active", mosaic);
   layoutBtn.setAttribute("aria-pressed", String(mosaic));
-  setTip(layoutBtn, mosaic ? "Focus: back to one tab" : "Mosaic: tile every tab");
+  setTip(layoutBtn, mosaic ? "Focus: back to one tab" : "Mosaic: tile your tabs");
   layoutBtn.innerHTML = icon(mosaic ? "focus" : "mosaic", "label");
   if (animate) playOnce(layoutBtn.firstElementChild, "rise");
 }
@@ -1388,6 +1400,7 @@ async function renderSources() {
   fillAgents(settings.agents);
   document.getElementById("restore-tabs").checked = settings.restoreTabs !== false;
   document.getElementById("start-page").value = settings.startPage || "";
+  document.getElementById("mosaic-max").value = String(settings.mosaicMax ?? 4);
   document.getElementById("auto-update").checked = settings.autoUpdate !== false;
   document.getElementById("passkeys").checked = settings.passkeys === true;
   document.getElementById("passkeys").closest(".top").hidden = document.getElementById("passkeys-help").hidden = !/Mac/.test(navigator.platform);
@@ -1823,6 +1836,7 @@ async function saveSources(rerender = true) {
     google: { mode: document.getElementById("google-mode").value, browser: document.getElementById("google-browser").value },
     restoreTabs: document.getElementById("restore-tabs").checked,
     startPage: document.getElementById("start-page").value,
+    mosaicMax: Number(document.getElementById("mosaic-max").value),
     autoUpdate: document.getElementById("auto-update").checked,
     passkeys: document.getElementById("passkeys").checked,
   });
@@ -2425,6 +2439,10 @@ if (api) {
       paintSound();
     } else if (msg.cmd === "toggle-layout") {
       layoutBtn.click();
+    } else if (msg.cmd === "layout") {
+      // The main process left Mosaic by itself (a tab without a tile became active).
+      layout = msg.mode === "mosaic" ? "mosaic" : "focus";
+      paintLayout(true);
     } else if (msg.cmd === "shot-done") {
       statusEl.textContent = "Saved screenshot · " + (msg.item?.sourceUrl || "");
       openLibrary();

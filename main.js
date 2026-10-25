@@ -444,9 +444,27 @@ function showView(tab, bounds, anim = null, index) {
   }
 }
 
-// Tabs shown as Mosaic tiles: every tab except those whose site rule keeps them out.
+// Tabs shown as Mosaic tiles (B69). If the user chose tabs for Mosaic, only
+// those; otherwise every tab except those whose site rule keeps them out.
+// At most mosaicMax tiles (4 by default, 0 = no limit), in tab order; the
+// active tab always keeps its tile when nothing was chosen.
+const MOSAIC_MAX_CHOICES = [4, 6, 9, 0];
+function mosaicMax() {
+  return loadSettings().mosaicMax;
+}
 function mosaicIds() {
-  return [...tabs.keys()].filter((id) => id === activeId || tabs.get(id).rule?.mosaic !== false);
+  const all = [...tabs.keys()];
+  const chosen = all.filter((id) => tabs.get(id).tile);
+  const max = mosaicMax() || Infinity;
+  if (chosen.length) return chosen.slice(0, max);
+  const ids = all.filter((id) => id === activeId || tabs.get(id).rule?.mosaic !== false);
+  if (ids.length <= max) return ids;
+  const shown = ids.slice(0, max);
+  if (activeId && !shown.includes(activeId)) shown[max - 1] = activeId;
+  return shown;
+}
+function chosenTiles() {
+  return [...tabs.values()].filter((t) => t.tile).length;
 }
 
 // opts.animate: "enter" | "exit" | "move", passed only by the Mosaic toggle
@@ -454,6 +472,13 @@ function mosaicIds() {
 // Every layout change ends with the full-screen toolbar layer back on top.
 function applyLayout(opts) {
   if (!win) return;
+  // A tab without a tile became active in Mosaic (opened, or picked in the
+  // tab strip): show it on its own.
+  if (layout === "mosaic" && !libraryOpen && activeId && !mosaicIds().includes(activeId)) {
+    layout = "focus";
+    sendUi("layout", { mode: layout });
+    opts = {};
+  }
   layoutViews(opts);
   raiseOverlay();
 }
@@ -547,6 +572,7 @@ function tabState(tab) {
     url,
     google, // placeholder for a page shown in the Google window
     agentShared: Boolean(tab.agentShared),
+    tile: Boolean(tab.tile), // chosen for Mosaic (B69)
 
     title: (tab.sleeping ? tab.sleeping.title : wc.getTitle()) || "New tab",
     sleeping: Boolean(tab.sleeping),
@@ -885,7 +911,7 @@ function saveSessionNow() {
   const list = [...tabs.values()].map((t) => tabState(t)).filter((t) => /^https?:/i.test(t.url));
   const active = list.findIndex((t) => t.id === activeId);
   try {
-    fs.writeFileSync(sessionFile(), JSON.stringify({ version: 1, layout, active: Math.max(0, active), tabs: list.map((t) => ({ url: t.url, title: t.title })) }));
+    fs.writeFileSync(sessionFile(), JSON.stringify({ version: 1, layout, active: Math.max(0, active), tabs: list.map((t) => ({ url: t.url, title: t.title, ...(t.tile ? { tile: true } : {}) })) }));
   } catch (_) {}
 }
 function restoreSession() {
@@ -896,7 +922,7 @@ function restoreSession() {
   const list = (saved?.tabs || []).filter((t) => /^https?:/i.test(t?.url || "")).slice(0, 100);
   if (!list.length || loadSettings().restoreTabs === false) return false;
   const active = Math.min(Math.max(0, saved.active || 0), list.length - 1);
-  list.forEach((t, i) => createTab(t.url, { background: i !== active, sleeping: i !== active, restore: true, title: t.title }));
+  list.forEach((t, i) => createTab(t.url, { background: i !== active, sleeping: i !== active, restore: true, title: t.title, tile: t.tile === true }));
   const ids = [...tabs.keys()];
   if (ids[active]) activateTab(ids[active]);
   return true;
@@ -1107,7 +1133,7 @@ function createTab(url, opts = {}) {
   });
   view.setBackgroundColor("#ffffff"); // pages without their own background expect white
   view.webContents.setUserAgent(USER_AGENT);
-  const tab = { id, view, audio: "auto", audioByUser: false, lastGesture: 0, lastActive: Date.now() };
+  const tab = { id, view, audio: "auto", audioByUser: false, lastGesture: 0, lastActive: Date.now(), tile: Boolean(opts.tile) };
   refreshRule(tab, normalizeUrl(url));
   tabs.set(id, tab);
   win.contentView.addChildView(view);
@@ -1417,6 +1443,7 @@ function loadSettings() {
   base.autoUpdate = raw.autoUpdate !== false;
   base.passkeys = raw.passkeys === true;
   base.startPage = typeof raw.startPage === "string" ? raw.startPage : "";
+  base.mosaicMax = MOSAIC_MAX_CHOICES.includes(raw.mosaicMax) ? raw.mosaicMax : 4;
   // First-run setup is shown once, to new users. Settings saved by an earlier
   // version count as set up. Runs with --user-data-dir (the tests) skip it
   // unless NODE_FIRST_RUN=1.
@@ -1451,6 +1478,10 @@ function saveSettings(next) {
   if (next && "passkeys" in next) current.passkeys = Boolean(next.passkeys);
   if (next && typeof next.startPage === "string") current.startPage = /^https?:\/\//i.test(next.startPage.trim()) ? next.startPage.trim() : "";
   if (next && next.firstRunDone) current.firstRunDone = true;
+  if (next && MOSAIC_MAX_CHOICES.includes(Number(next.mosaicMax))) {
+    current.mosaicMax = Number(next.mosaicMax);
+    if (layout === "mosaic") setTimeout(() => applyLayout({ animate: "move" }), 0);
+  }
   if (next?.agents) {
     if ("port" in next.agents) {
       const port = Math.round(Number(next.agents.port));
@@ -1481,6 +1512,7 @@ function saveSettings(next) {
     autoUpdate: current.autoUpdate !== false,
     passkeys: current.passkeys === true,
     startPage: current.startPage || "",
+    mosaicMax: current.mosaicMax,
     firstRunDone: Boolean(current.firstRunDone),
     agents: { enabled: current.agents.enabled, port: current.agents.port, token: encryptSecret(current.agents.token) },
     providers: {},
@@ -1527,6 +1559,7 @@ function publicSettings() {
     passkeysActive: PASSKEYS_ON,
     update: updater ? updater.state() : null,
     startPage: s.startPage || "",
+    mosaicMax: s.mosaicMax,
     firstRunDone: Boolean(s.firstRunDone),
     googleWindow: companion ? companion.status() : null,
     agents: agentsStatus(),
@@ -2010,6 +2043,13 @@ ipcMain.handle("tab:reload", (_e, id) => tabs.get(id)?.view.webContents.reload()
 ipcMain.handle("layout:set", (_e, mode) => {
   const before = layout;
   layout = mode === "mosaic" ? "mosaic" : "focus";
+  // Into Mosaic from a tab that has no tile: the first chosen tile becomes active.
+  const ids = layout === "mosaic" ? mosaicIds() : [];
+  if (ids.length && !ids.includes(activeId)) {
+    activeId = ids[0];
+    wakeTab(tabs.get(activeId));
+    emitList();
+  }
   if (layout === "mosaic" && before !== "mosaic") usage().count("mosaic");
   applyLayout(layout !== before ? { animate: layout === "mosaic" ? "enter" : "exit" } : {});
   return layout;
@@ -2106,6 +2146,55 @@ ipcMain.handle("menu:capture", (_e, x, y) => {
   ]);
   popupHold = true;
   menu.popup({ window: win, x: Math.round(x), y: Math.round(y), callback: () => (popupHold = false) });
+});
+// Choose a tab for Mosaic, or take it out (B69). Returns false when Mosaic is full.
+function setTile(id, on) {
+  const tab = tabs.get(String(id));
+  if (!tab) return false;
+  on = Boolean(on);
+  if (on && !tab.tile && mosaicMax() && chosenTiles() >= mosaicMax()) {
+    sendUi("notice", { message: `Mosaic holds ${mosaicMax()} tabs. Remove one first, or change the number in Settings → Tabs.` });
+    return false;
+  }
+  tab.tile = on;
+  // In Mosaic, choosing tiles keeps Mosaic on: if the current tab lost its
+  // tile, the first chosen tile becomes the current tab.
+  const ids = layout === "mosaic" ? mosaicIds() : [];
+  if (ids.length && !ids.includes(activeId)) {
+    activeId = ids[0];
+    wakeTab(tabs.get(activeId));
+  }
+  applyLayout(layout === "mosaic" ? { animate: "move" } : {});
+  emitList();
+  saveSessionSoon();
+  return true;
+}
+ipcMain.handle("tab:tile", (_e, id, on) => setTile(id, on));
+// Right-click on a tab in the tab strip: a native menu, so it draws over the pages.
+ipcMain.handle("tab:menu", (_e, id, x, y) => {
+  const tab = tabs.get(String(id));
+  if (!win || !tab) return;
+  const chosen = chosenTiles();
+  const full = !tab.tile && mosaicMax() && chosen >= mosaicMax();
+  const items = [
+    tab.tile
+      ? { label: "Remove from Mosaic", click: () => setTile(tab.id, false) }
+      : { label: full ? `Show in Mosaic (full: ${mosaicMax()} tabs)` : "Show in Mosaic", enabled: !full, click: () => setTile(tab.id, true) },
+  ];
+  if (chosen) {
+    items.push({
+      label: "Show All Tabs in Mosaic",
+      click: () => {
+        for (const t of tabs.values()) t.tile = false;
+        applyLayout(layout === "mosaic" ? { animate: "move" } : {});
+        emitList();
+        saveSessionSoon();
+      },
+    });
+  }
+  items.push({ type: "separator" }, { label: "Close Tab", click: () => closeTab(tab.id) });
+  popupHold = true;
+  Menu.buildFromTemplate(items).popup({ window: win, x: Math.round(x), y: Math.round(y), callback: () => (popupHold = false) });
 });
 ipcMain.on("tab:activity", (_e, id) => {
   const tab = tabs.get(String(id));

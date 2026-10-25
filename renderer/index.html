@@ -298,6 +298,14 @@
           <div class="source" id="startup-box">
             <div class="top"><label class="toggle"><input type="checkbox" id="restore-tabs" /> Reopen the tabs from last time</label></div>
             <label class="field"><span>New tab page (leave empty for NODE's start page)</span><input type="text" id="start-page" placeholder="https://…" spellcheck="false" /></label>
+            <label class="field"><span>Tiles in Mosaic</span>
+              <select id="mosaic-max">
+                <option value="4">Up to 4</option>
+                <option value="6">Up to 6</option>
+                <option value="9">Up to 9</option>
+                <option value="0">Every tab</option>
+              </select></label>
+            <p class="help">To choose which tabs Mosaic shows, right-click a tab and choose Show in Mosaic. With none chosen, Mosaic shows your first tabs and the one you are on.</p>
             <p class="help">Tabs you have not opened for 15 minutes go to sleep to save memory; they load again when you click them. Tabs playing media never sleep.</p>
           </div>
           <div class="rail-head rules-head">

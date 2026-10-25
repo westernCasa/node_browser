@@ -577,6 +577,9 @@ html, body {
 .chip.agent.on { border-color: var(--live); color: var(--live); }
 .chip.agent.shared { border-color: var(--signal); color: var(--signal); }
 .tab .agent-mark { color: var(--signal); font-style: normal; font-size: 10px; margin-left: 4px; }
+/* B69: tab chosen for Mosaic. Muted: a setting of the tab, not "on now". */
+.tab .tile-mark { display: inline-flex; color: var(--ink-muted, #a1a1a6); margin-left: 6px; flex: none; }
+.tab .tile-mark svg { width: 12px; height: 12px; }
 .source .field textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--line); background: var(--bg-2); color: var(--text); border-radius: var(--radius-sm); font: 11px/1.4 ui-monospace, Menlo, monospace; padding: 6px; resize: vertical; }
 .source .row { display: flex; gap: 6px; margin-top: 6px; }
 .agent-log { margin-top: 8px; font-size: 11px; color: var(--mute); }
