@@ -1218,11 +1218,28 @@ function closeTab(id) {
 }
 
 // ---- Right-click menu ----
-function showContextMenu(tab, p) {
-  Menu.buildFromTemplate(contextMenuItems(tab, p)).popup({ window: win });
+async function showContextMenu(tab, p) {
+  // Video players that draw their own controls over the video, or play from a
+  // blob: address (Nowness, Vimeo and others), hide the video from the
+  // right-click. Ask the page itself whether it has one (B72).
+  const video = p.mediaType === "video" || (await pageHasVideo(tab));
+  Menu.buildFromTemplate(contextMenuItems(tab, p, { video })).popup({ window: win });
 }
 
-function contextMenuItems(tab, p) {
+// True if any frame of the page has a video that has loaded. Gives up after
+// 250 ms so the menu never waits on a busy page.
+async function pageHasVideo(tab) {
+  let frames = [];
+  try {
+    frames = tab.view.webContents.mainFrame.framesInSubtree;
+  } catch (_) {}
+  const ask = Promise.all(
+    frames.map((f) => f.executeJavaScript(`[...document.querySelectorAll("video")].some((v) => v.readyState > 0)`, true).catch(() => false))
+  ).then((r) => r.some(Boolean));
+  return Promise.race([ask, new Promise((r) => setTimeout(() => r(false), 250))]);
+}
+
+function contextMenuItems(tab, p, { video = p.mediaType === "video" } = {}) {
   const wc = tab.view.webContents;
   const items = [];
   const sep = () => items.length && items.at(-1).type !== "separator" && items.push({ type: "separator" });
@@ -1248,6 +1265,10 @@ function contextMenuItems(tab, p) {
     sep();
     items.push({ label: `Open ${p.mediaType === "video" ? "Video" : "Audio"} in New Tab`, click: () => createTab(p.srcURL) }, { label: `Copy ${p.mediaType === "video" ? "Video" : "Audio"} Address`, click: () => clipboard.writeText(p.srcURL) });
     if (p.mediaType === "video") items.push({ label: "Picture in Picture", click: () => togglePip(tab.id) }, { label: "Loop Section", submenu: loopMenu(tab.id) });
+  } else if (video) {
+    // A video the right-click did not land on directly (custom player, blob: address).
+    sep();
+    items.push({ label: "Picture in Picture", click: () => togglePip(tab.id) }, { label: "Loop Section", submenu: loopMenu(tab.id) });
   }
   // On a Mac, a right-click selects the word under the pointer, which can be a
   // lone quote mark or bracket; only offer search and pin for real words.
@@ -2030,7 +2051,7 @@ app.whenReady().then(() => {
   });
   global.nodeCompanion = companion; // for the e2e tests
   global.nodeTest = {
-  claudeDesktopEntry, sleepIdleTabs, contextMenuItems: (id, p) => contextMenuItems(tabs.get(id), p).map((i) => i.label || i.role || "-"), savePdf, closedTabs };
+  claudeDesktopEntry, sleepIdleTabs, contextMenuItems: async (id, p) => contextMenuItems(tabs.get(id), p, { video: p.mediaType === "video" || (await pageHasVideo(tabs.get(id))) }).map((i) => i.label || i.role || "-"), savePdf, closedTabs };
   initAgents();
   bookmarkStore = new BookmarkStore(fsStorage(app.getPath("userData")));
   buildMenu();
