@@ -11,6 +11,8 @@ const cases = [
   ["https://mail.google.com/mail/u/0/", "apps", true],
   ["https://mail.google.com/mail/u/0/", "signin", false],
   ["https://docs.google.com/document/d/x", "apps", true],
+  ["https://docs.google.com/forms/d/e/1FAIpQLSc/viewform", "apps", false],
+  ["https://docs.google.com/forms/d/abc/edit", "apps", true],
   ["https://www.google.com/search?q=levain", "apps", false],
   ["https://www.youtube.com/watch?v=x", "apps", false],
   ["https://scholar.google.com/scholar?q=sourdough", "apps", false],

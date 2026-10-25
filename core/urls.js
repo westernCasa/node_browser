@@ -1,5 +1,7 @@
 // Address-bar input to URL, shared by desktop and mobile.
 const HOME_URL = "https://en.wikipedia.org/wiki/Main_Page";
+// The beta survey (B65): anonymous Google Form, no account needed.
+const SURVEY_URL = "https://forms.gle/XuMGZUzScNYPyP319";
 // Searches typed in the address bar go to Brave Search.
 const SEARCH_URL = "https://search.brave.com/search?q=";
 
@@ -38,4 +40,4 @@ function isSensitiveUrl(url) {
   return SENSITIVE.test(u.hostname + u.pathname) || SESSION_PATH.test(u.pathname);
 }
 
-module.exports = { HOME_URL, SEARCH_URL, normalizeUrl, hostOf, SENSITIVE, isSensitiveUrl };
+module.exports = { HOME_URL, SEARCH_URL, SURVEY_URL, normalizeUrl, hostOf, SENSITIVE, isSensitiveUrl };

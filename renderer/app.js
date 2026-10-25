@@ -70,6 +70,7 @@ function saveHidden() {
   if (typeof renderHiddenList === "function") renderHiddenList();
 }
 function hideKeyword(term) {
+  api?.usageCount?.("hides");
   const site = activeSite() || "*";
   hiddenBySite[site] = [...new Set([...(hiddenBySite[site] || []), lower(term)])];
   saveHidden();
@@ -300,7 +301,10 @@ function makeKeyChip() {
   el.addEventListener("click", () => {
     const term = el.__term;
     if (isPinned(term)) pinned = pinned.filter((p) => lower(p) !== lower(term));
-    else pinned = [...pinned, term];
+    else {
+      pinned = [...pinned, term];
+      api?.usageCount?.("pins");
+    }
     renderKeys({ animate: true });
     crawl();
   });
@@ -630,6 +634,7 @@ function renderResults(items) {
     decorateCard?.(card, item);
     if (resultsEl.children[i] !== card) resultsEl.insertBefore(card, resultsEl.children[i] || null);
   });
+  if (fresh) api?.usageCount?.("suggestionsShown", fresh);
   for (const old of existing.values()) old.remove();
   while (resultsEl.children.length > items.length) resultsEl.lastElementChild.remove();
 }
@@ -915,6 +920,7 @@ omniForm.addEventListener("submit", (e) => {
 function pinKeyword(text) {
   const v = String(text || "").trim();
   if (!v || isPinned(v)) return;
+  api?.usageCount?.("pins");
   pinned = [...pinned, v].slice(0, 6);
   unhideKeyword(v);
   renderKeys({ animate: true });
@@ -926,6 +932,7 @@ document.getElementById("key-form").addEventListener("submit", (e) => {
   const v = keyInput.value.trim();
   keyInput.value = "";
   if (!v || isPinned(v)) return;
+  api?.usageCount?.("pins");
   pinned = [...pinned, v].slice(0, 6);
   unhideKeyword(v);
   renderKeys({ animate: true });
@@ -1217,7 +1224,7 @@ const noticeEl = document.getElementById("notice");
 // Short message in the sidebar, with optional action buttons. Replaces alert().
 let googleNoticeShown = false;
 
-function showNotice(text, actions = []) {
+function showNotice(text, actions = [], { dismiss = true } = {}) {
   noticeEl.hidden = false;
   noticeEl.innerHTML = "";
   const p = document.createElement("div");
@@ -1225,7 +1232,7 @@ function showNotice(text, actions = []) {
   noticeEl.appendChild(p);
   const row = document.createElement("div");
   row.className = "row";
-  for (const a of [...actions, { label: "Dismiss", run: () => {} }]) {
+  for (const a of [...actions, ...(dismiss ? [{ label: "Dismiss", run: () => {} }] : [])]) {
     const b = document.createElement("button");
     b.textContent = a.label;
     b.addEventListener("click", () => {
@@ -1601,6 +1608,41 @@ if (api?.copyDiagnostics) {
   });
   document.getElementById("diag-folder").addEventListener("click", () => api.openLogFolder());
 }
+
+// ---- Beta survey (B64, B65) ----
+// Settings → Help: the survey link and the usage summary to paste into it.
+if (api?.copyUsage) {
+  document.getElementById("usage-copy").addEventListener("click", async () => {
+    const text = await api.copyUsage();
+    document.getElementById("usage-state").textContent = `Copied ${text.split("\n").length} lines to the clipboard. Paste them into the survey's usage question.`;
+  });
+  document.getElementById("survey-open").addEventListener("click", () => {
+    store.set("node.survey", { state: "done" });
+    closeMenu?.();
+    api.openSurvey();
+  });
+}
+// One prompt in the suggestions widget once NODE has been used on 3
+// different days. Later asks again on the next day of use; Don't ask again
+// and Take survey end it. The survey stays in Settings → Help either way.
+const SURVEY_AFTER_DAYS = 3;
+async function maybeSurveyPrompt() {
+  if (!api?.usageDays || !api?.openSurvey) return;
+  const survey = store.get("node.survey", { state: "ask" });
+  if (survey.state !== "ask") return;
+  const days = await api.usageDays();
+  if (days < SURVEY_AFTER_DAYS || (survey.laterDays && days <= survey.laterDays)) return;
+  showNotice(
+    `Thanks for trying NODE. You've used it on ${days} days. Would you answer a short survey? About 4 minutes, anonymous. It decides what gets fixed next.`,
+    [
+      { label: "Take survey", run: () => (store.set("node.survey", { state: "done" }), api.openSurvey()) },
+      { label: "Later", run: () => store.set("node.survey", { state: "ask", laterDays: days }) },
+      { label: "Don't ask again", run: () => store.set("node.survey", { state: "never" }) },
+    ],
+    { dismiss: false }
+  );
+}
+setTimeout(() => maybeSurveyPrompt().catch(() => {}), 8000);
 
 // ---- First-run setup (B30) ----
 async function maybeFirstRun() {
