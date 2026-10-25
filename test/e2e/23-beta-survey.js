@@ -105,7 +105,7 @@ async function launch() {
   await ui.click("#notice button:has-text('Take survey')");
   await sleep(1500);
   const urls = await app.evaluate(({ webContents }) => webContents.getAllWebContents().map((w) => w.getURL()));
-  check("Take survey opens the survey in a tab", urls.some((u) => decodeURIComponent(u).includes("forms.gle/XuMGZUzScNYPyP319")), urls.filter((u) => /forms/.test(u)).join(" "));
+  check("Take survey opens the survey in a tab", urls.some((u) => /forms\.gle\/XuMGZUzScNYPyP319|docs\.google\.com\/forms\/d\/e\//.test(decodeURIComponent(u))) && !urls.some((u) => /google-tab\.html/.test(u)), urls.filter((u) => /forms/.test(u)).join(" "));
   await app.evaluate(({ app }) => app.quit());
   await sleep(1500);
   const s3 = JSON.parse(fs.readFileSync(file, "utf8"));

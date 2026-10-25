@@ -7,7 +7,8 @@
 //   "off"    nothing is routed; Google pages stay in NODE (signed out).
 //
 // Google Search, YouTube watching, Maps and Scholar searching work signed out,
-// so they stay in NODE. Only Scholar's account features (My Library, alerts)
+// so they stay in NODE. So do published Google Forms (docs.google.com/forms/d/e/…),
+// which anyone can fill in without an account, such as NODE's beta survey. Only Scholar's account features (My Library, alerts)
 // are routed.
 
 const SIGNIN_HOSTS = ["accounts.google.com", "myaccount.google.com"];
@@ -54,6 +55,7 @@ function routesToGoogleWindow(url, mode = "apps") {
   const host = u.hostname.toLowerCase();
   if (SIGNIN_HOSTS.includes(host)) return true;
   if (mode !== "apps") return false;
+  if (host === "docs.google.com" && /^\/forms\/d\/e\//.test(u.pathname)) return false;
   if (APP_HOSTS.includes(host)) return true;
   return isScholarAccountPage(u);
 }
