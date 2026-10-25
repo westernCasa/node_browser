@@ -86,6 +86,15 @@ const PORT = 47699;
   log("read_tab:", rt.error ? "ERROR " + rt.text : rt.text.split("\n").filter(Boolean).slice(0, 5).join(" / "));
   const fp = await call("fetch_page", { url: BASE + "/other.html" });
   log("fetch_page:", fp.error ? "ERROR " + fp.text : fp.text.split("\n").filter(Boolean).slice(0, 2).join(" / "));
+  // B68: link-only list items (See also, References, Categories) keep their text, no empty bullets.
+  const sa = await call("fetch_page", { url: BASE + "/seealso.html" });
+  const md = sa.text || "";
+  log("fetch_page see-also:", md.split("\n").filter((l) => /^\s*(-|\d+\.)/.test(l)).join(" / "));
+  const okList = /- \[Hypertext\]\(/.test(md) && /- \[Project Xanadu\]/.test(md) && /As We May Think/.test(md) && /Information retrieval/.test(md) && !/^\s*(-|\d+\.)\s*$/m.test(md);
+  if (!okList) {
+    console.error("✗ list items came back empty:\n" + md);
+    process.exit(1);
+  }
   const cookies = await app.evaluate(async ({ session }) => (await session.fromPartition("node-agent").cookies.get({})).length + " cookies in agent session; user session separate: " + (session.fromPartition("node-agent") !== session.defaultSession));
   log("agent session:", cookies);
 

@@ -105,8 +105,15 @@ function extractionScript(ruleExtract) {
       }
     };
 
+    // Icons, logos and avatars (small images, or images in the site's menus
+    // and buttons) describe the site, not the page (B67).
+    const CHROME = "nav, header, [role=banner], [role=navigation], button, [role=button], [role=menu], [role=menuitem]";
     for (const el of mediaEls) {
       if (!inView(el.tagName === "SOURCE" ? el.parentElement : el) && el.tagName !== "META") continue;
+      if (el.tagName === "IMG" || el.tagName === "PICTURE") {
+        const r = el.getBoundingClientRect();
+        if ((r.width < 64 && r.height < 64) || (el.closest && el.closest(CHROME))) continue;
+      }
       takeMeta(el);
     }
 
