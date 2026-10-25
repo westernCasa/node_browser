@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld("scout", {
   openOverview: () => ipcRenderer.invoke("overview:open"),
   closeOverview: (ids) => ipcRenderer.invoke("overview:close", ids),
   tabMenu: (id, x, y) => ipcRenderer.invoke("tab:menu", id, x, y),
+  loopTab: (id, op, secs) => ipcRenderer.invoke("tab:loop", id, op, secs),
   navigate: (id, url) => ipcRenderer.invoke("tab:navigate", id, url),
   goBack: (id) => ipcRenderer.invoke("tab:back", id),
   goForward: (id) => ipcRenderer.invoke("tab:forward", id),

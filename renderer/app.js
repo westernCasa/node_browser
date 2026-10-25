@@ -195,6 +195,19 @@ function renderTabs() {
       m.title = "Shown in Mosaic. Right-click to remove.";
       el.appendChild(m);
     }
+    if (t.loop) {
+      // A section of the video loops (B70). Click to stop.
+      const lp = document.createElement("button");
+      lp.className = "loop-mark";
+      lp.textContent = "↻ " + t.loop.label;
+      lp.title = `Looping ${t.loop.label}. Click to stop.`;
+      lp.setAttribute("aria-label", `Looping ${t.loop.label}. Stop looping`);
+      lp.addEventListener("click", (e) => {
+        e.stopPropagation();
+        api?.loopTab?.(t.id, "stop");
+      });
+      el.appendChild(lp);
+    }
     if (t.agentShared) {
       const m = document.createElement("i");
       m.className = "agent-mark";
