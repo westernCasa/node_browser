@@ -178,6 +178,8 @@ function chromeBounds() {
   return { width, height };
 }
 
+// Space the tutorial's coach band takes at the bottom of the window (B72).
+let coachHeight = 0;
 function contentRect() {
   const { width, height } = chromeBounds();
   if (htmlFullId) return { x: 0, y: 0, width, height };
@@ -187,7 +189,7 @@ function contentRect() {
     x: 0,
     y: top,
     width: Math.max(280, width - sidebarWidth),
-    height: Math.max(200, height - top),
+    height: Math.max(200, height - top - coachHeight),
   };
 }
 
@@ -562,7 +564,7 @@ function tabState(tab) {
   const raw = tab.sleeping ? tab.sleeping.url : wc.getURL();
   const google = isPlaceholder(raw);
   let url = raw;
-  if (isStartPage(raw)) url = "";
+  if (isStartPage(raw) || isTutorialPage(raw)) url = "";
   else if (isInternal(raw)) {
     try {
       url = new URL(raw).searchParams.get("u") || raw;
@@ -572,6 +574,7 @@ function tabState(tab) {
     id: tab.id,
     url,
     google, // placeholder for a page shown in the Google window
+    tutorial: isTutorialPage(raw), // a practice page of the gestures tutorial
     agentShared: Boolean(tab.agentShared),
     tile: Boolean(tab.tile), // chosen for Mosaic (B69)
     loop: tab.loop ? { a: tab.loop.a, b: tab.loop.b, label: `${clock(tab.loop.a)}–${clock(tab.loop.b)}` } : null, // B70
@@ -1076,7 +1079,12 @@ function isPlaceholder(url) {
 // "page not loaded" / "page stopped" page (both carry the real address in ?u=)
 // and the new tab page.
 function isInternal(url) {
-  return /\/renderer\/(google-tab|error)\.html\?/.test(String(url || "")) || isStartPage(url);
+  return /\/renderer\/(google-tab|error)\.html\?/.test(String(url || "")) || isStartPage(url) || isTutorialPage(url);
+}
+
+// The gestures tutorial's practice pages (B72): no address shown, no suggestions.
+function isTutorialPage(url) {
+  return /\/renderer\/tutorial\/[a-z]+\.html$/.test(String(url || ""));
 }
 
 function isStartPage(url) {
@@ -1321,6 +1329,11 @@ function stepTab(dir) {
 }
 
 function pickTab(index) {
+  // In Mosaic, ⌘1 to ⌘4 focus that tile (B72).
+  if (layout === "mosaic" && !libraryOpen && index >= 0) {
+    const id = mosaicIds()[index];
+    if (id) return focusTile(id);
+  }
   const ids = [...tabs.keys()];
   const id = index < 0 ? ids.at(-1) : ids[index];
   if (id) activateTab(id);
@@ -1783,6 +1796,7 @@ function buildMenu() {
             sendUi("notice", { message: "Diagnostics copied. Paste them into the issue, with what you were doing when it went wrong." });
           },
         },
+        { label: "Gestures and Shortcuts Tutorial", click: () => sendUi("tour") },
         { label: "Take the Beta Survey…", click: () => createTab(require("./core/urls").SURVEY_URL) },
         { label: "Open Log Folder", click: () => shell.openPath(log().dir) },
         { type: "separator" },
@@ -1808,6 +1822,14 @@ function buildMenu() {
         },
         { label: "Toggle Mosaic", accelerator: "CmdOrCtrl+Shift+M", click: () => sendUi("toggle-layout") },
         { label: "Choose Tabs for Mosaic…", accelerator: "CmdOrCtrl+Shift+\\", click: () => sendUi("overview") },
+        {
+          label: "Loop Video: Next Minute / Stop",
+          accelerator: "CmdOrCtrl+Shift+L",
+          click: () => {
+            const tab = tabs.get(activeId);
+            if (tab) loopVideo(tab.id, tab.loop ? "stop" : "next", 60);
+          },
+        },
         { label: "Show or Hide Suggestions", accelerator: "CmdOrCtrl+Shift+.", click: () => sendUi("toggle-suggest") },
         { label: "Menu: Library, History, Settings", accelerator: "CmdOrCtrl+,", click: () => sendUi("open-menu", { section: "settings" }) },
         { type: "separator" },
@@ -2045,7 +2067,8 @@ ipcMain.handle("tab:forward", (_e, id) => {
   if (t?.view.webContents.canGoForward()) t.view.webContents.goForward();
 });
 ipcMain.handle("tab:reload", (_e, id) => tabs.get(id)?.view.webContents.reload());
-ipcMain.handle("layout:set", (_e, mode) => {
+ipcMain.handle("layout:set", (_e, mode) => setLayoutMode(mode));
+function setLayoutMode(mode, { tell = false } = {}) {
   const before = layout;
   layout = mode === "mosaic" ? "mosaic" : "focus";
   // Into Mosaic from a tab that has no tile: the first chosen tile becomes active.
@@ -2057,7 +2080,58 @@ ipcMain.handle("layout:set", (_e, mode) => {
   }
   if (layout === "mosaic" && before !== "mosaic") usage().count("mosaic");
   applyLayout(layout !== before ? { animate: layout === "mosaic" ? "enter" : "exit" } : {});
+  if (tell && layout !== before) sendUi("layout", { mode: layout });
   return layout;
+}
+// Mosaic → Focus on one tile (pinch out on it, or ⌘1 to ⌘4).
+function focusTile(id) {
+  if (!tabs.has(id)) return;
+  activeId = id;
+  wakeTab(tabs.get(id));
+  tabs.get(id).lastActive = Date.now();
+  emitList();
+  setLayoutMode("focus", { tell: true });
+}
+
+// ---- Pinch (B72) ----
+// view-preload.js sends trackpad pinches (not Ctrl + mouse wheel) as scale
+// steps. Like Safari: in Focus, pinching out zooms the page; pinching in
+// zooms the page back to 100%, and from 100% on to Mosaic. In Mosaic, pinch
+// in opens the tab overview and pinch out focuses the tile under the fingers.
+// One gesture changes one level.
+const PINCH_IN = 0.82;
+const PINCH_OUT = 1.22;
+let pinchG = null;
+function onPinch(tab, factor) {
+  const f = Math.max(0.5, Math.min(2, Number(factor) || 1));
+  if (!pinchG || pinchG.id !== tab.id) {
+    const zoomed = tab.view.webContents.getZoomFactor() > 1.01;
+    const mode = layout === "mosaic" && !libraryOpen ? "level" : zoomed || f > 1 ? "page" : "level";
+    pinchG = { id: tab.id, mode, acc: 1, fired: false };
+  }
+  clearTimeout(pinchG.timer);
+  pinchG.timer = setTimeout(() => (pinchG = null), 260);
+  if (pinchG.mode === "page") {
+    const wc = tab.view.webContents;
+    wc.setZoomFactor(Math.max(1, Math.min(3, wc.getZoomFactor() * f)));
+    clearTimeout(pinchG.emit);
+    pinchG.emit = setTimeout(emitList, 120);
+    return;
+  }
+  if (pinchG.fired) return;
+  pinchG.acc *= f;
+  if (pinchG.acc < PINCH_IN) {
+    pinchG.fired = true;
+    if (layout === "mosaic") sendUi("overview");
+    else setLayoutMode("mosaic", { tell: true });
+  } else if (pinchG.acc > PINCH_OUT && layout === "mosaic") {
+    pinchG.fired = true;
+    focusTile(tab.id);
+  }
+}
+ipcMain.on("tab:pinch", (_e, id, factor) => {
+  const tab = tabs.get(String(id));
+  if (tab && !libraryOpen) onPinch(tab, factor);
 });
 ipcMain.handle("layout:sidebar", (_e, w) => {
   sidebarWidth = Math.max(160, Math.min(360, Number(w) || SIDEBAR_DEFAULT));
@@ -2176,6 +2250,45 @@ function setTile(id, on) {
   return true;
 }
 ipcMain.handle("tab:tile", (_e, id, on) => setTile(id, on));
+
+// ---- Gestures tutorial (B72) ----
+// Practice pages bundled with NODE (renderer/tutorial/). The tutorial opens
+// them as Mosaic tiles, and puts back the user's tabs, tiles and layout after.
+let tourSaved = null;
+const TOUR_PAGES = ["levain.html", "yeast.html", "batard.html", "rye.html"];
+function tourUrl(name) {
+  return `file://${path.join(__dirname, "renderer", "tutorial", name).split(path.sep).join("/")}`;
+}
+ipcMain.handle("tour:start", () => {
+  if (!win) return null;
+  if (!tourSaved) tourSaved = { active: activeId, layout, tiles: [...tabs.values()].filter((t) => t.tile).map((t) => t.id), ids: [] };
+  for (const id of tourSaved.ids) if (tabs.has(id)) closeTab(id);
+  for (const t of tabs.values()) t.tile = false;
+  tourSaved.ids = TOUR_PAGES.map((name) => createTab(tourUrl(name), { background: true, tile: true }));
+  activeId = tourSaved.ids[0];
+  wakeTab(tabs.get(activeId));
+  setLayoutMode("focus", { tell: true });
+  emitList();
+  return { ids: tourSaved.ids, video: tourSaved.ids[2] };
+});
+ipcMain.handle("tour:end", () => {
+  const saved = tourSaved;
+  tourSaved = null;
+  if (!saved) return;
+  for (const id of saved.ids) if (tabs.has(id)) closeTab(id);
+  for (const t of tabs.values()) t.tile = saved.tiles.includes(t.id);
+  if (saved.active && tabs.has(saved.active)) activeId = saved.active;
+  wakeTab(tabs.get(activeId));
+  setLayoutMode(saved.layout, { tell: true });
+  emitList();
+});
+ipcMain.handle("layout:coach", (_e, h) => {
+  coachHeight = Math.max(0, Math.min(240, Math.round(Number(h) || 0)));
+  applyLayout();
+});
+// The tutorial offers itself once, after an update or after first-run setup.
+// Test runs (--user-data-dir) skip it unless NODE_TOUR=1.
+ipcMain.handle("tour:auto", () => !app.commandLine.hasSwitch("user-data-dir") || process.env.NODE_TOUR === "1");
 
 // ---- Tab overview (B71): zoom out to every tab and pick the Mosaic tiles ----
 // Pictures of tabs that are not on screen come from tab.thumb, taken when a
@@ -2317,7 +2430,7 @@ async function loopVideo(id, op, secs) {
     sendUi("notice", { message: "Stopped looping." });
   } else {
     tab.loop = { a: result.a, b: result.b, url: wc.getURL().split("#")[0] };
-    if (op !== "get") sendUi("notice", { message: `Looping ${clock(result.a)} to ${clock(result.b)} in this tab. To stop, click ↻ on the tab.` });
+    if (op !== "get") sendUi("notice", { message: `Looping ${clock(result.a)} to ${clock(result.b)} in this tab. To stop, click ↻ on the tab or press ${process.platform === "darwin" ? "⌘⇧L" : "Ctrl+Shift+L"}.` });
   }
   emitList();
   return tab.loop;

@@ -1,0 +1,10 @@
+/* Practice pages for the gestures tutorial (B72): plain light pages, like the sites people read. */
+:root { color-scheme: light; }
+body { margin: 0; background: #f6f5f2; color: #17171a; font: 18px/1.55 Georgia, "Times New Roman", serif; }
+main { max-width: 680px; margin: 0 auto; padding: 48px 24px 64px; display: flex; flex-direction: column; gap: 18px; }
+.host { font: 13px/1.3 ui-monospace, "SF Mono", Menlo, Consolas, monospace; color: #5b5b62; }
+h1 { margin: 0; font-size: 40px; line-height: 1.12; text-wrap: balance; }
+p { margin: 0; }
+.fig { height: 220px; border-radius: 6px; background: linear-gradient(135deg, #d9c7a3, #b99766); }
+video { width: 100%; aspect-ratio: 16 / 9; background: #111114; border-radius: 6px; }
+.note { font: 14px/1.5 -apple-system, "Segoe UI", sans-serif; color: #5b5b62; }
