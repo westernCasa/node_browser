@@ -73,7 +73,7 @@
           <button class="tb" id="find-close" data-tip="Close find" data-keys="Esc" aria-label="Close find"><svg class="ic" aria-hidden="true"><use href="#i-close"/></svg></button>
         </div>
         <span class="tb-sep" aria-hidden="true"></span>
-        <button class="tb" id="layout-btn" data-tip="Mosaic: tile every tab" data-keys="mod+shift+M" aria-label="Mosaic: tile every tab"><svg class="ic" aria-hidden="true"><use href="#i-mosaic"/></svg></button>
+        <button class="tb" id="layout-btn" data-tip="Mosaic: tile your tabs" data-keys="mod+shift+M" aria-label="Mosaic: tile your tabs"><svg class="ic" aria-hidden="true"><use href="#i-mosaic"/></svg></button>
         <button class="tb" id="sound-btn" data-tip="Sound: this tab only" data-keys="mod+shift+A" aria-label="Sound: this tab only"><svg class="ic" aria-hidden="true"><use href="#i-sound"/></svg></button>
         <button class="tb" id="capture-btn" data-tip="Capture: screenshot, save, media, picture in picture, loop" aria-label="Capture: screenshot, save, media, picture in picture, loop" aria-haspopup="menu"><svg class="ic" aria-hidden="true"><use href="#i-capture"/></svg></button>
         <button class="tb" id="agent-share-btn" data-tip="Share this tab with agents" aria-label="Share this tab with agents" hidden><svg class="ic" aria-hidden="true"><use href="#i-share"/></svg></button>
@@ -178,6 +178,20 @@
         </form>
       </div>
     </aside>
+  </div>
+  <!-- Tab overview (B71): every tab zoomed out; pick the Mosaic tiles like photos. -->
+  <div id="overview" hidden role="dialog" aria-modal="true" aria-labelledby="ov-title">
+    <div class="ov-head">
+      <h1 id="ov-title">Choose tabs for Mosaic</h1>
+      <span class="ov-count" id="ov-count" aria-live="polite"></span>
+      <div class="ov-actions">
+        <button class="chip" id="ov-clear">Clear</button>
+        <button class="chip" id="ov-cancel">Cancel</button>
+        <button class="chip" id="ov-done">Done</button>
+      </div>
+    </div>
+    <div class="ov-grid" id="ov-grid" role="listbox" aria-multiselectable="true" aria-labelledby="ov-title"></div>
+    <p class="ov-hint" id="ov-hint">Click tabs to show them in Mosaic. Arrow keys move, Space picks, Enter is Done, Esc cancels.</p>
   </div>
   <div id="menu-overlay" hidden>
     <div class="menu-shots" id="menu-shots" aria-hidden="true"></div>
@@ -298,6 +312,14 @@
           <div class="source" id="startup-box">
             <div class="top"><label class="toggle"><input type="checkbox" id="restore-tabs" /> Reopen the tabs from last time</label></div>
             <label class="field"><span>New tab page (leave empty for NODE's start page)</span><input type="text" id="start-page" placeholder="https://…" spellcheck="false" /></label>
+            <label class="field"><span>Tiles in Mosaic</span>
+              <select id="mosaic-max">
+                <option value="4">Up to 4</option>
+                <option value="6">Up to 6</option>
+                <option value="9">Up to 9</option>
+                <option value="0">Every tab</option>
+              </select></label>
+            <p class="help">To choose which tabs Mosaic shows, press ⌘⇧\ (Ctrl+Shift+\ on Windows) or right-click the Mosaic button, and click the tabs you want. You can also right-click a tab and choose Show in Mosaic. With none chosen, Mosaic shows your first tabs and the one you are on.</p>
             <p class="help">Tabs you have not opened for 15 minutes go to sleep to save memory; they load again when you click them. Tabs playing media never sleep.</p>
           </div>
           <div class="rail-head rules-head">

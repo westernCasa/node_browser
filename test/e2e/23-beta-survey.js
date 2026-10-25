@@ -103,8 +103,13 @@ async function launch() {
   await sleep(8500);
   check("Later: asked again on the next day of use", await ui.$eval("#notice", (e) => !e.hidden && /survey/i.test(e.textContent)));
   await ui.click("#notice button:has-text('Take survey')");
-  await sleep(1500);
-  const urls = await app.evaluate(({ webContents }) => webContents.getAllWebContents().map((w) => w.getURL()));
+  // The survey page can take a few seconds to start loading on a slow network.
+  let urls = [];
+  for (let i = 0; i < 20; i++) {
+    await sleep(500);
+    urls = await app.evaluate(({ webContents }) => webContents.getAllWebContents().map((w) => w.getURL()));
+    if (urls.some((u) => /forms/.test(decodeURIComponent(u)))) break;
+  }
   check("Take survey opens the survey in a tab", urls.some((u) => /forms\.gle\/XuMGZUzScNYPyP319|docs\.google\.com\/forms\/d\/e\//.test(decodeURIComponent(u))) && !urls.some((u) => /google-tab\.html/.test(u)), urls.filter((u) => /forms/.test(u)).join(" "));
   await app.evaluate(({ app }) => app.quit());
   await sleep(1500);
