@@ -61,6 +61,23 @@ window.addEventListener(
   true
 );
 
+// ---- Pinch (B72) ----
+// A trackpad pinch reaches the page as wheel events with ctrlKey and small,
+// fractional steps; Ctrl + mouse wheel comes in whole steps of about 100 and is
+// left to the browser's own page zoom. Pinches go to the app, which zooms the
+// page or moves between Focus, Mosaic and the tab overview (main.js onPinch).
+window.addEventListener(
+  "wheel",
+  (e) => {
+    if (!tabId || !e.ctrlKey) return;
+    const pinch = !Number.isInteger(e.deltaY) || Math.abs(e.deltaY) < 10;
+    if (!pinch) return;
+    e.preventDefault();
+    ipcRenderer.send("tab:pinch", tabId, Math.exp(-e.deltaY / 100));
+  },
+  { passive: false, capture: true }
+);
+
 // ---- Gestures ----
 const nav = (dir) => tabId && ipcRenderer.send("tab:gesture", tabId, dir);
 

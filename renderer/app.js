@@ -171,6 +171,7 @@ function renderZoom() {
 }
 
 function renderTabs() {
+  if (typeof tourCheck === "function") setTimeout(tourCheck, 0);
   renderRuleLine();
   paintAgentButtons();
   if (typeof loadTalk === "function" && talkOpen) loadTalk();
@@ -803,13 +804,14 @@ async function crawlViewport(reason) {
     return;
   }
   if (!tab.url) {
-    // New tab page: nothing to read yet.
-    if (lastCrawl.url !== "") {
-      lastCrawl = { at: Date.now(), url: "", terms: [], selection: "" };
+    // New tab page (or a tutorial practice page): nothing to read.
+    const key = tab.tutorial ? "tutorial" : "";
+    if (lastCrawl.url !== key) {
+      lastCrawl = { at: Date.now(), url: key, terms: [], selection: "" };
       auto = [];
       renderKeys();
       renderResults([]);
-      statusEl.textContent = "Open a page and NODE suggests what to read next.";
+      statusEl.textContent = tab.tutorial ? "A practice page for the tutorial. NODE does not suggest from it." : "Open a page and NODE suggests what to read next.";
     }
     return;
   }
@@ -830,6 +832,8 @@ async function crawlViewport(reason) {
           renderResults([]);
           statusEl.textContent = res.page?.google
             ? "This page is open in the Google window, so NODE does not suggest from it."
+            : res.page?.tutorial
+            ? "A practice page for the tutorial. NODE does not suggest from it."
             : !res.page?.url
             ? "Open a page and NODE suggests what to read next."
             : "Suggestions are off for this site (site rule). Pinned keywords still work with Crawl.";
@@ -973,6 +977,7 @@ function paintLayout(animate = false) {
   setTip(layoutBtn, mosaic ? "Focus: back to one tab" : "Mosaic: tile your tabs");
   layoutBtn.innerHTML = icon(mosaic ? "focus" : "mosaic", "label");
   if (animate) playOnce(layoutBtn.firstElementChild, "rise");
+  if (typeof tourCheck === "function") setTimeout(tourCheck, 0);
 }
 // Right-click the Mosaic button: the tab overview, to pick the tiles (B71).
 layoutBtn.addEventListener("contextmenu", (e) => {
@@ -1663,6 +1668,7 @@ async function maybeSurveyPrompt() {
   if (survey.state !== "ask") return;
   const days = await api.usageDays();
   if (days < SURVEY_AFTER_DAYS || (survey.laterDays && days <= survey.laterDays)) return;
+  if (!noticeEl.hidden || tourOn()) return; // another notice or the tutorial is showing: ask on the next start
   showNotice(
     `Thanks for trying NODE. You've used it on ${days} days. Would you answer a short survey? About 4 minutes, anonymous. It decides what gets fixed next.`,
     [
@@ -1705,6 +1711,7 @@ async function maybeFirstRun() {
     await api.setSettings(next);
     box.hidden = true;
     await api.setLibraryOpen(false);
+    setTimeout(() => maybeTourPrompt(true), 1500);
     if (openKeyPage) api.createTab("https://brave.com/search/api/");
   });
 }
@@ -3028,6 +3035,7 @@ api?.onCommand?.((msg) => {
   else if (msg.cmd === "toggle-suggest") setPanelOpen(!panelOpen, { focus: true, animate: true });
   else if (msg.cmd === "open-menu") openMenu(msg.section || menuSection);
   else if (msg.cmd === "overview") openOverview();
+  else if (msg.cmd === "tour") startTour();
 });
 
 // ---- Tab overview (B71) ----
@@ -3054,6 +3062,7 @@ function hostOf(url) {
 }
 
 function paintOverview() {
+  if (typeof tourCheck === "function") setTimeout(tourCheck, 0);
   const full = ovMax && ovPicked.length >= ovMax;
   ovCount.textContent = ovPicked.length ? `${ovPicked.length} of ${ovMax || "all"} picked` : ovMax ? `Pick up to ${ovMax}` : "Pick any tabs";
   ovCount.classList.toggle("full", Boolean(full));
@@ -3235,3 +3244,150 @@ ovEl.addEventListener("keydown", (e) => {
     stops[(i + (e.shiftKey ? stops.length - 1 : 1)) % stops.length]?.focus();
   }
 });
+
+
+// ---- Gestures tutorial (B72) ----
+// Teaches the trackpad gestures and keyboard shortcuts one step at a time, on
+// practice tabs NODE opens for it (main.js tour:start), and waits until each
+// step is done, by gesture or by shortcut. A band at the bottom of the window
+// holds the coach; the pages above it shrink to make room. Ends by closing the
+// practice tabs and putting back the user's tabs, tiles and layout.
+const coachEl = document.getElementById("coach");
+const COACH_H = 132;
+const isMacUi = /Mac/.test(navigator.platform || navigator.userAgent);
+const kbd = (...keys) =>
+  keys.map((k) => `<kbd>${k === "mod" ? (isMacUi ? "⌘" : "Ctrl") : k === "shift" ? (isMacUi ? "⇧" : "Shift") : escapeHtml(k)}</kbd>`).join("");
+const PAD_SVG = `<svg class="pad" viewBox="0 0 52 36" aria-hidden="true"><rect x="1" y="1" width="50" height="34" rx="4" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.5"/><circle class="finger" cx="22" cy="16" r="4" fill="currentColor"/><circle class="finger b" cx="30" cy="20" r="4" fill="currentColor"/></svg>`;
+let tour = null; // { i, ids, video, advancing }
+const tourOn = () => Boolean(tour);
+const tabById = (id) => tabs.find((t) => t.id === id);
+const TOUR_STEPS = [
+  { title: "Zoom out to Mosaic", text: "Mosaic shows your tabs side by side.", pinch: "in", gesture: "Pinch in on the page", keys: () => kbd("mod", "shift", "M"),
+    done: () => layout === "mosaic" && !ovOpen },
+  { title: "Zoom back in to one tile", text: "Put two fingers on the tile you want and spread them.", pinch: "out", gesture: "Pinch out on a tile", keys: () => `${kbd("mod", "1")} to ${kbd("mod", "4")}`,
+    done: () => layout === "focus" && !ovOpen },
+  { title: "Zoom all the way out", text: "The overview shows every open tab, so you can choose what Mosaic shows.", pinch: "in", gesture: "Pinch in, then pinch in again", keys: () => kbd("mod", "shift", "\\"),
+    done: () => ovOpen },
+  { title: "Pick two tabs", text: "Click the cards you want in Mosaic. Click again to unpick. Up to 4.", gesture: "Click cards", keys: () => `Arrows, then ${kbd("Space")}`,
+    start: () => { if (ovOpen) { ovPicked = []; paintOverview(); } }, done: () => ovOpen && ovPicked.length >= 2 },
+  { title: "Show them in Mosaic", text: "Mosaic now shows only the tabs you picked.", pinch: "out", gesture: "Pinch out", keys: () => kbd("Enter"),
+    done: () => !ovOpen && layout === "mosaic" && tabs.filter((t) => t.tile).length >= 2 },
+  { title: "Back to one tab", text: "The same shortcut switches between Focus and Mosaic.", pinch: "out", gesture: "Pinch out", keys: () => kbd("mod", "shift", "M"),
+    done: () => layout === "focus" && !ovOpen },
+  { title: "Loop a minute of video", text: "NODE opened the “Shaping a batard” practice tab. Loop the next minute of its video.", gesture: "Right-click the video → Loop Section", keys: () => kbd("mod", "shift", "L"),
+    start: () => tour && api.activateTab(tour.video), done: () => Boolean(tour && tabById(tour.video)?.loop) },
+  { title: "Stop looping", text: "The tab shows the section while it loops. The same shortcut stops it.", gesture: "Click ↻ on the tab", keys: () => kbd("mod", "shift", "L"),
+    done: () => Boolean(tour && tabById(tour.video) && !tabById(tour.video).loop) },
+];
+
+function paintCoach(doneStep = false) {
+  if (!tour) return;
+  const n = TOUR_STEPS.length;
+  if (tour.i >= n) {
+    coachEl.className = "coach done";
+    coachEl.innerHTML = `<div class="c-main"><div class="c-kick">Tutorial complete</div><h2>That's all of them</h2><p>Run it again any time from Help → Gestures and Shortcuts Tutorial.</p></div>` +
+      `<div class="c-acts"><button class="chip" id="coach-close">Close and go back to my tabs</button></div>`;
+    return;
+  }
+  const st = TOUR_STEPS[tour.i];
+  coachEl.className = "coach" + (doneStep ? " done" : "") + (st.pinch === "out" ? " outward" : "");
+  coachEl.innerHTML =
+    `<div class="c-main"><div class="c-kick">Step ${tour.i + 1} of ${n}<span class="c-dots">${TOUR_STEPS.map((_, j) => `<i class="${j <= tour.i ? "on" : ""}"></i>`).join("")}</span></div>` +
+    `<h2>${doneStep ? "Done" : escapeHtml(st.title)}</h2><p>${escapeHtml(st.text)}</p></div>` +
+    `<div class="c-ways"><div class="c-way"><span class="c-lab">Trackpad</span>${st.pinch ? PAD_SVG : ""}<span>${escapeHtml(st.gesture)}</span></div>` +
+    `<div class="c-way"><span class="c-lab">Keys</span><span>${st.keys()}</span></div></div>` +
+    `<div class="c-acts"><button class="chip" id="coach-skip">Skip step</button><button class="chip" id="coach-close">End tutorial</button></div>`;
+}
+
+function tourGo(i) {
+  if (!tour) return;
+  tour.i = i;
+  tour.advancing = false;
+  paintCoach();
+  if (i < TOUR_STEPS.length) Promise.resolve(TOUR_STEPS[i].start?.()).then(() => setTimeout(tourCheck, 300));
+}
+
+function tourCheck() {
+  if (!tour || tour.advancing || tour.i >= TOUR_STEPS.length) return;
+  if (!TOUR_STEPS[tour.i].done()) return;
+  tour.advancing = true;
+  paintCoach(true);
+  setTimeout(() => tourGo(tour ? tour.i + 1 : 0), reducedMotion() ? 300 : 800);
+}
+
+async function startTour() {
+  if (!api?.tourStart) return;
+  if (menuOpen) await closeMenu();
+  if (ovOpen) await closeOverview(false);
+  store.set("node.tour", "seen");
+  const r = await api.tourStart();
+  if (!r) return;
+  tour = { i: 0, ids: r.ids, video: r.video, advancing: false };
+  document.documentElement.style.setProperty("--coach-h", COACH_H + "px");
+  coachEl.hidden = false;
+  await api.setCoach(COACH_H);
+  tourGo(0);
+}
+
+async function endTour() {
+  if (!tour) return;
+  tour = null;
+  coachEl.hidden = true;
+  coachEl.innerHTML = "";
+  document.documentElement.style.setProperty("--coach-h", "0px");
+  if (ovOpen) await closeOverview(false);
+  await api.setCoach(0);
+  await api.tourEnd();
+}
+
+coachEl.addEventListener("click", (e) => {
+  if (e.target.closest("#coach-skip")) tourGo(tour.i + 1);
+  else if (e.target.closest("#coach-close")) endTour();
+});
+document.getElementById("tour-start")?.addEventListener("click", () => startTour());
+
+// Offered after an update to a version with the tutorial, or after setup,
+// until the user answers it (Start tutorial or Not now). Another notice in the
+// sidebar (the Brave key reminder, a blocked popup) goes first: the offer waits
+// until the sidebar is free, and if a later notice replaces it, it comes back
+// on the next start.
+const TOUR_OFFER = "New: pinch to move between one tab, Mosaic and all your tabs, and choose which tabs Mosaic shows. A 2-minute tutorial shows how.";
+async function maybeTourPrompt(afterSetup = false, tries = 0) {
+  if (!api?.tourAuto || store.get("node.tour", "") === "seen" || tourOn()) return;
+  if (!(await api.tourAuto())) return;
+  if (!afterSetup) {
+    const settings = await api.getSettings();
+    if (!settings.firstRunDone) return; // the setup screen offers it when it closes
+  }
+  if (!noticeEl.hidden || menuOpen || ovOpen) {
+    if (tries < 40) setTimeout(() => maybeTourPrompt(afterSetup, tries + 1).catch(() => {}), 3000);
+    return;
+  }
+  const answer = (run) => () => {
+    store.set("node.tour", "seen");
+    run();
+  };
+  showNotice(TOUR_OFFER, [{ label: "Start tutorial", run: answer(() => startTour()) }, { label: "Not now", run: answer(() => {}) }], { dismiss: false });
+}
+setTimeout(() => maybeTourPrompt().catch(() => {}), 2500);
+
+// Trackpad pinch in the tab overview: pinch out = Done (B72). The overview is
+// part of this window, so its pinches arrive here, not through a page.
+ovEl.addEventListener(
+  "wheel",
+  (e) => {
+    if (!e.ctrlKey) return;
+    e.preventDefault();
+    if (Number.isInteger(e.deltaY) && Math.abs(e.deltaY) >= 10) return; // Ctrl + mouse wheel
+    const g = (ovEl.__pinch = ovEl.__pinch || { acc: 1, fired: false });
+    clearTimeout(g.timer);
+    g.timer = setTimeout(() => (ovEl.__pinch = null), 260);
+    if (g.fired) return;
+    g.acc *= Math.exp(-e.deltaY / 100);
+    if (g.acc > 1.22) {
+      g.fired = true;
+      closeOverview(true);
+    }
+  },
+  { passive: false }
+);

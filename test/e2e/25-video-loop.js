@@ -73,10 +73,18 @@ fs.writeFileSync(path.join(userData, "settings.json"), JSON.stringify({ firstRun
   await sleep(800);
   check("a new address on the same page ends the loop", (await ui.$("#tabs .tab.active .loop-mark")) === null && (await loop("get")) === null);
 
+  // Right-click anywhere on a page with a video offers Loop Section, even when the
+  // click is not on the video itself (custom players, blob: addresses).
+  const menu = (p) => app.evaluate(({}, [i, q]) => global.nodeTest.contextMenuItems(i, q), [id, p]);
+  const onText = await menu({ mediaType: "none", x: 10, y: 10 });
+  const onBlobVideo = await menu({ mediaType: "video", srcURL: "blob:http://127.0.0.1:8765/abc", x: 10, y: 10 });
+  check("right-click on a page with a video offers Loop Section", onText.includes("Loop Section") && onBlobVideo.includes("Loop Section"), onText.join(" | "));
+
   // A page without video says so.
   await ui.fill("#omni", `${BASE}/other.html`);
   await ui.press("#omni", "Enter");
   await sleep(2000);
+  check("no Loop Section on a page without video", !(await menu({ mediaType: "none", x: 10, y: 10 })).includes("Loop Section"));
   await loop("next", 30);
   await sleep(300);
   check("no video: a notice says so", /No video to loop/.test(await ui.textContent("#notice")));
