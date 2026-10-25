@@ -378,6 +378,63 @@ function pipScript() {
   })()`;
 }
 
+/**
+ * Loop a section of the page's main video (B70). op: "next" (loop the next
+ * `secs` seconds from now), "start" (loop from here), "end" (loop up to
+ * here), "stop", or "get". The loop ends by itself when the page moves to
+ * another address (YouTube reuses one video element for every video).
+ * Returns { a, b, duration } or "none".
+ */
+function loopScript(op, secs = 60) {
+  return `(() => {
+    const op = ${JSON.stringify(String(op))};
+    const secs = ${Math.max(5, Math.min(3600, Number(secs) || 60))};
+    const vids = [...document.querySelectorAll("video")].filter((v) => v.readyState > 0);
+    if (!vids.length) return "none";
+    const area = (v) => { const r = v.getBoundingClientRect(); return r.width * r.height; };
+    const v = vids.find((x) => x.__nodeLoop) || vids.find((x) => !x.paused) || vids.sort((a, b) => area(b) - area(a))[0];
+    const here = () => location.href.split("#")[0];
+    const L = v.__nodeLoop && v.__nodeLoop.href === here() ? v.__nodeLoop : null;
+    if (op === "get") return L && L.b != null ? { a: L.a, b: L.b, duration: v.duration } : "none";
+    if (op === "stop") { v.__nodeLoop = null; return { stopped: true }; }
+    const end = isFinite(v.duration) ? v.duration : Infinity;
+    const now = v.currentTime;
+    let a, b;
+    if (op === "next") { a = now; b = Math.min(now + secs, end); }
+    else if (op === "start") { a = now; b = L && L.b > now + 1 ? L.b : Math.min(now + secs, end); }
+    else if (op === "end") { b = now; a = L && L.a < now - 1 ? L.a : Math.max(0, now - secs); }
+    else return "none";
+    if (!(b > a + 0.5)) return "none";
+    v.__nodeLoop = { a, b, href: here() };
+    if (!v.__nodeLoopFn) {
+      // Only playback that runs on past the end goes back to the start. A jump
+      // (the user seeking elsewhere) is left alone; the loop picks up again
+      // when playback next runs through the section.
+      v.__nodeLoopFn = (e) => {
+        const l = v.__nodeLoop;
+        if (!l) return;
+        if (l.href !== location.href.split("#")[0]) { v.__nodeLoop = null; return; }
+        if (e.type === "seeking") { v.__nodePrev = null; return; }
+        const prev = v.__nodePrev;
+        const cur = v.currentTime;
+        v.__nodePrev = cur;
+        const ranPast = prev != null && prev >= l.a - 0.05 && prev < l.b && (cur >= l.b - 0.05 || v.ended);
+        if (ranPast) {
+          v.currentTime = l.a;
+          if (v.ended || v.paused) v.play().catch(() => {});
+        }
+      };
+      v.addEventListener("timeupdate", v.__nodeLoopFn);
+      v.addEventListener("seeking", v.__nodeLoopFn);
+      v.addEventListener("ended", v.__nodeLoopFn);
+    }
+    v.__nodePrev = v.currentTime;
+    if (op === "next" || op === "start") { if (v.paused) v.play().catch(() => {}); }
+    else v.currentTime = a;
+    return { a, b, duration: v.duration };
+  })()`;
+}
+
 /** Pauses all playing media and marks it, so resumeScript can start it again (playback limit). */
 function pauseForLimitScript() {
   return `(() => {
@@ -405,4 +462,4 @@ function anyPlayingScript() {
   return `[...document.querySelectorAll("video, audio")].some((el) => !el.paused && !el.ended)`;
 }
 
-module.exports = { extractionScript, autoplayScript, blockAutoplayScript, centerOnClickScript, pipScript, readableTextScript, pauseForLimitScript, resumeScript, anyPlayingScript };
+module.exports = { extractionScript, autoplayScript, blockAutoplayScript, centerOnClickScript, pipScript, loopScript, readableTextScript, pauseForLimitScript, resumeScript, anyPlayingScript };

@@ -1,0 +1,9 @@
+<!doctype html><html><head><title>Loop test</title></head><body>
+<h1>Forty seconds</h1>
+<video id="v" width="640" height="360" muted controls></video>
+<script>
+  // The test server cannot send parts of a file, so the video is loaded whole
+  // as a blob, which can be seeked.
+  fetch("/long.webm").then((r) => r.blob()).then((b) => { document.getElementById("v").src = URL.createObjectURL(b); });
+</script>
+</body></html>

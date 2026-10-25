@@ -42,7 +42,7 @@ const { createAdblock } = require("./adblock");
 const { createNet } = require("./core/net");
 const { createSuggest } = require("./core/suggest");
 const { createPreview } = require("./core/preview");
-const { extractionScript, autoplayScript, blockAutoplayScript, centerOnClickScript, pipScript, readableTextScript, pauseForLimitScript, resumeScript, anyPlayingScript } = require("./core/page-scripts");
+const { extractionScript, autoplayScript, blockAutoplayScript, centerOnClickScript, pipScript, loopScript, readableTextScript, pauseForLimitScript, resumeScript, anyPlayingScript } = require("./core/page-scripts");
 const { PlaybackLimiter } = require("./core/playback");
 const { fsStorage } = require("./fs-storage");
 const { normalizeUrl, hostOf, SEARCH_URL } = require("./core/urls");
@@ -547,6 +547,7 @@ function tabState(tab) {
     url,
     google, // placeholder for a page shown in the Google window
     agentShared: Boolean(tab.agentShared),
+    loop: tab.loop ? { a: tab.loop.a, b: tab.loop.b, label: `${clock(tab.loop.a)}–${clock(tab.loop.b)}` } : null, // B70
 
     title: (tab.sleeping ? tab.sleeping.title : wc.getTitle()) || "New tab",
     sleeping: Boolean(tab.sleeping),
@@ -657,6 +658,7 @@ function attachListeners(tab) {
   on("zoom-changed", (_e, direction) => zoomTab(tab, direction === "in" ? 0.5 : -0.5));
   on("did-navigate", (_e, url) => {
     if (/^https?:/i.test(url)) tab.lastUrl = url;
+    tab.loop = null; // a new page: the loop ended with the old one (B70)
     // Sharing covers the site the user shared; going to another site ends it.
     if (tab.agentShared && originOf(url) !== tab.agentOrigin) {
       tab.agentShared = false;
@@ -672,6 +674,7 @@ function attachListeners(tab) {
   on("did-navigate-in-page", (_e, url, isMainFrame) => {
     if (isMainFrame) {
       refreshRule(tab, url);
+      if (tab.loop && tab.loop.url !== String(url).split("#")[0]) tab.loop = null; // another video on the same page
       // Single-page sites (YouTube and similar) change address without loading.
       tryAutoplay(wc, tab.rule?.autoplay);
     }
@@ -1209,7 +1212,7 @@ function contextMenuItems(tab, p) {
   if ((p.mediaType === "video" || p.mediaType === "audio") && http(p.srcURL)) {
     sep();
     items.push({ label: `Open ${p.mediaType === "video" ? "Video" : "Audio"} in New Tab`, click: () => createTab(p.srcURL) }, { label: `Copy ${p.mediaType === "video" ? "Video" : "Audio"} Address`, click: () => clipboard.writeText(p.srcURL) });
-    if (p.mediaType === "video") items.push({ label: "Picture in Picture", click: () => togglePip(tab.id) });
+    if (p.mediaType === "video") items.push({ label: "Picture in Picture", click: () => togglePip(tab.id) }, { label: "Loop Section", submenu: loopMenu(tab.id) });
   }
   // On a Mac, a right-click selects the word under the pointer, which can be a
   // lone quote mark or bracket; only offer search and pin for real words.
@@ -2103,6 +2106,7 @@ ipcMain.handle("menu:capture", (_e, x, y) => {
     { label: "Save Media", click: pick("media") },
     { type: "separator" },
     { label: "Picture in Picture", accelerator: "CmdOrCtrl+Shift+P", registerAccelerator: false, click: pick("pip") },
+    { label: "Loop Section", submenu: loopMenu(activeId) },
   ]);
   popupHold = true;
   menu.popup({ window: win, x: Math.round(x), y: Math.round(y), callback: () => (popupHold = false) });
@@ -2139,6 +2143,63 @@ async function togglePip(id) {
   return "none";
 }
 ipcMain.handle("tab:pip", (_e, id) => togglePip(id));
+
+// ---- Loop a section of a video (B70) ----
+// Runs in every frame until one has a video (embedded players included).
+function clock(t) {
+  t = Math.max(0, Math.floor(Number(t) || 0));
+  const h = Math.floor(t / 3600);
+  const m = Math.floor((t % 3600) / 60);
+  const s = String(t % 60).padStart(2, "0");
+  return h ? `${h}:${String(m).padStart(2, "0")}:${s}` : `${m}:${s}`;
+}
+async function loopVideo(id, op, secs) {
+  const tab = tabs.get(id || activeId);
+  if (!tab || tab.sleeping) return null;
+  const wc = tab.view.webContents;
+  let frames = [];
+  try {
+    frames = wc.mainFrame.framesInSubtree;
+  } catch (_) {}
+  let result = "none";
+  for (const f of frames) {
+    try {
+      const r = await f.executeJavaScript(loopScript(op, secs), true);
+      if (r && r !== "none") {
+        result = r;
+        break;
+      }
+    } catch (_) {}
+  }
+  if (result === "none") {
+    if (op !== "get" && op !== "stop") sendUi("notice", { message: "No video to loop on this page. Start the video first." });
+    return null;
+  }
+  if (result.stopped) {
+    tab.loop = null;
+    sendUi("notice", { message: "Stopped looping." });
+  } else {
+    tab.loop = { a: result.a, b: result.b, url: wc.getURL().split("#")[0] };
+    if (op !== "get") sendUi("notice", { message: `Looping ${clock(result.a)} to ${clock(result.b)} in this tab. To stop, click ↻ on the tab.` });
+  }
+  emitList();
+  return tab.loop;
+}
+ipcMain.handle("tab:loop", (_e, id, op, secs) => loopVideo(id, op, secs));
+function loopMenu(id) {
+  const tab = tabs.get(id || activeId);
+  const run = (op, secs) => () => loopVideo(tab?.id, op, secs);
+  return [
+    { label: "Loop the Next 30 Seconds", click: run("next", 30) },
+    { label: "Loop the Next Minute", click: run("next", 60) },
+    { label: "Loop the Next 5 Minutes", click: run("next", 300) },
+    { type: "separator" },
+    { label: "Start Loop Here", click: run("start", 60) },
+    { label: "End Loop Here", click: run("end", 60) },
+    { type: "separator" },
+    { label: "Stop Looping", enabled: Boolean(tab?.loop), click: run("stop") },
+  ];
+}
 
 // Ask AI about the current page (core/chat.js). Sends the page's readable text,
 // title and address to the model the user set up under Settings → AI.

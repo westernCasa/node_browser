@@ -187,6 +187,19 @@ function renderTabs() {
     el.className = "tab" + (t.id === activeId ? " active" : "") + (t.sleeping ? " asleep" : "");
     if (t.sleeping) el.title = "Asleep to save memory. Opens again when you click it.";
     el.innerHTML = `<span title="${escapeHtml(t.url || "")}">${escapeHtml(t.title || "New tab")}</span>`;
+    if (t.loop) {
+      // A section of the video loops (B70). Click to stop.
+      const lp = document.createElement("button");
+      lp.className = "loop-mark";
+      lp.textContent = "↻ " + t.loop.label;
+      lp.title = `Looping ${t.loop.label}. Click to stop.`;
+      lp.setAttribute("aria-label", `Looping ${t.loop.label}. Stop looping`);
+      lp.addEventListener("click", (e) => {
+        e.stopPropagation();
+        api?.loopTab?.(t.id, "stop");
+      });
+      el.appendChild(lp);
+    }
     if (t.agentShared) {
       const m = document.createElement("i");
       m.className = "agent-mark";

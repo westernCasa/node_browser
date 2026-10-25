@@ -4,6 +4,7 @@ contextBridge.exposeInMainWorld("scout", {
   createTab: (url) => ipcRenderer.invoke("tab:create", url),
   closeTab: (id) => ipcRenderer.invoke("tab:close", id),
   activateTab: (id) => ipcRenderer.invoke("tab:activate", id),
+  loopTab: (id, op, secs) => ipcRenderer.invoke("tab:loop", id, op, secs),
   navigate: (id, url) => ipcRenderer.invoke("tab:navigate", id, url),
   goBack: (id) => ipcRenderer.invoke("tab:back", id),
   goForward: (id) => ipcRenderer.invoke("tab:forward", id),
