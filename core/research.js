@@ -6,6 +6,8 @@
 
 const TRAIL_MAX = 500;
 // Start pages and search-result pages are not research reading.
+const { isSensitiveUrl } = require("./urls");
+
 const NOT_READING = /wikipedia\.org\/wiki\/(Main_Page|Special:)|duckduckgo\.com\/(\?|html)|google\.[a-z.]+\/search|bing\.com\/search|search\.brave\.com\/search/i;
 
 function newId() {
@@ -26,12 +28,32 @@ function blank(name) {
   };
 }
 
+// Sessions saved before 0.9.1 may hold sign-in, account, payment or banking
+// pages: take them out when the session is opened. Returns true if any went.
+function prune(session) {
+  if (!session) return false;
+  let removed = 0;
+  for (const key of ["trail", "opened"]) {
+    const list = session[key] || [];
+    const kept = list.filter((r) => !isSensitiveUrl(r.url));
+    removed += list.length - kept.length;
+    session[key] = kept;
+  }
+  if (Array.isArray(session.captures)) {
+    const kept = session.captures.filter((c) => !isSensitiveUrl(c.url));
+    removed += session.captures.length - kept.length;
+    session.captures = kept;
+  }
+  return removed > 0;
+}
+
 class ResearchStore {
   /** @param storage {{ read(name): string|null, write(name, text), list(): string[] }} */
   constructor(storage) {
     this.storage = storage;
     this.timer = null;
     this.current = this.loadCurrent() || this.create();
+    if (prune(this.current)) this.saveNow();
   }
 
   file(id) {
@@ -86,6 +108,7 @@ class ResearchStore {
     const s = JSON.parse(this.storage.read(this.file(id)));
     this.saveNow();
     this.current = s;
+    prune(s);
     this.saveNow();
     return s;
   }
@@ -102,7 +125,8 @@ class ResearchStore {
 
   // Record that a page was read, with its top keywords.
   visit(url, title, keywords = []) {
-    if (!/^https?:/i.test(url || "") || NOT_READING.test(url)) return;
+    // Sign-in, account, payment and banking pages never enter the trail (B66).
+    if (!/^https?:/i.test(url || "") || NOT_READING.test(url) || isSensitiveUrl(url)) return;
     const t = this.current.trail;
     let row = t.find((r) => r.url === url);
     if (!row) {
@@ -118,7 +142,7 @@ class ResearchStore {
   }
 
   opened(item) {
-    if (!item?.url) return;
+    if (!item?.url || isSensitiveUrl(item.url)) return;
     this.current.opened.push({ url: item.url, title: item.title || item.url, query: item.query || "", at: Date.now() });
     this.saveSoon();
   }
@@ -172,6 +196,8 @@ class ResearchStore {
   // A screenshot, saved page or saved media file taken during this session.
   // The file lives in the Library; the session keeps a link to it.
   capture({ libraryId, kind, name, url, title }) {
+    // The file stays in the Library; a sign-in or payment page is not linked into the session.
+    if (isSensitiveUrl(url)) return;
     const list = (this.current.captures = this.current.captures || []);
     list.push({ at: Date.now(), libraryId: String(libraryId || ""), kind: String(kind || "shot"), name: String(name || ""), url: String(url || ""), title: String(title || "").slice(0, 300) });
     if (list.length > 500) list.splice(0, list.length - 500);

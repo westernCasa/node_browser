@@ -18,4 +18,24 @@ function hostOf(url) {
   return m ? m[1].replace(/^www\./, "") : String(url || "");
 }
 
-module.exports = { HOME_URL, SEARCH_URL, normalizeUrl, hostOf };
+// Sign-in, account, payment and banking pages, by the words in their address.
+// Agents never read these (agents.js), and the research trail never records
+// them (core/research.js), so their addresses cannot reach agents or exports.
+// "session" counts only as the first part of the path (github.com/session,
+// /sessions/new), so pages about a conference session are still recorded.
+const SENSITIVE = /(^|[./-])(login|log-in|signin|sign-in|signup|sign-up|auth|oauth|sso|account|accounts|myaccount|password|passkey|passkeys|webauthn|2fa|mfa|checkout|payment|payments|billing|wallet|bank|banking)([./?#-]|$)/i;
+const SESSION_PATH = /^\/sessions?(\/|$)/i;
+
+/** True for sign-in, account, payment and banking pages (see SENSITIVE). */
+function isSensitiveUrl(url) {
+  let u;
+  try {
+    u = new URL(String(url || ""));
+  } catch {
+    return false;
+  }
+  if (!/^https?:$/.test(u.protocol)) return false;
+  return SENSITIVE.test(u.hostname + u.pathname) || SESSION_PATH.test(u.pathname);
+}
+
+module.exports = { HOME_URL, SEARCH_URL, normalizeUrl, hostOf, SENSITIVE, isSensitiveUrl };

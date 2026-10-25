@@ -30,6 +30,10 @@ const cases = [
   ["http://[::1]/", true],
   ["http://printer.local/", true],
   ["https://blog.example/accountability-in-science", false],
+  // Found in the MCP test (B66): GitHub's sign-in endpoint and X's passkey page.
+  ["https://github.com/session", true],
+  ["https://x.com/i/flow/passkey", true],
+  ["https://example.org/conference/session/3", false],
 ];
 for (const [url, want] of cases) {
   const why = refused(url);

@@ -10,9 +10,8 @@
 // computer or the local network.
 
 const { markdownScript } = require("./core/markdown");
-
-// Address words that mark sign-in, account, payment and banking pages.
-const SENSITIVE = /(^|[./-])(login|log-in|signin|sign-in|signup|sign-up|auth|oauth|sso|account|accounts|myaccount|password|checkout|payment|payments|billing|wallet|bank|banking)([./?#-]|$)/i;
+// Sign-in, account, payment and banking pages (shared with the research trail).
+const { isSensitiveUrl, SENSITIVE } = require("./core/urls");
 const MAX_CHARS = 40000;
 
 const isLoopback = (h) => h === "127.0.0.1" || h === "localhost";
@@ -39,7 +38,7 @@ function checkAddress(raw, { allowPrivate = false } = {}) {
   }
   if (!/^https?:$/.test(u.protocol)) throw new Error("Only http and https addresses can be read.");
   if (isPrivateHost(u.hostname, { allowLoopback: allowPrivate })) throw new Error("Addresses on this computer or the local network cannot be read by agents.");
-  if (SENSITIVE.test(u.hostname + u.pathname)) throw new Error("NODE does not read sign-in, account, payment or banking pages for agents.");
+  if (isSensitiveUrl(u.href)) throw new Error("NODE does not read sign-in, account, payment or banking pages for agents.");
   return u.href;
 }
 
@@ -166,7 +165,7 @@ function createAgents({ BrowserWindow, session, userAgent, registry, research, g
         if (!tab || !tab.shared) throw new Error("That tab is not shared with agents.");
         // A shared tab may be a local page the user opened (a dev server): only
         // the sign-in, payment and banking blocks apply.
-        if (SENSITIVE.test(new URL(tab.url).hostname + new URL(tab.url).pathname)) throw new Error("NODE does not read sign-in, account, payment or banking pages for agents.");
+        if (isSensitiveUrl(tab.url)) throw new Error("NODE does not read sign-in, account, payment or banking pages for agents.");
         const page = await tab.webContents.executeJavaScriptInIsolatedWorld(1001, [{ code: markdownScript(MAX_CHARS) }], true);
         return { text: formatPage(page), detail: page.url };
       },

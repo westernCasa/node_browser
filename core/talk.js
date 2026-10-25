@@ -11,7 +11,7 @@
 // Platform-neutral: the caller passes getJson(url) (desktop: core/net.js).
 
 const TRACKING = /^(utm_[a-z]+|fbclid|gclid|dclid|msclkid|mc_cid|mc_eid|igshid|ref|ref_src|ref_url|si|spm|_hsenc|_hsmi|yclid|s_cid|cmpid)$/i;
-const SENSITIVE = /(^|[./-])(login|log-in|signin|sign-in|signup|sign-up|auth|oauth|sso|account|accounts|myaccount|password|checkout|payment|payments|billing|wallet|bank|banking)([./?#-]|$)/i;
+const { isSensitiveUrl } = require("./urls");
 
 /** The address used for lookups: no fragment, no tracking parameters, no trailing slash. */
 function cleanUrl(raw) {
@@ -45,7 +45,7 @@ function whyNot(url, rule = {}) {
   if (!clean) return "Talk works on web pages (http and https) only.";
   const u = new URL(clean);
   if (isPrivateHost(u.hostname)) return "Pages on this computer or a private network are never looked up.";
-  if (SENSITIVE.test(u.hostname + u.pathname)) return "Sign-in, account, payment and banking pages are never looked up.";
+  if (isSensitiveUrl(u.href)) return "Sign-in, account, payment and banking pages are never looked up.";
   if (rule.suggest === false || rule.talk === false) return "A site rule turns Talk off for this site.";
   return "";
 }
