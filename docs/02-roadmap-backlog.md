@@ -1,6 +1,6 @@
 # NODE Browser: Roadmap and Backlog
 
-Last updated: 2026-10-25 (0.9.2 released: B67-B72. B73-B76 restored: added this morning from the survey as B71-B74 in another chat, lost when this file was synced, and renumbered because B71 and B72 were taken by the tab overview and gestures). The editable version (with status dropdowns) is in the review doc: https://claude.ai/code/artifact/b6ec4995-3117-41d0-a3c4-948c16e699fc
+Last updated: 2026-10-26 (B26 done: AI query ideas confirmed on the Mac. Earlier, 2026-10-25: 0.9.2 released, B67-B72. B73-B76 restored: added this morning from the survey as B71-B74 in another chat, lost when this file was synced, and renumbered because B71 and B72 were taken by the tab overview and gestures). The editable version (with status dropdowns) is in the review doc: https://claude.ai/code/artifact/b6ec4995-3117-41d0-a3c4-948c16e699fc
 
 ## Roadmap
 
@@ -46,7 +46,7 @@ Effort: XS under 1 hour, S half a day, M 1-2 days, L 3+ days. Finding IDs (C1, K
 | B23 | 5 | Port Library, Shot, Save, Media to Rust | P2 | M | Replaced by M05 |
 | B24 | 5 | Decide the mobile tab model | P2 | M | Done in planning: one WebView per tab, Mosaic on tablets (`06-mobile-plan.md`) |
 | B25 | 3 | Show Wikipedia results first while web results load (web requests are spaced 2.5 s apart, so a search can take 6 s) | P1 | S | Done |
-| B26 | 4 | Check on a real machine: live Wikipedia, DuckDuckGo, Brave, Grok and local model results, and an hour of browsing (Phase 2 gate) | P0 | S | In progress: hour of browsing and Brave results with a key confirmed on the Mac 2026-10-18. Still to confirm: AI query ideas with Grok or a local model |
+| B26 | 4 | Check on a real machine: live Wikipedia, DuckDuckGo, Brave, Grok and local model results, and an hour of browsing (Phase 2 gate) | P0 | S | Done 2026-10-26: hour of browsing and Brave results with a key confirmed on the Mac 2026-10-18; AI query ideas confirmed on the Mac 2026-10-26 |
 | B27 | 4 | Installable builds for macOS (.dmg) and Windows (.exe) with an app icon | P0 | M | Done (0.4): `npm run dist:mac` / `dist:win`; not signed; automatic updates are B46 |
 | B28 | 4 | Visual editor for site rules in Settings, so no JSON editing is needed | P1 | M | Done |
 | B29 | 4 | Sleep background tabs that are not playing media, to save memory with many tabs open | P1 | M | Done: after 15 minutes unused; never while playing, on screen or shared |
@@ -106,9 +106,9 @@ Effort: XS under 1 hour, S half a day, M 1-2 days, L 3+ days. Finding IDs (C1, K
 - Run NODE on a real machine and confirm live results from Wikipedia and DuckDuckGo.
 - ~~Add a Brave Search API key under Settings and confirm Brave results appear.~~ Done on the Mac, 2026-10-18.
 - Check that browsing feels smooth with several tabs open, and that video sites (YouTube, Vimeo, news sites) start playing on their own (B32, B34).
-- Turn on AI query ideas with Ollama or Grok, press Test, and check the "(AI)" queries give useful results.
+- ~~Turn on AI query ideas with Ollama or Grok, press Test, and check the "(AI)" queries give useful results.~~ Done on the Mac, 2026-10-26.
 
-These checks are backlog item B26.
+These checks were backlog item B26 (done 2026-10-26). The two checks not crossed out are still worth doing before the Phase 4 gate.
 
 ## Mobile backlog
 
