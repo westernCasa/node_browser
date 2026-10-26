@@ -327,7 +327,15 @@
                 <option value="0">Every tab</option>
               </select></label>
             <p class="help">To choose which tabs Mosaic shows, press ⌘⇧\ (Ctrl+Shift+\ on Windows) or right-click the Mosaic button, and click the tabs you want. You can also right-click a tab and choose Show in Mosaic. With none chosen, Mosaic shows your first tabs and the one you are on.</p>
-            <p class="help">Tabs you have not opened for 15 minutes go to sleep to save memory; they load again when you click them. Tabs playing media never sleep.</p>
+            <label class="field"><span>Put unused tabs to sleep</span>
+              <select id="tab-sleep">
+                <option value="15">After 15 minutes</option>
+                <option value="30">After 30 minutes</option>
+                <option value="60">After 1 hour</option>
+                <option value="120">After 2 hours</option>
+                <option value="0">Never</option>
+              </select></label>
+            <p class="help">A sleeping tab frees its memory and loads again when you click it. Only time you spend using NODE counts, so tabs don't go to sleep while you're away from the computer. Tabs on screen or playing media never sleep.</p>
           </div>
           <div class="rail-head rules-head">
             <div>

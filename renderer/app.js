@@ -1426,6 +1426,7 @@ async function renderSources() {
   document.getElementById("restore-tabs").checked = settings.restoreTabs !== false;
   document.getElementById("start-page").value = settings.startPage || "";
   document.getElementById("mosaic-max").value = String(settings.mosaicMax ?? 4);
+  document.getElementById("tab-sleep").value = String(settings.tabSleep ?? 30);
   document.getElementById("auto-update").checked = settings.autoUpdate !== false;
   document.getElementById("passkeys").checked = settings.passkeys === true;
   document.getElementById("passkeys").closest(".top").hidden = document.getElementById("passkeys-help").hidden = !/Mac/.test(navigator.platform);
@@ -1864,6 +1865,7 @@ async function saveSources(rerender = true) {
     restoreTabs: document.getElementById("restore-tabs").checked,
     startPage: document.getElementById("start-page").value,
     mosaicMax: Number(document.getElementById("mosaic-max").value),
+    tabSleep: Number(document.getElementById("tab-sleep").value),
     autoUpdate: document.getElementById("auto-update").checked,
     passkeys: document.getElementById("passkeys").checked,
   });

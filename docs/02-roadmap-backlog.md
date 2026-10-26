@@ -49,7 +49,7 @@ Effort: XS under 1 hour, S half a day, M 1-2 days, L 3+ days. Finding IDs (C1, K
 | B26 | 4 | Check on a real machine: live Wikipedia, DuckDuckGo, Brave, Grok and local model results, and an hour of browsing (Phase 2 gate) | P0 | S | In progress: hour of browsing and Brave results with a key confirmed on the Mac 2026-10-18. Still to confirm: AI query ideas with Grok or a local model |
 | B27 | 4 | Installable builds for macOS (.dmg) and Windows (.exe) with an app icon | P0 | M | Done (0.4): `npm run dist:mac` / `dist:win`; not signed; automatic updates are B46 |
 | B28 | 4 | Visual editor for site rules in Settings, so no JSON editing is needed | P1 | M | Done |
-| B29 | 4 | Sleep background tabs that are not playing media, to save memory with many tabs open | P1 | M | Done: after 15 minutes unused; never while playing, on screen or shared |
+| B29 | 4 | Sleep background tabs that are not playing media, to save memory with many tabs open | P1 | M | Done: after 30 minutes unused (only time NODE is in use counts; Settings → Tabs: 15 min to 2 h, or never); never while playing, on screen or shared |
 | B30 | 4 | First-run setup: start page, search sources, AI option | P1 | S | Done: welcome screen (Brave key, AI choice, reopen tabs, ad blocking) and a NODE new tab page |
 | B31 | 4 | Error log and a Copy diagnostics button for bug reports | P1 | S | Done: logs/node.log, Settings → Help, Help menu with Report a Problem |
 | B32 | 4 | Speed (feedback: "a little laggy"): read the page on the 5 s timer only after scroll, resize or selection; measure only elements near the viewport; stop drawing hidden tabs and allow background throttling | P0 | S | Done |
@@ -96,6 +96,7 @@ Effort: XS under 1 hour, S half a day, M 1-2 days, L 3+ days. Finding IDs (C1, K
 | B75 | 4 | Many open tabs: tab management for people who keep lots of tabs open, as Zen does (for example a vertical tab list, tab groups or workspaces, pinned tabs). A tester uses Zen for this and would switch if NODE covered it (survey, 2026-10-25). Decide the scope after the follow-up with u/upforanything67. Added as B73; renumbered | P2 | L | Not started; waiting on tester answers |
 | B76 | 4 | Usability test round 1: 5 remote moderated think-aloud sessions run solo, with task success, a 1-7 ease rating per task and SUS at the end. Plan, script and note sheet in `16-usability-test.md`. Added as B74; renumbered | P1 | M | Planning |
 | B77 | 4 | Built-in blocker covers what uBlock Origin does by default: add uBO's own filter lists (uBlock filters, privacy, badware, quick fixes) and cookie-notice lists to the Ghostery engine, and turn on on-page hiding (cosmetic filters) and scriptlets through its preload script. Say "the same filter lists uBlock Origin uses" in the shield menu and on the welcome screen. From the B48 spike: Chrome extensions do not work on Electron 44. A tester uses uBlock Origin (survey, 2026-10-25) | P1 | M | Done (0.9.4) |
+| B78 | 4 | Tabs switched by themselves after a while, and tabs went to sleep and reloaded after stepping away (Sven, Mac, 0.9.4). A Mosaic tile loading a new page by itself (next video, page refresh) took focus and became the active tab; sleep counted time away from the computer | P0 | S | Done 2026-10-26 (PR #13): focus switches tabs only after a click or key press in that tab; only time in use counts toward sleep; default 30 minutes; Settings → Tabs choice. To confirm on the Mac |
 | B60 | 5 | NODE for Chromium extension | — | — | Dropped 2026-10-14: missing must-have features |
 | B59 | 6 | Research agent v3: gated actions with confirmation (forms, downloads) | P2 | L | Not started |
 | B52 | 4 | Google window: Google sign-in and Google apps open in a separate window of a Chromium-based browser on the computer, with its own NODE profile and a NODE extension (history, center on click, autoplay, no duplicate tabs). The extension is also the first step of B51 | P0 | M | Done; to test sign-in on the Mac |
@@ -105,7 +106,7 @@ Effort: XS under 1 hour, S half a day, M 1-2 days, L 3+ days. Finding IDs (C1, K
 - ~~Browse for an hour to check the Phase 2 gate (no search blocks).~~ Done on the Mac, 2026-10-18.
 - Run NODE on a real machine and confirm live results from Wikipedia and DuckDuckGo.
 - ~~Add a Brave Search API key under Settings and confirm Brave results appear.~~ Done on the Mac, 2026-10-18.
-- Check that browsing feels smooth with several tabs open, and that video sites (YouTube, Vimeo, news sites) start playing on their own (B32, B34).
+- Check that browsing feels smooth with several tabs open, and that video sites (YouTube, Vimeo, news sites) start playing on their own (B32, B34). Autoplay confirmed on the Mac, 2026-10-26; found B78.
 - Turn on AI query ideas with Ollama or Grok, press Test, and check the "(AI)" queries give useful results.
 
 These checks are backlog item B26.
