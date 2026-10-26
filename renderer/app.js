@@ -1426,7 +1426,15 @@ async function renderPasswords() {
     return;
   }
   state.textContent = r.logins.length ? `${r.logins.length} saved login${r.logins.length === 1 ? "" : "s"}` : "No saved logins yet.";
-  const row = (ul, site, user, label, run) => {
+  const button = (label, name, run) => {
+    const b = document.createElement("button");
+    b.className = "chip";
+    b.textContent = label;
+    b.setAttribute("aria-label", `${label} ${name}`);
+    b.addEventListener("click", run);
+    return b;
+  };
+  const row = (ul, site, user, buttons, secret = null) => {
     const li = document.createElement("li");
     const a = document.createElement("span");
     a.className = "pw-site";
@@ -1434,21 +1442,58 @@ async function renderPasswords() {
     const u = document.createElement("span");
     u.className = "pw-user";
     u.textContent = user;
-    const b = document.createElement("button");
-    b.className = "chip";
-    b.textContent = label;
-    b.setAttribute("aria-label", `${label} ${site}${user ? ` (${user})` : ""}`);
-    b.addEventListener("click", async () => {
-      await run();
-      renderPasswords().catch(() => {});
-    });
-    li.append(a, u, b);
+    const box = document.createElement("span");
+    box.className = "pw-buttons";
+    box.append(...buttons);
+    li.append(a, u);
+    if (secret) li.append(secret);
+    li.append(box);
     ul.appendChild(li);
   };
-  for (const l of r.logins) row(list, l.site, l.username || "No username", "Remove", () => api.passwordsRemove(l.id));
-  for (const n of r.never) row(never, n.site, "", "Allow", () => api.passwordsAllow(n.origin));
+  const again = () => renderPasswords().catch(() => {});
+  for (const l of r.logins) {
+    const name = `${l.site}${l.username ? ` (${l.username})` : ""}`;
+    const secret = document.createElement("span");
+    secret.className = "pw-secret";
+    secret.textContent = "••••••••";
+    const show = button("Show", name, async () => {
+      if (show.textContent === "Hide") {
+        secret.textContent = "••••••••";
+        show.textContent = "Show";
+        return;
+      }
+      const pw = await api.passwordsReveal(l.id);
+      if (!pw) return;
+      secret.textContent = pw;
+      show.textContent = "Hide";
+      // Hidden again after 30 seconds.
+      setTimeout(() => {
+        if (secret.isConnected) {
+          secret.textContent = "••••••••";
+          show.textContent = "Show";
+        }
+      }, 30000);
+    });
+    const copy = button("Copy", name, async () => {
+      if (await api.passwordsCopy(l.id)) showNotice("Password copied. It is cleared from the clipboard in a minute.");
+    });
+    const remove = button("Remove", name, async () => {
+      await api.passwordsRemove(l.id);
+      again();
+    });
+    row(list, l.site, l.username || "No username", [show, copy, remove], secret);
+  }
+  for (const n of r.never) row(never, n.site, "", [button("Allow", n.site, async () => (await api.passwordsAllow(n.origin), again()))]);
   document.getElementById("passwords-never-head").hidden = !r.never.length;
 }
+
+document.getElementById("passwords-import")?.addEventListener("click", async () => {
+  if (!api?.passwordsImport) return;
+  const r = await api.passwordsImport();
+  if (r?.error) showNotice(r.error);
+  else if (r && !r.cancelled) showNotice(`Imported: ${r.added} new, ${r.updated} updated${r.same ? `, ${r.same} already saved` : ""}.${r.trashed ? " The exported file is in the Trash." : ""}`);
+  renderPasswords().catch(() => {});
+});
 
 async function renderSources() {
   const [settings, status] = await Promise.all([api.getSettings(), api.searchStatus()]);

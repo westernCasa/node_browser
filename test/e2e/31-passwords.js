@@ -168,7 +168,7 @@ fs.writeFileSync(path.join(userData, "settings.json"), JSON.stringify({ firstRun
   await sleep(800);
   check("Settings lists 2 logins", (await ui.$$eval("#passwords-list li", (e) => e.length)) === 2);
   check("Settings shows the offer switch off", !(await ui.$eval("#passwords-offer", (e) => e.checked)));
-  await ui.click("#passwords-list li button");
+  await ui.click('#passwords-list li button[aria-label^="Remove"]');
   await sleep(500);
   check("Remove deletes a login", (await list()).logins.length === 1);
 

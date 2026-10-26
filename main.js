@@ -956,18 +956,28 @@ function passwords() {
 }
 const canStorePasswords = () => safeStorage.isEncryptionAvailable();
 const tabOfContents = (wc) => [...tabs.values()].find((t) => t.view.webContents === wc);
-function passwordPageOrigin(tab) {
+// The origin a sign-in belongs to: the frame's own (a sign-in form can sit in
+// a frame from another site), on a normal page of a tab.
+function passwordPageOrigin(tab, frame = null) {
   if (!tab || tab.tutorial || tab.sleeping) return null;
-  const url = tab.view.webContents.getURL();
+  const wc = tab.view.webContents;
+  const url = wc.getURL();
   if (isInternal(url) || isTutorialPage(url)) return null;
+  if (frame && frame !== wc.mainFrame) {
+    try {
+      return frame.isDestroyed?.() ? null : PW.originOf(frame.url);
+    } catch {
+      return null;
+    }
+  }
   return PW.originOf(url);
 }
 // Asks with a native sheet over the page (Safari does the same). Tests replace it.
 let passwordAsk = (opts) => dialog.showMessageBox(win, opts).then((r) => r.response);
 let passwordAsking = false;
 
-async function onLoginSubmitted(tab, { username = "", password = "" }) {
-  const origin = passwordPageOrigin(tab);
+async function onLoginSubmitted(tab, { username = "", password = "" }, frame = null) {
+  const origin = passwordPageOrigin(tab, frame);
   if (!origin || loadSettings().passwordsOffer === false || !canStorePasswords()) return;
   username = String(username).slice(0, 256);
   password = String(password).slice(0, 1024);
@@ -1013,38 +1023,57 @@ async function onLoginSubmitted(tab, { username = "", password = "" }) {
   }
 }
 
-function fillLogin(tab, id) {
-  const origin = passwordPageOrigin(tab);
+// Sends a login to the frame it was asked from, only if that frame is still on
+// the login's site. The frame checks its own origin again before filling.
+function fillLogin(tab, id, frame = null) {
+  const f = frame || tab.view.webContents.mainFrame;
+  const origin = passwordPageOrigin(tab, f);
   const login = origin && passwords().reveal(id, origin);
   if (!login) return false;
-  tab.view.webContents.send("pw:fill", { origin: new URL(tab.view.webContents.getURL()).origin, ...login });
+  f.send("pw:fill", { origin: new URL(f.url).origin, ...login });
   return true;
 }
-
-function loginMenuItems(tab) {
-  const origin = passwordPageOrigin(tab);
-  if (!origin || !canStorePasswords()) return [];
-  return passwords()
-    .forOrigin(origin)
-    .slice(0, 8)
-    .map((l) => ({ label: l.username || "Saved password (no username)", click: () => fillLogin(tab, l.id) }));
+function fillNewPassword(tab, frame = null, password = PW.generatePassword()) {
+  const f = frame || tab.view.webContents.mainFrame;
+  const origin = passwordPageOrigin(tab, f);
+  if (!origin) return null;
+  f.send("pw:fill-new", { origin: new URL(f.url).origin, password });
+  return password;
 }
 
-function showLoginMenu(tab, rect) {
-  const items = loginMenuItems(tab);
+function loginMenuItems(tab, frame = null, { newPassword = false } = {}) {
+  const origin = passwordPageOrigin(tab, frame);
+  if (!origin || !canStorePasswords()) return [];
+  const items = newPassword
+    ? []
+    : passwords()
+        .forOrigin(origin)
+        .slice(0, 8)
+        .map((l) => ({ label: l.username || "Saved password (no username)", click: () => fillLogin(tab, l.id, frame) }));
+  // On a sign-up or change-password form, suggest a strong password.
+  if (newPassword && loadSettings().passwordsOffer !== false) items.push({ label: "Use Strong Password", sublabel: "NODE asks to save it when you send the form", click: () => fillNewPassword(tab, frame) });
+  return items;
+}
+
+function showLoginMenu(tab, rect, frame = null, opts = {}) {
+  const items = loginMenuItems(tab, frame, opts);
   if (!items.length || !tab.attached || win.isDestroyed()) return false;
+  const inFrame = frame && frame !== tab.view.webContents.mainFrame;
   const b = tab.view.getBounds();
   const z = tab.view.webContents.getZoomFactor() || 1;
   if (global.nodeTest?.noPopup) {
     global.nodeTest.loginMenuShown = (global.nodeTest.loginMenuShown || 0) + 1;
+    global.nodeTest.loginMenuLabels = items.map((i) => i.label);
+    global.nodeTest.loginMenuRun = (n) => items[n]?.click();
     return true;
   }
   items.push({ type: "separator" }, { label: "Passwords…", click: () => sendUi("open-menu", { section: "settings", box: "passwords-box" }) });
   popupHold = true;
+  // A field in a frame: its place in the page is not known here, so the menu
+  // opens at the pointer.
   Menu.buildFromTemplate(items).popup({
     window: win,
-    x: Math.round(b.x + rect.x * z),
-    y: Math.round(b.y + (rect.y + rect.height) * z + 2),
+    ...(inFrame ? {} : { x: Math.round(b.x + rect.x * z), y: Math.round(b.y + (rect.y + rect.height) * z + 2) }),
     callback: () => (popupHold = false),
   });
   return true;
@@ -1054,16 +1083,17 @@ ipcMain.on("pw:submitted", (e, data) => {
   const tab = tabOfContents(e.sender);
   // A sign-in follows the user's own click or key press; a page sending a form
   // by itself does not get to ask.
-  if (!tab || e.senderFrame !== e.sender.mainFrame || Date.now() - tab.lastGesture > 10000) return;
-  onLoginSubmitted(tab, data || {}).catch(() => (passwordAsking = false));
+  if (!tab || !e.senderFrame || Date.now() - tab.lastGesture > 10000) return;
+  onLoginSubmitted(tab, data || {}, e.senderFrame).catch(() => (passwordAsking = false));
 });
-ipcMain.handle("pw:focus", (e, { rect } = {}) => {
+ipcMain.handle("pw:focus", (e, { rect, newPassword } = {}) => {
   const tab = tabOfContents(e.sender);
-  if (!tab || e.senderFrame !== e.sender.mainFrame || !rect) return false;
+  if (!tab || !e.senderFrame || !rect) return false;
   // Only right after a click or key press in this tab, so a page that moves
   // focus by itself does not open the menu.
   if (Date.now() - tab.lastGesture > 1000) return false;
-  return showLoginMenu(tab, rect);
+  tab.pwFrame = e.senderFrame;
+  return showLoginMenu(tab, rect, e.senderFrame, { newPassword: Boolean(newPassword) });
 });
 ipcMain.handle("passwords:list", () => ({
   available: canStorePasswords(),
@@ -1071,6 +1101,110 @@ ipcMain.handle("passwords:list", () => ({
   never: canStorePasswords() ? passwords().neverList() : [],
 }));
 ipcMain.handle("passwords:remove", (_e, id) => passwords().remove(String(id)));
+
+// Showing or copying a saved password asks for Touch ID on a Mac that has it,
+// and for a confirmation elsewhere. A yes lasts 2 minutes. Tests replace it.
+let passwordAuthUntil = 0;
+let passwordAuth = async (reason) => {
+  if (process.platform === "darwin" && systemPreferences.canPromptTouchID?.()) {
+    try {
+      await systemPreferences.promptTouchID(reason);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  const r = await dialog.showMessageBox(win, {
+    type: "warning",
+    message: `NODE wants to ${reason}.`,
+    detail: "Anyone who can see your screen can read it. Make sure you are alone, or copy it instead.",
+    buttons: ["Continue", "Cancel"],
+    defaultId: 1,
+    cancelId: 1,
+  });
+  return r.response === 0;
+};
+async function passwordCheck(reason) {
+  if (Date.now() < passwordAuthUntil) return true;
+  const ok = await passwordAuth(reason);
+  if (ok) passwordAuthUntil = Date.now() + 2 * 60 * 1000;
+  return ok;
+}
+ipcMain.handle("passwords:reveal", async (_e, id) => {
+  if (!canStorePasswords() || !(await passwordCheck("show a saved password"))) return null;
+  return passwords().secret(String(id));
+});
+// Copied passwords are cleared from the clipboard after a minute, unless
+// something else was copied since.
+let clipTimer = null;
+ipcMain.handle("passwords:copy", async (_e, id) => {
+  if (!canStorePasswords() || !(await passwordCheck("copy a saved password"))) return false;
+  const pw = passwords().secret(String(id));
+  if (!pw) return false;
+  clipboard.writeText(pw);
+  clearTimeout(clipTimer);
+  // (readText returns a promise in this Electron version; await works either way.)
+  clipTimer = setTimeout(async () => {
+    if ((await clipboard.readText()) === pw) clipboard.writeText("");
+  }, global.nodeTest?.clipMs || 60 * 1000);
+  return true;
+});
+
+// Import from a passwords file exported by another browser or password manager.
+async function importPasswords(file) {
+  if (!canStorePasswords()) return { error: "This computer has no secure storage for passwords." };
+  let text;
+  try {
+    if (fs.statSync(file).size > 20 * 1024 * 1024) return { error: "The file is too large for a passwords file." };
+    text = fs.readFileSync(file, "utf8");
+  } catch (err) {
+    return { error: "Could not read the file: " + String(err.message || err) };
+  }
+  const found = PW.loginsFromCsv(text);
+  text = null;
+  if (found.error) return { error: found.error };
+  if (!found.logins.length) return { error: "No logins with a web address and a password were found in the file." };
+  const plan = passwords().importPlan(found.logins);
+  const lines = [`${plan.added} new`, plan.updated ? `${plan.updated} with a new password` : "", plan.same ? `${plan.same} already saved` : "", found.skipped ? `${found.skipped} rows skipped (no web address or password)` : ""].filter(Boolean);
+  const go = await passwordAsk({
+    type: "question",
+    message: `Import ${plan.added + plan.updated} login${plan.added + plan.updated === 1 ? "" : "s"} from ${path.basename(file)}?`,
+    detail: lines.join(" · ") + "\n\nThey are encrypted and kept on this computer.",
+    buttons: ["Import", "Cancel"],
+    defaultId: 0,
+    cancelId: 1,
+  });
+  if (go !== 0) return { cancelled: true };
+  const done = passwords().importMany(found.logins);
+  sendUi("passwords-changed", {});
+  // The exported file holds every password in plain text.
+  const trash = await passwordAsk({
+    type: "warning",
+    message: "Move the exported file to the Trash?",
+    detail: `${path.basename(file)} has all the passwords in plain text. NODE has its own encrypted copy now.`,
+    buttons: ["Move to Trash", "Keep the File"],
+    defaultId: 0,
+    cancelId: 1,
+  });
+  let trashed = false;
+  if (trash === 0) {
+    try {
+      await shell.trashItem(file);
+      trashed = true;
+    } catch {}
+  }
+  return { ...done, skipped: found.skipped, trashed };
+}
+ipcMain.handle("passwords:import", async () => {
+  const r = await dialog.showOpenDialog(win, {
+    title: "Import Passwords",
+    message: "Choose the passwords file you exported (CSV)",
+    filters: [{ name: "Passwords file", extensions: ["csv"] }],
+    properties: ["openFile"],
+  });
+  if (r.canceled || !r.filePaths[0]) return { cancelled: true };
+  return importPasswords(r.filePaths[0]);
+});
 ipcMain.handle("passwords:allow", (_e, origin) => passwords().allow(String(origin)));
 
 // ---- Session restore ----
@@ -1310,6 +1444,7 @@ function createTab(url, opts = {}) {
     webPreferences: {
       preload: path.join(__dirname, "view-preload.js"),
       additionalArguments: [`--scout-tab=${id}`],
+      nodeIntegrationInSubFrames: true, // runs view-preload.js in frames too, for sign-in forms there (no Node access: sandboxed)
       sandbox: true,
       contextIsolation: true,
       autoplayPolicy: "no-user-gesture-required",
@@ -1451,7 +1586,7 @@ function contextMenuItems(tab, p, { video = p.mediaType === "video" } = {}) {
     for (const word of (p.dictionarySuggestions || []).slice(0, 5)) items.push({ label: word, click: () => wc.replaceMisspelling(word) });
     if (p.misspelledWord) items.push({ label: "Add to Dictionary", click: () => wc.session.addWordToSpellCheckerDictionary(p.misspelledWord) }, { type: "separator" });
     items.push({ role: "undo" }, { role: "redo" }, { type: "separator" }, { role: "cut" }, { role: "copy" }, { role: "paste" }, { role: "selectAll" });
-    const logins = /^input/.test(p.formControlType || "") || p.inputFieldType === "password" ? loginMenuItems(tab) : [];
+    const logins = /^input/.test(p.formControlType || "") || p.inputFieldType === "password" ? loginMenuItems(tab, p.frame || null).filter((i) => i.label !== "Use Strong Password") : [];
     if (logins.length) items.push({ type: "separator" }, { label: "Fill Saved Login", submenu: logins });
   } else if (text) {
     sep();
@@ -2258,6 +2393,8 @@ app.whenReady().then(() => {
   claudeDesktopEntry, sleepIdleTabs,
   setPasswordAsk: (answer) => (passwordAsk = async (opts) => ((global.nodeTest.lastPasswordAsk = opts), answer)),
   loginMenu: (id) => loginMenuItems(tabs.get(id)).map((i) => i.label),
+  setPasswordAuth: (answer) => ((passwordAuth = async () => answer), (passwordAuthUntil = 0)),
+  importPasswords,
   fillLogin: (id, n = 0) => {
     const tab = tabs.get(id);
     const origin = passwordPageOrigin(tab);

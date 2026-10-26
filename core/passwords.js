@@ -35,6 +35,83 @@ function siteName(origin) {
   }
 }
 
+// A strong password like Safari's: four groups of five letters and digits,
+// with at least one capital letter and one digit (about 110 bits).
+function generatePassword(randomInt = crypto.randomInt) {
+  const lower = "abcdefghijkmnopqrstuvwxyz"; // no l, easily read as 1
+  const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ"; // no I or O
+  const digits = "23456789";
+  const all = lower + upper + digits;
+  for (;;) {
+    const chars = Array.from({ length: 20 }, () => all[randomInt(all.length)]);
+    const pw = [0, 5, 10, 15].map((i) => chars.slice(i, i + 5).join("")).join("-");
+    if (/[A-Z]/.test(pw) && /[2-9]/.test(pw) && /[a-z]/.test(pw)) return pw;
+  }
+}
+
+// CSV as exported by Chrome, Brave, Edge, Safari, Firefox, 1Password and
+// Bitwarden (RFC 4180: quoted fields, "" for a quote, line breaks in quotes).
+function parseCsv(text) {
+  const rows = [];
+  let row = [];
+  let field = "";
+  let quoted = false;
+  text = String(text).replace(/^\uFEFF/, "");
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (quoted) {
+      if (c === '"' && text[i + 1] === '"') {
+        field += '"';
+        i++;
+      } else if (c === '"') quoted = false;
+      else field += c;
+    } else if (c === '"') quoted = true;
+    else if (c === ",") {
+      row.push(field);
+      field = "";
+    } else if (c === "\n" || c === "\r") {
+      if (c === "\r" && text[i + 1] === "\n") i++;
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = "";
+    } else field += c;
+  }
+  if (field || row.length) {
+    row.push(field);
+    rows.push(row);
+  }
+  return rows.filter((r) => r.some((f) => f.trim()));
+}
+
+// The logins in an exported passwords file. Columns are found by name.
+const COLUMNS = {
+  url: ["url", "website", "login_uri", "login url", "web site", "hostname", "origin"],
+  username: ["username", "login_username", "login name", "user name", "login", "email"],
+  password: ["password", "login_password"],
+};
+function loginsFromCsv(text) {
+  const rows = parseCsv(text);
+  if (rows.length < 2) return { logins: [], skipped: 0, error: "The file has no logins." };
+  const head = rows[0].map((h) => h.trim().toLowerCase());
+  const col = (names) => head.findIndex((h) => names.includes(h));
+  const iu = col(COLUMNS.url), iname = col(COLUMNS.username), ip = col(COLUMNS.password);
+  if (iu < 0 || ip < 0) return { logins: [], skipped: 0, error: "This is not a passwords file: it needs a URL and a password column." };
+  const logins = [];
+  let skipped = 0;
+  for (const r of rows.slice(1)) {
+    const raw = (r[iu] || "").trim();
+    const origin = originOf(/^[a-z][a-z0-9+.-]*:/i.test(raw) ? raw : raw ? `https://${raw}` : "");
+    const password = r[ip] || "";
+    if (!origin || !password) {
+      skipped++;
+      continue;
+    }
+    logins.push({ origin, username: iname >= 0 ? (r[iname] || "").trim() : "", password });
+  }
+  return { logins, skipped };
+}
+
 function createPasswordStore({ file, encrypt, decrypt, now = () => Date.now() }) {
   let data = { version: 1, logins: [], never: [] };
   try {
@@ -118,7 +195,39 @@ function createPasswordStore({ file, encrypt, decrypt, now = () => Date.now() })
     count() {
       return data.logins.length;
     },
+    // The password, for Settings → Show or Copy (after the user is checked).
+    secret(id) {
+      const l = data.logins.find((x) => x.id === id);
+      return l ? decrypt(l.password) : null;
+    },
+    // What an import would do, and doing it.
+    importPlan(list) {
+      let added = 0, updated = 0, same = 0;
+      const seen = new Set();
+      for (const l of list) {
+        const key = `${l.origin}\n${l.username}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const m = data.logins.find((x) => sameSite(x.origin, l.origin) && (x.username || "") === l.username);
+        if (!m) added++;
+        else if (decrypt(m.password) === l.password) same++;
+        else updated++;
+      }
+      return { added, updated, same };
+    },
+    importMany(list) {
+      const plan = this.importPlan(list);
+      const at = now();
+      for (const l of list) {
+        const m = data.logins.find((x) => sameSite(x.origin, l.origin) && (x.username || "") === l.username);
+        if (m) {
+          if (decrypt(m.password) !== l.password) m.password = encrypt(l.password);
+        } else data.logins.push({ id: crypto.randomBytes(8).toString("hex"), origin: l.origin, username: l.username, password: encrypt(l.password), created: at, used: 0 });
+      }
+      save();
+      return plan;
+    },
   };
 }
 
-module.exports = { createPasswordStore, originOf, sameSite, siteName };
+module.exports = { createPasswordStore, originOf, sameSite, siteName, generatePassword, parseCsv, loginsFromCsv };
