@@ -224,6 +224,30 @@ const shoot = (name) => {
   await sleep(400);
   check("address bar in use keeps the toolbar", (await pageView()).layerOnTop);
   await ui.evaluate(() => window.scout.holdChrome(false));
+  // The menu does not hold the toolbar in full screen: it slides away when the
+  // pointer moves down and comes back at the top edge, with the menu open.
+  await app.evaluate(({ BrowserWindow }) => {
+    const b = BrowserWindow.getAllWindows()[0].getContentBounds();
+    globalThis.__cursor = { x: b.x + 600, y: b.y + 1 };
+  });
+  await sleep(700);
+  await inLayer("document.querySelector('#menu-btn').click()");
+  await sleep(800);
+  check("the menu opens from the full-screen toolbar", await ui.evaluate(() => menuOpen));
+  await app.evaluate(({ BrowserWindow }) => {
+    const b = BrowserWindow.getAllWindows()[0].getContentBounds();
+    globalThis.__cursor = { x: b.x + 600, y: b.y + 500 };
+  });
+  await sleep(1000);
+  check("with the menu open, the toolbar slides away when the pointer moves down", (await pageView()).layer === null && (await ui.evaluate(() => menuOpen)));
+  await app.evaluate(({ BrowserWindow }) => {
+    const b = BrowserWindow.getAllWindows()[0].getContentBounds();
+    globalThis.__cursor = { x: b.x + 600, y: b.y + 1 };
+  });
+  await sleep(700);
+  check("and comes back at the top edge", (await pageView()).layerOnTop);
+  await ui.keyboard.press("Escape");
+  await sleep(500);
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].emit("leave-full-screen"));
   await sleep(300);
   st = await pageView();

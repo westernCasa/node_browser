@@ -366,7 +366,9 @@ function setChromeShown(on) {
 // The page views cover the renderer, so it gets no mouse events over the
 // page: read the pointer position from the system instead.
 function pollChrome() {
-  if (!win || !immersive || htmlFullId || chromeHold || overlayHold || popupHold || libraryOpen) return;
+  // The menu does not hold the toolbar: it slides away and comes back with
+  // the pointer, as over a page (reported by Sven, 0.9.5).
+  if (!win || !immersive || htmlFullId || chromeHold || overlayHold || popupHold) return;
   const p = screen.getCursorScreenPoint();
   const b = win.getContentBounds();
   const inside = p.x >= b.x && p.x < b.x + b.width && p.y >= b.y && p.y < b.y + b.height;
