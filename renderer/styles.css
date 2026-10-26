@@ -1015,3 +1015,16 @@ body.chrome-overlay .chrome::before { content: ""; position: absolute; left: 0; 
 
 /* B73: the shield next to the address. Count in mono after the icon; muted and crossed out when blocking is off. */
 #shield-btn.muted { color: var(--ink-muted); }
+
+/* B49: Ask about this page, the tabs in Mosaic or the session. Citations are
+   small mono buttons that open the source; the sources are listed below. */
+.ask-scope { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 8px; }
+.ask-msg .ask-text { white-space: pre-wrap; }
+.ask-msg .cite { display: inline-grid; place-items: center; min-width: 18px; height: 16px; padding: 0 3px; margin: 0 1px; vertical-align: 1px;
+  border: 1px solid var(--line); border-radius: var(--radius-sm); background: transparent; color: var(--signal); font: 10px/14px var(--mono); cursor: pointer; }
+.ask-msg .cite:hover { border-color: var(--signal); }
+.ask-msg .ask-sources { margin: 10px 0 0; padding-left: 22px; font-size: 12px; color: var(--ink-muted); display: flex; flex-direction: column; gap: 4px; }
+.ask-msg .ask-sources li::marker { font-family: var(--mono); color: var(--signal); }
+.ask-msg .ask-sources button { background: none; border: 0; padding: 0; color: var(--ink); font: inherit; text-align: left; cursor: pointer; text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 2px; }
+.ask-msg .ask-sources span { font-family: var(--mono); font-size: 11px; }
+.ask-msg .ask-saved { margin: 8px 0 0; font: 11px var(--mono); color: var(--ink-muted); }

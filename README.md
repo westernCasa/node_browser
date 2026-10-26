@@ -134,6 +134,7 @@ What leaves your computer, and when:
 | A request for each suggested page, to find its picture | The suggested pages' sites | When suggestions show. No cookies, no sign-ins |
 | Pinned keywords, up to 8 page keywords and the page title | Your local model, or xAI (Grok) with your key | Only if AI query ideas are on (off by default) |
 | The page's readable text, title and address | Your local model, or xAI (Grok) | Only when you ask a question in Ask AI or run the research agent |
+| The text, titles and addresses of the tabs in Mosaic, or of the 8 pages you read most recently in the research session | Your local model, or xAI (Grok) | Only when you ask about Mosaic tabs or the session in Ask AI. Session pages that are not open are read again, logged out. Sign-in, account and payment pages are never sent |
 | The address of the page you're reading | Hacker News search (Algolia) and Bluesky search | Only while the Talk tab is open |
 | A check for a new version | GitHub | Every 6 hours in installed copies, if "Check for updates" is on |
 | A download of the ad and tracker block lists (uBlock Origin's default lists; with cookie notices on, also the cookie-notice lists) | GitHub | About once a week |
@@ -148,6 +149,7 @@ Ads and trackers are blocked on every page with the filter lists uBlock Origin t
 - **Bookmarks.** ☆ next to the address bar (or Cmd/Ctrl+D) bookmarks the page; ★ means it is saved. Bookmarks appear first in address-bar suggestions and in the Bookmarks shelf of the Library (Cmd/Ctrl+Shift+B).
 - **Picture-in-picture.** Capture → Picture in Picture in the toolbar (or Cmd/Ctrl+Shift+P) puts the page's video, or an embedded YouTube or Vimeo player, in a floating window. Again to close it.
 - **Ad and tracker blocking.** On by default, using the filter lists uBlock Origin turns on by default (uBlock filters, badware, privacy, quick fixes, unbreak, EasyList, EasyPrivacy, Peter Lowe's list) through Ghostery's filter engine, downloaded on first run and updated weekly. Ad and tracker requests are blocked, and leftover ad boxes are hidden on the page. Settings → Also hide cookie notices adds the cookie-notice lists. Turn it off in Settings, or for one site with a site rule `"adblock": false`. Settings shows how many requests were blocked.
+- **Ask AI across tabs.** The Ask tab can also answer about all the tabs in Mosaic or the pages of your research session. Answers cite their sources as [1], [2] and so on; click a number to open that page. Session → Summarize session writes a summary with key findings, disagreements and open questions, cited, and saves it to the Library.
 - **Ask AI.** The Ask tab in the suggestions widget opens a chat about the current page, with Summarize, Key facts and What next? buttons. It uses the model set up under Settings → AI (a local model or Grok). Questions send the page's readable text, title and address to that model; nothing is sent until you ask.
 
 ## Installing

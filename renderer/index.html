@@ -122,16 +122,17 @@
       <div id="ask-pane" role="tabpanel" aria-labelledby="ask-btn" hidden>
         <div class="rail-head">
           <div>
-            <p class="kicker">This page</p>
+            <p class="kicker" id="ask-kicker">This page</p>
             <h1>Ask AI</h1>
           </div>
         </div>
-        <p class="help" id="ask-privacy"></p>
-        <div class="actions-row" id="ask-quick">
-          <button class="chip" data-q="Summarize this page in 5 bullet points.">Summarize</button>
-          <button class="chip" data-q="What are the key facts, names and dates on this page?">Key facts</button>
-          <button class="chip" data-q="What questions does this page leave open, and what should I read next to answer them?">What next?</button>
+        <div class="ask-scope" id="ask-scope" role="radiogroup" aria-label="Ask about">
+          <button class="chip active" role="radio" aria-checked="true" data-scope="page">This page</button>
+          <button class="chip" role="radio" aria-checked="false" data-scope="mosaic">Mosaic tabs</button>
+          <button class="chip" role="radio" aria-checked="false" data-scope="session">Session</button>
         </div>
+        <p class="help" id="ask-privacy"></p>
+        <div class="actions-row" id="ask-quick"></div>
         <div id="ask-log"></div>
         <form id="ask-form" class="ask-form">
           <textarea id="ask-input" rows="3" placeholder="Ask about this page (Enter to send, Shift+Enter for a new line)"></textarea>

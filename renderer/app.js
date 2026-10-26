@@ -2541,14 +2541,80 @@ function demoNavigate(input) {
 renderKeys();
 renderResults([]);
 
-// ---- Ask AI about the current page (core/chat.js) ----
-// One conversation per page address; it starts over when the page changes.
+// ---- Ask AI (core/chat.js) ----
+// About this page, the tabs in Mosaic, or the research session (B49). One
+// conversation per page address, one for Mosaic and one for the session.
+// Answers about several pages cite them as [1] to [n]: each number opens
+// that page, and the sources are listed under the answer.
 const askLog = document.getElementById("ask-log");
 const askInput = document.getElementById("ask-input");
-let ask = { url: "", messages: [] };
+let askScope = "page";
+let ask = { key: "", messages: [] };
+const ASK_SCOPES = {
+  page: {
+    kicker: "This page",
+    placeholder: "Ask about this page (Enter to send, Shift+Enter for a new line)",
+    sends: "this page's text, title and address",
+    quick: [
+      ["Summarize", "Summarize this page in 5 bullet points."],
+      ["Key facts", "What are the key facts, names and dates on this page?"],
+      ["What next?", "What questions does this page leave open, and what should I read next to answer them?"],
+    ],
+  },
+  mosaic: {
+    kicker: "Tabs in Mosaic",
+    placeholder: "Ask about the tabs in Mosaic (Enter to send)",
+    sends: "the text, titles and addresses of the tabs Mosaic shows (up to 10)",
+    quick: [
+      ["Compare", "Compare these pages: what does each one add?"],
+      ["Disagreements", "Where do these pages disagree?"],
+      ["Summarize all", "Summarize what these pages say together, in 5 bullet points."],
+    ],
+  },
+  session: {
+    kicker: "Research session",
+    placeholder: "Ask about the pages you read in this session (Enter to send)",
+    sends: "the text of the 8 pages you read most recently in this research session (pages that are not open are read again, logged out)",
+    quick: [
+      ["Summarize session", "", "summary"],
+      ["Key findings", "What are the key findings across these pages?"],
+      ["What's missing?", "What do these pages not answer yet, and what should I look for next?"],
+    ],
+  },
+};
 
 function askTab() {
   return tabs.find((t) => t.id === activeId);
+}
+function askKey() {
+  return askScope === "page" ? "page:" + (askTab()?.url || "") : askScope;
+}
+
+// Text with [n] citations: each number becomes a button that opens the source.
+function citedNodes(text, sources) {
+  const frag = document.createDocumentFragment();
+  let last = 0;
+  for (const m of String(text).matchAll(/\[(\d{1,2})\]/g)) {
+    const src = sources?.find((s) => s.n === Number(m[1]));
+    if (!src) continue;
+    frag.append(text.slice(last, m.index));
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "cite";
+    b.textContent = m[1];
+    b.title = `${src.title}\n${src.url}`;
+    b.setAttribute("aria-label", `Source ${m[1]}: ${src.title}`);
+    b.addEventListener("click", () => openSource(src.url));
+    frag.append(b);
+    last = m.index + m[0].length;
+  }
+  frag.append(String(text).slice(last));
+  return frag;
+}
+function openSource(url) {
+  const open = tabs.find((t) => t.url === url);
+  if (open) api.activateTab(open.id);
+  else api.createTab(url);
 }
 
 function renderAsk() {
@@ -2556,49 +2622,113 @@ function renderAsk() {
   for (const m of ask.messages) {
     const el = document.createElement("div");
     el.className = "ask-msg " + m.role;
-    el.textContent = m.content;
+    if (m.role === "assistant" && m.sources?.length) {
+      const body = document.createElement("div");
+      body.className = "ask-text";
+      body.append(citedNodes(m.content, m.sources));
+      el.append(body);
+      if (m.file) {
+        const saved = document.createElement("p");
+        saved.className = "ask-saved";
+        saved.textContent = `Saved to the Library: ${m.file}`;
+        el.append(saved);
+      }
+      const list = document.createElement("ol");
+      list.className = "ask-sources";
+      for (const s of m.sources) {
+        const li = document.createElement("li");
+        const b = document.createElement("button");
+        b.type = "button";
+        b.textContent = s.title;
+        b.title = s.url;
+        b.addEventListener("click", () => openSource(s.url));
+        li.append(b, Object.assign(document.createElement("span"), { textContent: " " + hostOf(s.url) }));
+        list.append(li);
+      }
+      el.append(list);
+    } else el.textContent = m.content;
     askLog.appendChild(el);
   }
   askLog.scrollTop = askLog.scrollHeight;
 }
 
+async function paintAskScope() {
+  const conf = ASK_SCOPES[askScope];
+  for (const b of document.querySelectorAll("#ask-scope [data-scope]")) {
+    const on = b.dataset.scope === askScope;
+    b.classList.toggle("active", on);
+    b.setAttribute("aria-checked", String(on));
+  }
+  document.getElementById("ask-kicker").textContent = conf.kicker;
+  askInput.placeholder = conf.placeholder;
+  const quick = document.getElementById("ask-quick");
+  quick.innerHTML = "";
+  for (const [label, q, action] of conf.quick) {
+    const b = document.createElement("button");
+    b.className = "chip";
+    b.textContent = label;
+    if (q) b.dataset.q = q;
+    if (action) b.dataset.action = action;
+    quick.append(b);
+  }
+  if (ask.key !== askKey()) ask = { key: askKey(), messages: [] };
+  const info = api?.chatInfo ? await api.chatInfo() : { ready: false };
+  document.getElementById("ask-privacy").textContent = info.ready
+    ? `Questions send ${conf.sends} to ${info.provider === "grok" ? "Grok (xAI)" : "your local model"} (${info.model}). Nothing is sent until you ask.`
+    : "Set up a model first in Settings → AI: a local model (Ollama or LM Studio) or a Grok API key.";
+  renderAsk();
+}
+
 async function openAsk() {
   if (!api?.askPage) return showNotice("Ask needs the desktop app.");
   showPane("ask");
-  const tab = askTab();
-  if (tab && tab.url !== ask.url) ask = { url: tab.url, messages: [] };
-  const info = await api.chatInfo();
-  document.getElementById("ask-privacy").textContent = info.ready
-    ? `Questions send this page's text, title and address to ${info.provider === "grok" ? "Grok (xAI)" : "your local model"} (${info.model}). Nothing is sent until you ask.`
-    : "Set up a model first in Settings → AI: a local model (Ollama or LM Studio) or a Grok API key.";
-  renderAsk();
+  await paintAskScope();
   askInput.focus();
 }
 
 async function sendAsk(question) {
   const q = String(question || "").trim();
   const tab = askTab();
-  if (!q || !tab) return;
-  if (tab.url !== ask.url) ask = { url: tab.url, messages: [] };
-  const history = ask.messages.filter((m) => m.role !== "error");
+  if (!q || (askScope === "page" && !tab)) return;
+  if (ask.key !== askKey()) ask = { key: askKey(), messages: [] };
+  const history = ask.messages.filter((m) => m.role === "user" || m.role === "assistant").map((m) => ({ role: m.role, content: m.content }));
   ask.messages.push({ role: "user", content: q });
-  ask.messages.push({ role: "pending", content: "Thinking…" });
+  ask.messages.push({ role: "pending", content: askScope === "page" ? "Thinking…" : "Reading the pages…" });
   renderAsk();
   askInput.value = "";
-  const r = await api.askPage(tab.id, q, history);
+  const r = askScope === "page" ? await api.askPage(tab.id, q, history) : await api.askScope(askScope, q, history);
   ask.messages.pop();
-  ask.messages.push(r.ok ? { role: "assistant", content: r.answer } : { role: "error", content: r.error });
+  ask.messages.push(r.ok ? { role: "assistant", content: r.answer, sources: r.sources } : { role: "error", content: r.error });
+  renderAsk();
+}
+
+async function summarizeSession() {
+  if (ask.key !== askKey()) ask = { key: askKey(), messages: [] };
+  ask.messages.push({ role: "user", content: "Summarize this research session" });
+  ask.messages.push({ role: "pending", content: "Reading the pages and writing a summary…" });
+  renderAsk();
+  const r = await api.summarizeSession();
+  ask.messages.pop();
+  ask.messages.push(r.ok ? { role: "assistant", content: r.summary.replace(/\n## Sources[\s\S]*$/, "").trim(), sources: r.sources, file: r.file } : { role: "error", content: r.error });
   renderAsk();
 }
 
 document.getElementById("ask-btn").addEventListener("click", openAsk);
+document.getElementById("ask-scope").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-scope]");
+  if (!b || b.dataset.scope === askScope) return;
+  askScope = b.dataset.scope;
+  paintAskScope();
+});
 document.getElementById("ask-clear").addEventListener("click", () => {
   ask.messages = [];
   renderAsk();
 });
 document.getElementById("ask-quick").addEventListener("click", (e) => {
-  const b = e.target.closest("button[data-q]");
-  if (b) sendAsk(b.dataset.q);
+  const b = e.target.closest("button");
+  if (!b) return;
+  if (b.dataset.action === "summary") summarizeSession();
+  else if (b.dataset.q) sendAsk(b.dataset.q);
 });
 document.getElementById("ask-form").addEventListener("submit", (e) => {
   e.preventDefault();

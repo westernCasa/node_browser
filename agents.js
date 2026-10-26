@@ -223,7 +223,18 @@ function createAgents({ BrowserWindow, session, userAgent, registry, research, g
     return [...web, ...ref];
   }
 
-  return { tools, resources, readForAgent, searchForAgent };
+  // Readable text of a public page, read logged out (Ask AI across a research session, B49).
+  async function readText(url) {
+    const page = await fetchPage(checkAddress(url, { allowPrivate: allowPrivate() }), { withThumb: false });
+    return { url: page.url || url, title: page.title || "", text: stripMarkdownLinks(page.markdown || "") };
+  }
+
+  return { tools, resources, readForAgent, searchForAgent, readText };
+}
+
+// Link targets add nothing for a model reading the text: keep the link words.
+function stripMarkdownLinks(md) {
+  return String(md || "").replace(/!\[[^\]]*\]\([^)]*\)/g, "").replace(/\[([^\]]*)\]\([^)]*\)/g, "$1");
 }
 
 module.exports = { createAgents, checkAddress, isPrivateHost, SENSITIVE };
