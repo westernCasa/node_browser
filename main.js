@@ -1481,6 +1481,7 @@ function loadSettings() {
     grok: { model: ai.grok?.model || AI.AI_DEFAULTS.grok.model, key: decryptSecret(ai.grok?.key) },
   };
   base.adblock = raw.adblock !== false;
+  base.adblockCookies = raw.adblockCookies === true; // B77: also hide cookie notices (off by default, as in uBlock Origin)
   base.restoreTabs = raw.restoreTabs !== false;
   base.autoUpdate = raw.autoUpdate !== false;
   base.passkeys = raw.passkeys === true;
@@ -1515,6 +1516,10 @@ function saveSettings(next) {
     if (JSON.stringify(current.providers[id]) !== before) search.reset(id);
   }
   if (next && "adblock" in next) current.adblock = Boolean(next.adblock);
+  if (next && "adblockCookies" in next && Boolean(next.adblockCookies) !== current.adblockCookies) {
+    current.adblockCookies = Boolean(next.adblockCookies);
+    setTimeout(() => adblock?.load(), 0); // switch between the two list sets
+  }
   if (next && "restoreTabs" in next) current.restoreTabs = Boolean(next.restoreTabs);
   if (next && "autoUpdate" in next) current.autoUpdate = Boolean(next.autoUpdate);
   if (next && "passkeys" in next) current.passkeys = Boolean(next.passkeys);
@@ -1549,6 +1554,7 @@ function saveSettings(next) {
   const disk = {
     version: SETTINGS_VERSION,
     adblock: current.adblock !== false,
+    adblockCookies: current.adblockCookies === true,
     google: { ...current.google },
     restoreTabs: current.restoreTabs !== false,
     autoUpdate: current.autoUpdate !== false,
@@ -1594,6 +1600,7 @@ function publicSettings() {
     aiStatus: { ...aiState },
     adblock: s.adblock !== false,
     adblockStats: adblock ? adblock.stats() : { status: "off", blocked: 0 },
+    adblockCookies: s.adblockCookies === true,
     google: { ...s.google },
     restoreTabs: s.restoreTabs !== false,
     autoUpdate: s.autoUpdate !== false,
@@ -2029,6 +2036,8 @@ app.whenReady().then(() => {
   // Ad and tracker blocking (adblock.js): on unless turned off in Settings or by a site rule.
   adblock = createAdblock({
     userData: app.getPath("userData"),
+    ipcMain,
+    cookieNotices: () => loadSettings().adblockCookies === true,
     fetch: (...args) => globalThis.fetch(...args),
     isEnabled: () => loadSettings().adblock !== false,
     // A blocked request updates the toolbar count (B73), at most twice a second.
@@ -2044,6 +2053,8 @@ app.whenReady().then(() => {
       for (const tab of tabs.values()) if (tab.view.webContents.id === wcId) return tab.rule?.adblock !== false;
       return true;
     },
+    // On-page hiding runs only in tabs, never in NODE's own window (B77).
+    isPage: (wcId) => [...tabs.values()].some((tab) => tab.view.webContents.id === wcId),
   });
   adblock.install(session.defaultSession);
   watchDownloads(session.defaultSession);
@@ -2276,6 +2287,18 @@ ipcMain.handle("menu:privacy", (_e, x, y) => {
         wc.reload();
       },
     },
+    { type: "separator" },
+    {
+      label: "Also Hide Cookie Notices",
+      type: "checkbox",
+      checked: loadSettings().adblockCookies === true,
+      enabled: on,
+      click: () => {
+        saveSettings({ adblockCookies: loadSettings().adblockCookies !== true });
+        setTimeout(() => wc.reload(), 1500);
+      },
+    },
+    { label: "Uses uBlock Origin's Default Filter Lists", enabled: false },
     { type: "separator" },
     { label: "What NODE Sends…", click: () => createTab(PRIVACY_DOC) }
   );

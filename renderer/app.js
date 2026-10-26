@@ -1415,6 +1415,7 @@ async function renderSources() {
   const [settings, status] = await Promise.all([api.getSettings(), api.searchStatus()]);
   fillAI(settings.ai, settings.aiStatus);
   document.getElementById("adblock-enabled").checked = settings.adblock !== false;
+  document.getElementById("adblock-cookies").checked = settings.adblockCookies === true;
   const ab = settings.adblockStats || {};
   document.getElementById("adblock-state").textContent =
     settings.adblock === false ? "Off" : ab.status === "ready" || String(ab.status).startsWith("ready") ? `On · ${ab.blocked} requests blocked since NODE started` : `On · ${ab.status}`;
@@ -1858,7 +1859,7 @@ if (api?.rulesGet) {
 
 async function saveSources(rerender = true) {
   if (!sourcesDraft) return;
-  await api.setSettings({ ...sourcesDraft, ai: aiDraft(), adblock: document.getElementById("adblock-enabled").checked,
+  await api.setSettings({ ...sourcesDraft, ai: aiDraft(), adblock: document.getElementById("adblock-enabled").checked, adblockCookies: document.getElementById("adblock-cookies").checked,
     google: { mode: document.getElementById("google-mode").value, browser: document.getElementById("google-browser").value },
     restoreTabs: document.getElementById("restore-tabs").checked,
     startPage: document.getElementById("start-page").value,

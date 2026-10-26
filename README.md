@@ -136,18 +136,18 @@ What leaves your computer, and when:
 | The page's readable text, title and address | Your local model, or xAI (Grok) | Only when you ask a question in Ask AI or run the research agent |
 | The address of the page you're reading | Hacker News search (Algolia) and Bluesky search | Only while the Talk tab is open |
 | A check for a new version | GitHub | Every 6 hours in installed copies, if "Check for updates" is on |
-| A download of the ad and tracker block lists | GitHub | About once a week |
+| A download of the ad and tracker block lists (uBlock Origin's default lists; with cookie notices on, also the cookie-notice lists) | GitHub | About once a week |
 | Google sign-in and Google apps | A separate Chrome-based browser on your computer, with its own NODE profile | When you open a Google account page (Settings → Google window) |
 
 AI agents on your computer can use NODE through its MCP server only if you turn it on. It listens on your computer only (127.0.0.1), never on the network, and agents read pages logged out.
 
-Ads and trackers are blocked on every page with the EasyList and EasyPrivacy lists. The shield next to the address shows how many were blocked on the page; click it for the sites blocked and the switch.
+Ads and trackers are blocked on every page with the filter lists uBlock Origin turns on by default, and leftover ad boxes are hidden. The shield next to the address shows how many were blocked on the page; click it for the sites blocked and the switch.
 
 ## Bookmarks, picture-in-picture, ad blocking and Ask AI
 
 - **Bookmarks.** ☆ next to the address bar (or Cmd/Ctrl+D) bookmarks the page; ★ means it is saved. Bookmarks appear first in address-bar suggestions and in the Bookmarks shelf of the Library (Cmd/Ctrl+Shift+B).
 - **Picture-in-picture.** Capture → Picture in Picture in the toolbar (or Cmd/Ctrl+Shift+P) puts the page's video, or an embedded YouTube or Vimeo player, in a floating window. Again to close it.
-- **Ad and tracker blocking.** On by default, using the EasyList and EasyPrivacy lists (Ghostery's filter engine), downloaded on first run and updated weekly. Turn it off in Settings, or for one site with a site rule `"adblock": false`. Settings shows how many requests were blocked.
+- **Ad and tracker blocking.** On by default, using the filter lists uBlock Origin turns on by default (uBlock filters, badware, privacy, quick fixes, unbreak, EasyList, EasyPrivacy, Peter Lowe's list) through Ghostery's filter engine, downloaded on first run and updated weekly. Ad and tracker requests are blocked, and leftover ad boxes are hidden on the page. Settings → Also hide cookie notices adds the cookie-notice lists. Turn it off in Settings, or for one site with a site rule `"adblock": false`. Settings shows how many requests were blocked.
 - **Ask AI.** The Ask tab in the suggestions widget opens a chat about the current page, with Summarize, Key facts and What next? buttons. It uses the model set up under Settings → AI (a local model or Grok). Questions send the page's readable text, title and address to that model; nothing is sent until you ask.
 
 ## Installing
