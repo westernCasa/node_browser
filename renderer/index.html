@@ -307,7 +307,8 @@
               <label class="toggle"><input type="checkbox" id="adblock-enabled" /> Block ads and trackers</label>
             </div>
             <div class="state" id="adblock-state"></div>
-            <p class="help">Uses the EasyList and EasyPrivacy lists, updated weekly. To allow ads on one site, add a site rule with <code>"adblock": false</code>.</p>
+            <div class="top"><label class="toggle"><input type="checkbox" id="adblock-cookies" /> Also hide cookie notices</label></div>
+            <p class="help">Uses the filter lists uBlock Origin turns on by default (uBlock filters, EasyList, EasyPrivacy, Peter Lowe's list and others), updated weekly. Blocks ad and tracker requests and hides leftover ad boxes on the page. Hiding cookie notices adds the cookie-notice lists; a hidden notice is not an answer to it. To allow ads on one site, add a site rule with <code>"adblock": false</code>.</p>
           </div>
           <div class="rail-head rules-head">
             <div>
@@ -462,7 +463,7 @@
         <h2>Browsing</h2>
         <label class="toggle"><input type="checkbox" id="fr-restore" checked /> Reopen my tabs when NODE starts</label>
         <label class="toggle"><input type="checkbox" id="fr-adblock" checked /> Block ads and trackers</label>
-        <p class="help">NODE blocks ads and trackers on every page with the EasyList and EasyPrivacy lists, built in. The shield next to the address shows how many it blocked on the page you're reading.</p>
+        <p class="help">NODE blocks ads and trackers on every page with the filter lists uBlock Origin uses by default, built in. The shield next to the address shows how many it blocked on the page you're reading.</p>
       </section>
       <div class="fr-actions"><button type="button" class="chip" id="fr-done">Start browsing</button></div>
     </div>

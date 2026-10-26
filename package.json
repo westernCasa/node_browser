@@ -39,6 +39,7 @@
   },
   "dependencies": {
     "@ghostery/adblocker-electron": "2.19",
+    "@ghostery/adblocker-electron-preload": "2.20.1",
     "electron-updater": "6.8.9"
   },
   "productName": "NODE",
