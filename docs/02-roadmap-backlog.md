@@ -1,6 +1,6 @@
 # NODE Browser: Roadmap and Backlog
 
-Last updated: 2026-10-26 (B26 done: AI query ideas confirmed on the Mac. B78 added and fixed: tabs switching by themselves, tabs sleeping while away. All open checks done; usability test under way. B47 done: saving and filling passwords, strong passwords, import, show and copy. Earlier, 2026-10-25: 0.9.2 released, B67-B72. B73-B76 restored: added this morning from the survey as B71-B74 in another chat, lost when this file was synced, and renumbered because B71 and B72 were taken by the tab overview and gestures). The editable version (with status dropdowns) is in the review doc: https://claude.ai/code/artifact/b6ec4995-3117-41d0-a3c4-948c16e699fc
+Last updated: 2026-10-26 (B26 done: AI query ideas confirmed on the Mac. B78 added and fixed: tabs switching by themselves, tabs sleeping while away. All open checks done; usability test under way. B47 done: saving and filling passwords, strong passwords, import, show and copy. 0.9.5 prepared with B47 and B78. Earlier, 2026-10-25: 0.9.2 released, B67-B72. B73-B76 restored: added this morning from the survey as B71-B74 in another chat, lost when this file was synced, and renumbered because B71 and B72 were taken by the tab overview and gestures). The editable version (with status dropdowns) is in the review doc: https://claude.ai/code/artifact/b6ec4995-3117-41d0-a3c4-948c16e699fc
 
 ## Roadmap
 
