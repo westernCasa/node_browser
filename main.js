@@ -932,6 +932,147 @@ function sleepIdleTabs({ step = SLEEP_TICK_MS, inUse = nodeInUse() } = {}) {
 }
 setInterval(() => sleepIdleTabs(), SLEEP_TICK_MS).unref?.();
 
+// ---- Passwords (B47, core/passwords.js) ----
+// Saved only when the system has secure storage (Keychain, DPAPI, a Linux
+// keyring); NODE never keeps passwords in plain text. Tests turn on Electron's
+// plain-text mode with NODE_TEST_PLAIN_PASSWORDS=1 and --user-data-dir.
+const PW = require("./core/passwords");
+let pwStore = null;
+function passwords() {
+  if (!pwStore) {
+    pwStore = PW.createPasswordStore({
+      file: path.join(app.getPath("userData"), "passwords.json"),
+      encrypt: (v) => ({ enc: safeStorage.encryptString(v).toString("base64") }),
+      decrypt: (saved) => {
+        try {
+          return saved?.enc ? safeStorage.decryptString(Buffer.from(saved.enc, "base64")) : "";
+        } catch {
+          return "";
+        }
+      },
+    });
+  }
+  return pwStore;
+}
+const canStorePasswords = () => safeStorage.isEncryptionAvailable();
+const tabOfContents = (wc) => [...tabs.values()].find((t) => t.view.webContents === wc);
+function passwordPageOrigin(tab) {
+  if (!tab || tab.tutorial || tab.sleeping) return null;
+  const url = tab.view.webContents.getURL();
+  if (isInternal(url) || isTutorialPage(url)) return null;
+  return PW.originOf(url);
+}
+// Asks with a native sheet over the page (Safari does the same). Tests replace it.
+let passwordAsk = (opts) => dialog.showMessageBox(win, opts).then((r) => r.response);
+let passwordAsking = false;
+
+async function onLoginSubmitted(tab, { username = "", password = "" }) {
+  const origin = passwordPageOrigin(tab);
+  if (!origin || loadSettings().passwordsOffer === false || !canStorePasswords()) return;
+  username = String(username).slice(0, 256);
+  password = String(password).slice(0, 1024);
+  if (!password) {
+    if (username) tab.pendingUser = { origin, username, at: Date.now() };
+    return;
+  }
+  if (!username && tab.pendingUser && PW.sameSite(tab.pendingUser.origin, origin) && Date.now() - tab.pendingUser.at < 10 * 60 * 1000) username = tab.pendingUser.username;
+  // The same sign-in can arrive from Enter, the click and the submit event.
+  const key = `${origin}\n${username}\n${password}`;
+  if (tab.lastLogin?.key === key && Date.now() - tab.lastLogin.at < 10000) return;
+  tab.lastLogin = { key, at: Date.now() };
+  const verdict = passwords().consider({ origin, username, password });
+  if ((verdict.action !== "new" && verdict.action !== "update") || passwordAsking) return;
+  const site = PW.siteName(origin);
+  passwordAsking = true;
+  try {
+    if (verdict.action === "new") {
+      const choice = await passwordAsk({
+        type: "question",
+        message: `Save the password for ${site}?`,
+        detail: `${username ? `Username: ${username}\n\n` : ""}NODE keeps it on this computer, encrypted, and offers it the next time you sign in here. It is never sent anywhere.`,
+        buttons: ["Save Password", "Never for This Site", "Not Now"],
+        defaultId: 0,
+        cancelId: 2,
+      });
+      if (choice === 0) passwords().save({ origin, username, password });
+      else if (choice === 1) passwords().never(origin);
+    } else {
+      const choice = await passwordAsk({
+        type: "question",
+        message: `Update the saved password for ${username || "this login"} on ${site}?`,
+        detail: "The password you just used is different from the one NODE saved.",
+        buttons: ["Update Password", "Not Now"],
+        defaultId: 0,
+        cancelId: 1,
+      });
+      if (choice === 0) passwords().save({ origin, username, password });
+    }
+  } finally {
+    passwordAsking = false;
+    sendUi("passwords-changed", {});
+  }
+}
+
+function fillLogin(tab, id) {
+  const origin = passwordPageOrigin(tab);
+  const login = origin && passwords().reveal(id, origin);
+  if (!login) return false;
+  tab.view.webContents.send("pw:fill", { origin: new URL(tab.view.webContents.getURL()).origin, ...login });
+  return true;
+}
+
+function loginMenuItems(tab) {
+  const origin = passwordPageOrigin(tab);
+  if (!origin || !canStorePasswords()) return [];
+  return passwords()
+    .forOrigin(origin)
+    .slice(0, 8)
+    .map((l) => ({ label: l.username || "Saved password (no username)", click: () => fillLogin(tab, l.id) }));
+}
+
+function showLoginMenu(tab, rect) {
+  const items = loginMenuItems(tab);
+  if (!items.length || !tab.attached || win.isDestroyed()) return false;
+  const b = tab.view.getBounds();
+  const z = tab.view.webContents.getZoomFactor() || 1;
+  if (global.nodeTest?.noPopup) {
+    global.nodeTest.loginMenuShown = (global.nodeTest.loginMenuShown || 0) + 1;
+    return true;
+  }
+  items.push({ type: "separator" }, { label: "Passwords…", click: () => sendUi("open-menu", { section: "settings", box: "passwords-box" }) });
+  popupHold = true;
+  Menu.buildFromTemplate(items).popup({
+    window: win,
+    x: Math.round(b.x + rect.x * z),
+    y: Math.round(b.y + (rect.y + rect.height) * z + 2),
+    callback: () => (popupHold = false),
+  });
+  return true;
+}
+
+ipcMain.on("pw:submitted", (e, data) => {
+  const tab = tabOfContents(e.sender);
+  // A sign-in follows the user's own click or key press; a page sending a form
+  // by itself does not get to ask.
+  if (!tab || e.senderFrame !== e.sender.mainFrame || Date.now() - tab.lastGesture > 10000) return;
+  onLoginSubmitted(tab, data || {}).catch(() => (passwordAsking = false));
+});
+ipcMain.handle("pw:focus", (e, { rect } = {}) => {
+  const tab = tabOfContents(e.sender);
+  if (!tab || e.senderFrame !== e.sender.mainFrame || !rect) return false;
+  // Only right after a click or key press in this tab, so a page that moves
+  // focus by itself does not open the menu.
+  if (Date.now() - tab.lastGesture > 1000) return false;
+  return showLoginMenu(tab, rect);
+});
+ipcMain.handle("passwords:list", () => ({
+  available: canStorePasswords(),
+  logins: canStorePasswords() ? passwords().list() : [],
+  never: canStorePasswords() ? passwords().neverList() : [],
+}));
+ipcMain.handle("passwords:remove", (_e, id) => passwords().remove(String(id)));
+ipcMain.handle("passwords:allow", (_e, origin) => passwords().allow(String(origin)));
+
 // ---- Session restore ----
 // The open tabs are saved to userData/tabs.json and reopened on the next start
 // (asleep, except the active one).
@@ -1310,6 +1451,8 @@ function contextMenuItems(tab, p, { video = p.mediaType === "video" } = {}) {
     for (const word of (p.dictionarySuggestions || []).slice(0, 5)) items.push({ label: word, click: () => wc.replaceMisspelling(word) });
     if (p.misspelledWord) items.push({ label: "Add to Dictionary", click: () => wc.session.addWordToSpellCheckerDictionary(p.misspelledWord) }, { type: "separator" });
     items.push({ role: "undo" }, { role: "redo" }, { type: "separator" }, { role: "cut" }, { role: "copy" }, { role: "paste" }, { role: "selectAll" });
+    const logins = /^input/.test(p.formControlType || "") || p.inputFieldType === "password" ? loginMenuItems(tab) : [];
+    if (logins.length) items.push({ type: "separator" }, { label: "Fill Saved Login", submenu: logins });
   } else if (text) {
     sep();
     const short = text.length > 30 ? text.slice(0, 30) + "…" : text;
@@ -1516,6 +1659,7 @@ function loadSettings() {
   base.startPage = typeof raw.startPage === "string" ? raw.startPage : "";
   base.mosaicMax = MOSAIC_MAX_CHOICES.includes(raw.mosaicMax) ? raw.mosaicMax : 4;
   base.tabSleep = SLEEP_CHOICES.includes(raw.tabSleep) ? raw.tabSleep : 30;
+  base.passwordsOffer = raw.passwordsOffer !== false;
   // First-run setup is shown once, to new users. Settings saved by an earlier
   // version count as set up. Runs with --user-data-dir (the tests) skip it
   // unless NODE_FIRST_RUN=1.
@@ -1554,6 +1698,7 @@ function saveSettings(next) {
   if (next && "passkeys" in next) current.passkeys = Boolean(next.passkeys);
   if (next && typeof next.startPage === "string") current.startPage = /^https?:\/\//i.test(next.startPage.trim()) ? next.startPage.trim() : "";
   if (next && next.firstRunDone) current.firstRunDone = true;
+  if (next && "passwordsOffer" in next) current.passwordsOffer = Boolean(next.passwordsOffer);
   if (next && "tabSleep" in next && SLEEP_CHOICES.includes(Number(next.tabSleep))) current.tabSleep = Number(next.tabSleep);
   if (next && MOSAIC_MAX_CHOICES.includes(Number(next.mosaicMax))) {
     current.mosaicMax = Number(next.mosaicMax);
@@ -1592,6 +1737,7 @@ function saveSettings(next) {
     startPage: current.startPage || "",
     mosaicMax: current.mosaicMax,
     tabSleep: current.tabSleep,
+    passwordsOffer: current.passwordsOffer !== false,
     firstRunDone: Boolean(current.firstRunDone),
     agents: { enabled: current.agents.enabled, port: current.agents.port, token: encryptSecret(current.agents.token) },
     providers: {},
@@ -1641,6 +1787,7 @@ function publicSettings() {
     startPage: s.startPage || "",
     mosaicMax: s.mosaicMax,
     tabSleep: s.tabSleep,
+    passwordsOffer: s.passwordsOffer !== false,
     firstRunDone: Boolean(s.firstRunDone),
     googleWindow: companion ? companion.status() : null,
     agents: agentsStatus(),
@@ -2049,6 +2196,7 @@ app.commandLine.appendSwitch("disable-features", "PreloadMediaEngagementData");
 
 app.whenReady().then(() => {
   usage().touch();
+  if (process.env.NODE_TEST_PLAIN_PASSWORDS === "1" && app.commandLine.hasSwitch("user-data-dir")) safeStorage.setUsePlainTextEncryption?.(true);
   protocol.handle("scoutlib", (request) => {
     try {
       // scoutlib://item/<id> (older pages used scoutlib://<id>/file).
@@ -2107,7 +2255,15 @@ app.whenReady().then(() => {
   });
   global.nodeCompanion = companion; // for the e2e tests
   global.nodeTest = {
-  claudeDesktopEntry, sleepIdleTabs, contextMenuItems: async (id, p) => contextMenuItems(tabs.get(id), p, { video: p.mediaType === "video" || (await pageHasVideo(tabs.get(id))) }).map((i) => i.label || i.role || "-"), savePdf, closedTabs };
+  claudeDesktopEntry, sleepIdleTabs,
+  setPasswordAsk: (answer) => (passwordAsk = async (opts) => ((global.nodeTest.lastPasswordAsk = opts), answer)),
+  loginMenu: (id) => loginMenuItems(tabs.get(id)).map((i) => i.label),
+  fillLogin: (id, n = 0) => {
+    const tab = tabs.get(id);
+    const origin = passwordPageOrigin(tab);
+    const l = origin && passwords().forOrigin(origin)[n];
+    return l ? fillLogin(tab, l.id) : false;
+  }, contextMenuItems: async (id, p) => contextMenuItems(tabs.get(id), p, { video: p.mediaType === "video" || (await pageHasVideo(tabs.get(id))) }).map((i) => i.label || i.role || "-"), savePdf, closedTabs };
   initAgents();
   bookmarkStore = new BookmarkStore(fsStorage(app.getPath("userData")));
   buildMenu();

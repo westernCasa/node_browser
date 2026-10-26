@@ -140,6 +140,8 @@ What leaves your computer, and when:
 | A download of the ad and tracker block lists (uBlock Origin's default lists; with cookie notices on, also the cookie-notice lists) | GitHub | About once a week |
 | Google sign-in and Google apps | A separate Chrome-based browser on your computer, with its own NODE profile | When you open a Google account page (Settings → Google window) |
 
+Saved passwords are never sent anywhere. They are encrypted with your computer's own secure storage (Keychain on a Mac, Windows' data protection, a keyring on Linux) and kept on this computer. A saved login is filled only on the site it was saved for, and only when you pick it.
+
 AI agents on your computer can use NODE through its MCP server only if you turn it on. It listens on your computer only (127.0.0.1), never on the network, and agents read pages logged out.
 
 Ads and trackers are blocked on every page with the filter lists uBlock Origin turns on by default, and leftover ad boxes are hidden. The shield next to the address shows how many were blocked on the page; click it for the sites blocked and the switch.
@@ -149,6 +151,7 @@ Ads and trackers are blocked on every page with the filter lists uBlock Origin t
 - **Bookmarks.** ☆ next to the address bar (or Cmd/Ctrl+D) bookmarks the page; ★ means it is saved. Bookmarks appear first in address-bar suggestions and in the Bookmarks shelf of the Library (Cmd/Ctrl+Shift+B).
 - **Picture-in-picture.** Capture → Picture in Picture in the toolbar (or Cmd/Ctrl+Shift+P) puts the page's video, or an embedded YouTube or Vimeo player, in a floating window. Again to close it.
 - **Ad and tracker blocking.** On by default, using the filter lists uBlock Origin turns on by default (uBlock filters, badware, privacy, quick fixes, unbreak, EasyList, EasyPrivacy, Peter Lowe's list) through Ghostery's filter engine, downloaded on first run and updated weekly. Ad and tracker requests are blocked, and leftover ad boxes are hidden on the page. Settings → Also hide cookie notices adds the cookie-notice lists. Turn it off in Settings, or for one site with a site rule `"adblock": false`. Settings shows how many requests were blocked.
+- **Passwords.** After you sign in, NODE asks whether to save the password (Save Password, Never for This Site, Not Now), and asks to update it when you sign in with a new one. Next time, click the username or password field and pick the login from the menu, or right-click the field → Fill Saved Login. Sign-ins in two steps (username first, then password) are saved as one login. Settings → Passwords lists the saved logins with Remove, and the sites you chose Never for. Without secure storage on the computer, NODE does not save passwords.
 - **Ask AI across tabs.** The Ask tab can also answer about all the tabs in Mosaic or the pages of your research session. Answers cite their sources as [1], [2] and so on; click a number to open that page. Session → Summarize session writes a summary with key findings, disagreements and open questions, cited, and saves it to the Library.
 - **Ask AI.** The Ask tab in the suggestions widget opens a chat about the current page, with Summarize, Key facts and What next? buttons. It uses the model set up under Settings → AI (a local model or Grok). Questions send the page's readable text, title and address to that model; nothing is sent until you ask.
 

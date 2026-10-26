@@ -1411,11 +1411,52 @@ document.getElementById("ai-test").addEventListener("click", async () => {
     : r.error;
 });
 
+// Saved passwords (B47): site and username only; a login can be removed.
+async function renderPasswords() {
+  if (!api?.passwordsList) return;
+  const r = await api.passwordsList();
+  const state = document.getElementById("passwords-state");
+  const list = document.getElementById("passwords-list");
+  const never = document.getElementById("passwords-never");
+  list.innerHTML = "";
+  never.innerHTML = "";
+  if (!r.available) {
+    state.textContent = "This computer has no secure storage for passwords, so NODE does not save them.";
+    document.getElementById("passwords-never-head").hidden = true;
+    return;
+  }
+  state.textContent = r.logins.length ? `${r.logins.length} saved login${r.logins.length === 1 ? "" : "s"}` : "No saved logins yet.";
+  const row = (ul, site, user, label, run) => {
+    const li = document.createElement("li");
+    const a = document.createElement("span");
+    a.className = "pw-site";
+    a.textContent = site;
+    const u = document.createElement("span");
+    u.className = "pw-user";
+    u.textContent = user;
+    const b = document.createElement("button");
+    b.className = "chip";
+    b.textContent = label;
+    b.setAttribute("aria-label", `${label} ${site}${user ? ` (${user})` : ""}`);
+    b.addEventListener("click", async () => {
+      await run();
+      renderPasswords().catch(() => {});
+    });
+    li.append(a, u, b);
+    ul.appendChild(li);
+  };
+  for (const l of r.logins) row(list, l.site, l.username || "No username", "Remove", () => api.passwordsRemove(l.id));
+  for (const n of r.never) row(never, n.site, "", "Allow", () => api.passwordsAllow(n.origin));
+  document.getElementById("passwords-never-head").hidden = !r.never.length;
+}
+
 async function renderSources() {
   const [settings, status] = await Promise.all([api.getSettings(), api.searchStatus()]);
   fillAI(settings.ai, settings.aiStatus);
   document.getElementById("adblock-enabled").checked = settings.adblock !== false;
   document.getElementById("adblock-cookies").checked = settings.adblockCookies === true;
+  document.getElementById("passwords-offer").checked = settings.passwordsOffer !== false;
+  renderPasswords().catch(() => {});
   const ab = settings.adblockStats || {};
   document.getElementById("adblock-state").textContent =
     settings.adblock === false ? "Off" : ab.status === "ready" || String(ab.status).startsWith("ready") ? `On · ${ab.blocked} requests blocked since NODE started` : `On · ${ab.status}`;
@@ -1866,6 +1907,7 @@ async function saveSources(rerender = true) {
     startPage: document.getElementById("start-page").value,
     mosaicMax: Number(document.getElementById("mosaic-max").value),
     tabSleep: Number(document.getElementById("tab-sleep").value),
+    passwordsOffer: document.getElementById("passwords-offer").checked,
     autoUpdate: document.getElementById("auto-update").checked,
     passkeys: document.getElementById("passkeys").checked,
   });
@@ -3167,7 +3209,9 @@ api?.onCommand?.((msg) => {
   if (msg.cmd === "capture") document.getElementById(captureActions[msg.action])?.click();
   else if (msg.cmd === "chrome") paintChrome(msg);
   else if (msg.cmd === "toggle-suggest") setPanelOpen(!panelOpen, { focus: true, animate: true });
-  else if (msg.cmd === "open-menu") openMenu(msg.section || menuSection);
+  else if (msg.cmd === "open-menu") {
+    openMenu(msg.section || menuSection).then(() => msg.box && setTimeout(() => (document.getElementById(msg.box)?.previousElementSibling || document.getElementById(msg.box))?.scrollIntoView({ block: "start" }), 300));
+  } else if (msg.cmd === "passwords-changed") renderPasswords().catch(() => {});
   else if (msg.cmd === "overview") openOverview();
   else if (msg.cmd === "tour") startTour();
 });

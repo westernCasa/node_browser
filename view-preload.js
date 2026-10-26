@@ -162,3 +162,135 @@ window.addEventListener(
   },
   { capture: true, passive: true }
 );
+
+// ---- Passwords (B47) ----
+// After a sign-in form is sent, the username and password go to the app, which
+// asks whether to save them (main.js). When a sign-in field gets focus on a
+// site with saved logins, the app shows them in a small menu; a login is
+// filled only when the user picks it. Only this page's top frame takes part.
+const TEXTISH = ["text", "email", "tel", ""];
+const visible = (el) => {
+  if (!el || !el.isConnected || el.disabled || el.readOnly) return false;
+  if (!el.getClientRects().length) return false;
+  const s = getComputedStyle(el);
+  return s.visibility !== "hidden" && s.display !== "none";
+};
+const scopeOf = (el) => (el && el.form) || document;
+const passwordFields = (scope) => [...scope.querySelectorAll("input[type=password]")].filter(visible);
+const USERISH = /user|e-?mail|login|account|ident|phone|handle/i;
+function usernameField(scope, before) {
+  const all = [...scope.querySelectorAll("input")].filter((el) => TEXTISH.includes((el.getAttribute("type") || "").toLowerCase()) && visible(el));
+  const prior = before ? all.filter((el) => el.compareDocumentPosition(before) & Node.DOCUMENT_POSITION_FOLLOWING) : all;
+  const pool = prior.length ? prior : all;
+  const score = (el) => {
+    const ac = (el.getAttribute("autocomplete") || "").toLowerCase();
+    if (/\b(username|email)\b/.test(ac)) return 3;
+    if ((el.type || "").toLowerCase() === "email") return 2;
+    if (USERISH.test(`${el.name} ${el.id} ${el.placeholder} ${el.getAttribute("aria-label") || ""}`)) return 1;
+    return 0;
+  };
+  let best = null;
+  for (const el of pool) if (!best || score(el) >= score(best)) best = el;
+  if (best && score(best) === 0 && !before) return null; // a lone search box is not a username
+  return best;
+}
+function isUsernameField(el) {
+  if (!el || el.tagName !== "INPUT" || !TEXTISH.includes((el.getAttribute("type") || "").toLowerCase())) return false;
+  const scope = scopeOf(el);
+  if (passwordFields(scope).length) return usernameField(scope, passwordFields(scope)[0]) === el;
+  const ac = (el.getAttribute("autocomplete") || "").toLowerCase();
+  return /\busername\b/.test(ac);
+}
+
+// The sign-in data in the form around el (or the whole page).
+function readLogin(el) {
+  const scope = scopeOf(el);
+  const pws = passwordFields(scope).filter((p) => p.value);
+  // Sign-up and change-password forms repeat the new password last.
+  const password = pws.length ? pws[pws.length - 1].value : "";
+  const userEl = usernameField(scope, pws[0] || passwordFields(scope)[0] || null);
+  const username = userEl ? userEl.value.trim() : "";
+  return { username, password };
+}
+function sendLogin(el) {
+  if (!tabId) return;
+  const { username, password } = readLogin(el);
+  // A first step that asks only for the username (Google, Microsoft) is kept
+  // for the password step that follows.
+  if (!password) {
+    if (username && isUsernameField(el instanceof HTMLInputElement ? el : usernameField(scopeOf(el), null))) ipcRenderer.send("pw:submitted", { username, password: "" });
+    return;
+  }
+  ipcRenderer.send("pw:submitted", { username, password });
+}
+document.addEventListener("submit", (e) => sendLogin(e.target), true);
+window.addEventListener(
+  "keydown",
+  (e) => {
+    if (e.key !== "Enter" || !(e.target instanceof HTMLInputElement)) return;
+    if (e.target.type === "password" || isUsernameField(e.target)) sendLogin(e.target);
+  },
+  true
+);
+window.addEventListener(
+  "click",
+  (e) => {
+    const b = e.target instanceof Element ? e.target.closest("button, input[type=submit], input[type=image], [role=button]") : null;
+    if (!b) return;
+    // Only buttons that send the form: a submit button, or outside a form a
+    // button labelled like one (not "Show password" and the like).
+    const submitLike = b.form ? b.type === "submit" || b.type === "image" : /\b(sign|log)\s?in\b|continue|next|submit/i.test(b.textContent || b.value || b.getAttribute("aria-label") || "");
+    if (!submitLike) return;
+    const scope = b.form || document;
+    if (passwordFields(scope).some((p) => p.value) || (scope !== document && [...scope.querySelectorAll("input")].some(isUsernameField))) sendLogin(b);
+  },
+  true
+);
+
+// Offer saved logins when a sign-in field gets focus (once per field), and
+// again when an empty field that already has focus is clicked. The app shows
+// the menu only right after a click or key press in this tab.
+const offered = new WeakSet();
+let lastField = null;
+const fieldKind = (el) => (!(el instanceof HTMLInputElement) ? null : el.type === "password" ? "password" : isUsernameField(el) ? "username" : null);
+async function offer(el, kind) {
+  const r = el.getBoundingClientRect();
+  const shown = await ipcRenderer.invoke("pw:focus", { kind, rect: { x: r.left, y: r.top, width: r.width, height: r.height } }).catch(() => false);
+  if (shown) offered.add(el);
+}
+document.addEventListener(
+  "focusin",
+  (e) => {
+    const kind = tabId && fieldKind(e.target);
+    if (!kind) return;
+    lastField = e.target;
+    if (!offered.has(e.target)) offer(e.target, kind);
+  },
+  true
+);
+window.addEventListener(
+  "mousedown",
+  (e) => {
+    const el = e.target;
+    const kind = tabId && el === document.activeElement && !el.value && fieldKind(el);
+    if (kind) setTimeout(() => offer(el, kind), 0);
+  },
+  true
+);
+
+function setValue(el, value) {
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
+  el.focus();
+  setter.call(el, value);
+  el.dispatchEvent(new Event("input", { bubbles: true }));
+  el.dispatchEvent(new Event("change", { bubbles: true }));
+}
+ipcRenderer.on("pw:fill", (_e, { origin, username, password }) => {
+  if (location.origin !== origin) return;
+  const anchor = lastField && lastField.isConnected ? lastField : document.activeElement;
+  const scope = scopeOf(anchor);
+  const pw = passwordFields(scope)[0] || null;
+  const user = usernameField(scope, pw) || (anchor instanceof HTMLInputElement && anchor.type !== "password" ? anchor : null);
+  if (user && username) setValue(user, username);
+  if (pw && password) setValue(pw, password);
+});
