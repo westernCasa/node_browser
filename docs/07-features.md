@@ -64,6 +64,7 @@ NODE is a research browser that reads the page you are on, picks out keywords, a
 - Right-click menu: open link in a new or background tab, copy or save links and images, search Brave for or pin selected text, spelling suggestions, back, forward, reload, print, Save as PDF, Inspect.
 - Downloads go to the Downloads folder (a number is added when a name is taken); progress in the toolbar, list in Menu → Downloads with Open, Show in folder and Cancel.
 - Tabs from last time reopen on start (Settings → Startup); tabs unused for 30 minutes of use sleep to save memory and load again when clicked (time away from the computer does not count; Settings → Tabs: 15 minutes to 2 hours, or never).
+- Passwords (B47): after a sign-in NODE asks to save the password (or update it); clicking a sign-in field on that site offers the saved logins, filled only when picked; right-click → Fill Saved Login. Two-step sign-ins work. Stored encrypted with the system's secure storage, never sent. Settings → Passwords: list, Remove, Never saved for. Not yet: showing or copying a saved password, importing from other browsers, generated passwords.
 - Reopen Closed Tab (Cmd/Ctrl+Shift+T), Next and Previous Tab (Ctrl+Tab, Ctrl+Shift+Tab), Cmd/Ctrl+1 to 9, Print (Cmd/Ctrl+P), Save Page as PDF.
 - A page that fails to load, or whose tab crashes, shows a NODE page with the reason and Try again.
 
@@ -132,6 +133,6 @@ NODE is a research browser that reads the page you are on, picks out keywords, a
 ## Not built yet or still to confirm
 
 - Live check of results and an hour of browsing (B26); Google sign-in after the upgrade (B40); iPhone retest (M01, M16).
-- Code signing and automatic updates (B46), passwords (B47), extensions (B48), chat across tabs (B49), sync (B50), ad blocking on the phone.
+- Code signing (B46), showing saved passwords and importing them from other browsers (B47 part 2), extensions (B48), chat across tabs (B49), sync (B50), ad blocking on the phone.
 - Site rules editor (B28), sleeping background tabs (B29), first-run setup (B30), error log (B31).
 - Media in the background when the phone app is not in front (needs a custom build, not Expo Go).

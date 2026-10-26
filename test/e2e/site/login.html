@@ -1,0 +1,15 @@
+<!doctype html><meta charset="utf-8"><title>Sign in</title>
+<h1>Sign in</h1>
+<form id="f">
+  <label>Email <input id="user" type="email" name="email" autocomplete="username"></label>
+  <label>Password <input id="pass" type="password" name="password" autocomplete="current-password"></label>
+  <button type="button" id="show">Show password</button>
+  <button id="go">Sign in</button>
+</form>
+<input id="search" type="search" placeholder="Search">
+<script>
+document.getElementById("f").addEventListener("submit", (e) => { e.preventDefault(); setTimeout(() => (location.href = "other.html?n=signed-in"), 200); });
+// Like React: keep what the page saw last.
+window.seen = {};
+for (const id of ["user", "pass"]) document.getElementById(id).addEventListener("input", (e) => (window.seen[id] = e.target.value));
+</script>

@@ -28,7 +28,7 @@
     "dist:mac": "electron-builder --mac",
     "dist:win": "electron-builder --win",
     "test:redteam": "node test/e2e/18-redteam.js",
-    "test:unit": "node test/chat-demo.js && node test/usage-demo.js && node test/research-demo.js && node test/keywords-demo.js && node test/keywords-eval.js && node test/providers-demo.js && node test/rules-demo.js && node test/ai-demo.js && node test/controller-demo.js && node test/playback-demo.js && node test/bookmarks-demo.js && node test/google-demo.js && node test/agents-demo.js && node test/agent-demo.js && node test/talk-demo.js",
+    "test:unit": "node test/passwords-demo.js && node test/chat-demo.js && node test/usage-demo.js && node test/research-demo.js && node test/keywords-demo.js && node test/keywords-eval.js && node test/providers-demo.js && node test/rules-demo.js && node test/ai-demo.js && node test/controller-demo.js && node test/playback-demo.js && node test/bookmarks-demo.js && node test/google-demo.js && node test/agents-demo.js && node test/agent-demo.js && node test/talk-demo.js",
     "release": "electron-builder --publish always"
   },
   "devDependencies": {
