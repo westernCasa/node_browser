@@ -93,8 +93,10 @@ const log = (...a) => console.log("•", ...a);
   await sleep(2000);
   log("PDF saved:", fs.readdirSync(downloadsDir).filter((f) => f.endsWith(".pdf")).join(", "));
 
-  // Sleeping tabs: pretend 20 minutes passed.
-  const slept = await app.evaluate(() => global.nodeTest.sleepIdleTabs(Date.now() + 20 * 60 * 1000));
+  // Sleeping tabs: time away does not count; then pretend 40 minutes of use passed.
+  const away = await app.evaluate(() => global.nodeTest.sleepIdleTabs({ step: 40 * 60 * 1000, inUse: false }));
+  log("tabs put to sleep while away:", away);
+  const slept = await app.evaluate(() => global.nodeTest.sleepIdleTabs({ step: 40 * 60 * 1000, inUse: true }));
   await sleep(800);
   log("tabs put to sleep:", slept, "| asleep in the tab bar:", await ui.$$eval("#tabs .tab.asleep", (e) => e.length), "| titles kept:", (await tabTitles()).join(" | "));
   await ui.click("#tabs .tab.asleep");

@@ -63,7 +63,7 @@ NODE is a research browser that reads the page you are on, picks out keywords, a
 
 - Right-click menu: open link in a new or background tab, copy or save links and images, search Brave for or pin selected text, spelling suggestions, back, forward, reload, print, Save as PDF, Inspect.
 - Downloads go to the Downloads folder (a number is added when a name is taken); progress in the toolbar, list in Menu → Downloads with Open, Show in folder and Cancel.
-- Tabs from last time reopen on start (Settings → Startup); tabs unused for 15 minutes sleep to save memory and load again when clicked.
+- Tabs from last time reopen on start (Settings → Startup); tabs unused for 30 minutes of use sleep to save memory and load again when clicked (time away from the computer does not count; Settings → Tabs: 15 minutes to 2 hours, or never).
 - Reopen Closed Tab (Cmd/Ctrl+Shift+T), Next and Previous Tab (Ctrl+Tab, Ctrl+Shift+Tab), Cmd/Ctrl+1 to 9, Print (Cmd/Ctrl+P), Save Page as PDF.
 - A page that fails to load, or whose tab crashes, shows a NODE page with the reason and Try again.
 

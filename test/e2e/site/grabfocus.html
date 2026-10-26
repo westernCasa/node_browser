@@ -1,0 +1,11 @@
+<!doctype html><title>Grab focus</title><input id=q><video id=v muted></video>
+<script>
+const p=new URLSearchParams(location.search);
+setTimeout(()=>{ const m=p.get('m');
+ if(m==='window') window.focus();
+ if(m==='input') document.getElementById('q').focus();
+ if(m==='alert') alert('hi');
+ if(m==='nav') location.href='other.html?n=after';
+ if(m==='open') window.open('other.html?n=opened');
+}, 3000);
+</script>

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, WebContentsView, ipcMain, session, shell, protocol, net, Menu, dialog, safeStorage, clipboard, systemPreferences, screen } = require("electron");
+const { app, BrowserWindow, WebContentsView, ipcMain, session, shell, protocol, net, Menu, dialog, safeStorage, clipboard, systemPreferences, screen, powerMonitor } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const { URL } = require("url");
@@ -672,8 +672,11 @@ function attachListeners(tab) {
   const open = () => tabs.has(tab.id) && !wc.isDestroyed();
   const on = (event, fn) => wc.on(event, (...args) => (open() ? fn(...args) : undefined));
   const ping = () => emit({ type: "update", tab: tabState(tab), activeId });
+  // A page can take focus by itself, for example a Mosaic tile that loads the
+  // next video. Only focus that follows a click or key press in this tab makes
+  // it the active tab; otherwise tabs would switch while the user is away.
   on("focus", () => {
-    if (activeId !== tab.id) activateTab(tab.id);
+    if (activeId !== tab.id && Date.now() - tab.lastGesture < 1500) activateTab(tab.id);
   });
   on("page-title-updated", (_e, title) => {
     historyStore.updateTitle(wc.getURL(), title);
@@ -874,7 +877,23 @@ function diagnostics() {
 // ---- Sleeping tabs (B29) ----
 // A tab not used for a while, not playing and not on screen is put to sleep:
 // its page is replaced by a blank one and loads again when the tab is opened.
-const SLEEP_AFTER_MS = 15 * 60 * 1000;
+// Only time NODE is in use counts: the window is focused and the computer has
+// had input in the last 2 minutes. Stepping away does not put tabs to sleep.
+// Settings → Tabs: after 15, 30, 60 or 120 minutes of use, or never (0).
+const SLEEP_CHOICES = [15, 30, 60, 120, 0];
+const SLEEP_TICK_MS = 60 * 1000;
+const AWAY_AFTER_S = 120;
+function sleepAfterMs() {
+  return (loadSettings().tabSleep || 0) * 60 * 1000;
+}
+function nodeInUse() {
+  if (!win || win.isDestroyed() || !win.isFocused()) return false;
+  try {
+    return powerMonitor.getSystemIdleTime() < AWAY_AFTER_S;
+  } catch {
+    return true;
+  }
+}
 
 function sleepTab(tab) {
   if (!tab || tab.sleeping || tab.id === activeId) return false;
@@ -894,16 +913,24 @@ function wakeTab(tab) {
   tab.view.webContents.loadURL(loadTarget(url, tab.id, { restore: true }));
 }
 
-function sleepIdleTabs(now = Date.now()) {
-  const visible = layout === "mosaic" ? new Set(mosaicIds()) : new Set([activeId]);
+// Called every minute. Tabs on screen start again from 0; the others add the
+// minute only while NODE is in use. Tests pass a longer step and inUse: true.
+function sleepIdleTabs({ step = SLEEP_TICK_MS, inUse = nodeInUse() } = {}) {
+  const visible = layout === "mosaic" && !libraryOpen ? new Set(mosaicIds()) : new Set([activeId]);
+  const limit = sleepAfterMs();
   let n = 0;
   for (const tab of tabs.values()) {
-    if (visible.has(tab.id) || now - (tab.lastActive || 0) < SLEEP_AFTER_MS) continue;
+    if (visible.has(tab.id)) {
+      tab.idleMs = 0;
+      continue;
+    }
+    if (inUse) tab.idleMs = (tab.idleMs || 0) + step;
+    if (!limit || tab.idleMs < limit) continue;
     if (sleepTab(tab)) n++;
   }
   return n;
 }
-setInterval(() => sleepIdleTabs(), 60 * 1000).unref?.();
+setInterval(() => sleepIdleTabs(), SLEEP_TICK_MS).unref?.();
 
 // ---- Session restore ----
 // The open tabs are saved to userData/tabs.json and reopened on the next start
@@ -1149,7 +1176,7 @@ function createTab(url, opts = {}) {
   });
   view.setBackgroundColor("#ffffff"); // pages without their own background expect white
   view.webContents.setUserAgent(USER_AGENT);
-  const tab = { id, view, audio: "auto", audioByUser: false, lastGesture: 0, lastActive: Date.now(), tile: Boolean(opts.tile) };
+  const tab = { id, view, audio: "auto", audioByUser: false, lastGesture: 0, lastActive: Date.now(), idleMs: 0, tile: Boolean(opts.tile) };
   refreshRule(tab, normalizeUrl(url));
   tabs.set(id, tab);
   win.contentView.addChildView(view);
@@ -1395,6 +1422,7 @@ function activateTab(id) {
   activeId = id;
   wakeTab(tabs.get(id));
   tabs.get(id).lastActive = Date.now();
+  tabs.get(id).idleMs = 0;
   // A tab paused by the playback limit resumes when it becomes active.
   if (playback.activated(id)) inFrames(tabs.get(id).view.webContents, resumeScript());
   applyLayout();
@@ -1487,6 +1515,7 @@ function loadSettings() {
   base.passkeys = raw.passkeys === true;
   base.startPage = typeof raw.startPage === "string" ? raw.startPage : "";
   base.mosaicMax = MOSAIC_MAX_CHOICES.includes(raw.mosaicMax) ? raw.mosaicMax : 4;
+  base.tabSleep = SLEEP_CHOICES.includes(raw.tabSleep) ? raw.tabSleep : 30;
   // First-run setup is shown once, to new users. Settings saved by an earlier
   // version count as set up. Runs with --user-data-dir (the tests) skip it
   // unless NODE_FIRST_RUN=1.
@@ -1525,6 +1554,7 @@ function saveSettings(next) {
   if (next && "passkeys" in next) current.passkeys = Boolean(next.passkeys);
   if (next && typeof next.startPage === "string") current.startPage = /^https?:\/\//i.test(next.startPage.trim()) ? next.startPage.trim() : "";
   if (next && next.firstRunDone) current.firstRunDone = true;
+  if (next && "tabSleep" in next && SLEEP_CHOICES.includes(Number(next.tabSleep))) current.tabSleep = Number(next.tabSleep);
   if (next && MOSAIC_MAX_CHOICES.includes(Number(next.mosaicMax))) {
     current.mosaicMax = Number(next.mosaicMax);
     if (layout === "mosaic") setTimeout(() => applyLayout({ animate: "move" }), 0);
@@ -1561,6 +1591,7 @@ function saveSettings(next) {
     passkeys: current.passkeys === true,
     startPage: current.startPage || "",
     mosaicMax: current.mosaicMax,
+    tabSleep: current.tabSleep,
     firstRunDone: Boolean(current.firstRunDone),
     agents: { enabled: current.agents.enabled, port: current.agents.port, token: encryptSecret(current.agents.token) },
     providers: {},
@@ -1609,6 +1640,7 @@ function publicSettings() {
     update: updater ? updater.state() : null,
     startPage: s.startPage || "",
     mosaicMax: s.mosaicMax,
+    tabSleep: s.tabSleep,
     firstRunDone: Boolean(s.firstRunDone),
     googleWindow: companion ? companion.status() : null,
     agents: agentsStatus(),
@@ -2134,6 +2166,7 @@ function focusTile(id) {
   activeId = id;
   wakeTab(tabs.get(id));
   tabs.get(id).lastActive = Date.now();
+  tabs.get(id).idleMs = 0;
   emitList();
   setLayoutMode("focus", { tell: true });
 }
