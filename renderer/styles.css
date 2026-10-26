@@ -1032,6 +1032,9 @@ body.chrome-overlay .chrome::before { content: ""; position: absolute; left: 0; 
 /* Saved passwords (B47) */
 .pw-list { list-style: none; margin: 8px 0 0; padding: 0; }
 .pw-list li { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 6px 0; border-top: 1px solid var(--line); }
+.pw-list li:has(.pw-secret) { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto; }
+.pw-secret { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 12px; user-select: text; }
+.pw-buttons { display: flex; gap: 6px; }
 .pw-list li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pw-user { color: var(--mute); font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 12px; }
 .pw-never-head { margin-top: 12px; }

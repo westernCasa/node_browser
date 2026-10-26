@@ -1,14 +1,17 @@
 const { ipcRenderer } = require("electron");
 
 const arg = process.argv.find((a) => a.startsWith("--scout-tab="));
-const tabId = arg ? arg.slice("--scout-tab=".length) : null;
+// This script also runs in frames inside the page, for sign-in forms there
+// (B47). Only the top frame does the rest (gestures, shortcuts, activity).
+const frameTab = arg ? arg.slice("--scout-tab=".length) : null;
+const tabId = process.isMainFrame ? frameTab : null;
 
-// Any click in the page makes this tab active and counts as a user gesture
-// (used to decide whether a popup may open).
+// Any click in the page, frames included, makes this tab active and counts as
+// a user gesture (used to decide whether a popup may open).
 window.addEventListener(
   "pointerdown",
   () => {
-    if (tabId) ipcRenderer.send("tab:clicked", tabId);
+    if (frameTab) ipcRenderer.send("tab:clicked", frameTab);
   },
   true
 );
@@ -213,7 +216,7 @@ function readLogin(el) {
   return { username, password };
 }
 function sendLogin(el) {
-  if (!tabId) return;
+  if (!frameTab) return;
   const { username, password } = readLogin(el);
   // A first step that asks only for the username (Google, Microsoft) is kept
   // for the password step that follows.
@@ -253,15 +256,28 @@ window.addEventListener(
 const offered = new WeakSet();
 let lastField = null;
 const fieldKind = (el) => (!(el instanceof HTMLInputElement) ? null : el.type === "password" ? "password" : isUsernameField(el) ? "username" : null);
+// A form for a new password: sign-up or change password.
+const NEWISH = /new|confirm|create|sign-?up|regist|repeat|again|verify/i;
+function wantsNewPassword(el) {
+  if (!(el instanceof HTMLInputElement) || el.type !== "password") return false;
+  const ac = (el.getAttribute("autocomplete") || "").toLowerCase();
+  if (ac.includes("new-password")) return true;
+  if (ac.includes("current-password")) return false;
+  const label = `${el.name} ${el.id} ${el.placeholder} ${el.getAttribute("aria-label") || ""}`;
+  if (/current|old|existing/i.test(label)) return false;
+  if (passwordFields(scopeOf(el)).length >= 2) return true;
+  return NEWISH.test(label);
+}
 async function offer(el, kind) {
   const r = el.getBoundingClientRect();
-  const shown = await ipcRenderer.invoke("pw:focus", { kind, rect: { x: r.left, y: r.top, width: r.width, height: r.height } }).catch(() => false);
+  const rect = { x: r.left, y: r.top, width: r.width, height: r.height };
+  const shown = await ipcRenderer.invoke("pw:focus", { kind, rect, newPassword: wantsNewPassword(el) }).catch(() => false);
   if (shown) offered.add(el);
 }
 document.addEventListener(
   "focusin",
   (e) => {
-    const kind = tabId && fieldKind(e.target);
+    const kind = frameTab && fieldKind(e.target);
     if (!kind) return;
     lastField = e.target;
     if (!offered.has(e.target)) offer(e.target, kind);
@@ -272,7 +288,7 @@ window.addEventListener(
   "mousedown",
   (e) => {
     const el = e.target;
-    const kind = tabId && el === document.activeElement && !el.value && fieldKind(el);
+    const kind = frameTab && el === document.activeElement && !el.value && fieldKind(el);
     if (kind) setTimeout(() => offer(el, kind), 0);
   },
   true
@@ -293,4 +309,13 @@ ipcRenderer.on("pw:fill", (_e, { origin, username, password }) => {
   const user = usernameField(scope, pw) || (anchor instanceof HTMLInputElement && anchor.type !== "password" ? anchor : null);
   if (user && username) setValue(user, username);
   if (pw && password) setValue(pw, password);
+});
+// A suggested strong password goes into every empty password field of the
+// form (the password and its confirmation), shown so the user can see it.
+ipcRenderer.on("pw:fill-new", (_e, { origin, password }) => {
+  if (location.origin !== origin) return;
+  const anchor = lastField && lastField.isConnected ? lastField : document.activeElement;
+  const fresh = passwordFields(scopeOf(anchor)).filter((f) => f === anchor || (wantsNewPassword(f) && !f.value));
+  for (const f of fresh) setValue(f, password);
+  if (anchor instanceof HTMLInputElement) anchor.focus();
 });

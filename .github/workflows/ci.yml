@@ -30,7 +30,7 @@ jobs:
           (cd test/e2e/site && python3 -m http.server 8765 >/dev/null 2>&1 &)
           sleep 1
           mkdir -p e2e-out
-          for t in 01-basics 03-rules-and-fast-results 04-find-zoom-history 05-research-session 09-playback-limit 12-pip-bookmarks-adblock 13-ask-ai 15-agents-mcp 16-research-agent 17-talk 18-redteam 19-browser-basics 20-first-run-and-help 21-rules-editor 22-ui-refresh 23-beta-survey 24-mosaic-pick 25-video-loop 26-gestures-tour 27-privacy-visible 28-ask-across-tabs 29-blocker-onpage 30-tab-focus-sleep 31-passwords; do
+          for t in 01-basics 03-rules-and-fast-results 04-find-zoom-history 05-research-session 09-playback-limit 12-pip-bookmarks-adblock 13-ask-ai 15-agents-mcp 16-research-agent 17-talk 18-redteam 19-browser-basics 20-first-run-and-help 21-rules-editor 22-ui-refresh 23-beta-survey 24-mosaic-pick 25-video-loop 26-gestures-tour 27-privacy-visible 28-ask-across-tabs 29-blocker-onpage 30-tab-focus-sleep 31-passwords 32-passwords-more; do
             echo "::group::$t"
             xvfb-run -a node test/e2e/$t.js "$PWD/e2e-out" 2>&1 | tee e2e-out/$t.log
             status=${PIPESTATUS[0]}
@@ -71,7 +71,7 @@ jobs:
           (cd test/e2e/site && python -m http.server 8765 --bind 127.0.0.1 >/dev/null 2>&1 &)
           sleep 2
           mkdir -p e2e-out
-          for t in 01-basics 05-research-session 19-browser-basics 20-first-run-and-help 22-ui-refresh 23-beta-survey 24-mosaic-pick 25-video-loop 26-gestures-tour 27-privacy-visible 28-ask-across-tabs 29-blocker-onpage 30-tab-focus-sleep 31-passwords; do
+          for t in 01-basics 05-research-session 19-browser-basics 20-first-run-and-help 22-ui-refresh 23-beta-survey 24-mosaic-pick 25-video-loop 26-gestures-tour 27-privacy-visible 28-ask-across-tabs 29-blocker-onpage 30-tab-focus-sleep 31-passwords 32-passwords-more; do
             echo "::group::$t"
             node test/e2e/$t.js "$PWD/e2e-out" 2>&1 | tee e2e-out/$t.log
             status=${PIPESTATUS[0]}
