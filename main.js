@@ -142,6 +142,7 @@ function watchRules() {
 let historyStore = null;
 let bookmarkStore = null;
 let adblock = null;
+let blockedEmitTimer = null;
 
 function ruleFor(url) {
   return Rules.resolve(siteRules, url);
@@ -575,6 +576,8 @@ function tabState(tab) {
     url,
     google, // placeholder for a page shown in the Google window
     tutorial: isTutorialPage(raw), // a practice page of the gestures tutorial
+    blocked: adblock ? adblock.blockedIn(wc.id) : 0, // ads and trackers blocked on this page (B73)
+    blocking: !adblock || loadSettings().adblock === false ? "off" : tab.rule?.adblock === false ? "site" : "on",
     agentShared: Boolean(tab.agentShared),
     tile: Boolean(tab.tile), // chosen for Mosaic (B69)
     loop: tab.loop ? { a: tab.loop.a, b: tab.loop.b, label: `${clock(tab.loop.a)}–${clock(tab.loop.b)}` } : null, // B70
@@ -688,6 +691,7 @@ function attachListeners(tab) {
   on("zoom-changed", (_e, direction) => zoomTab(tab, direction === "in" ? 0.5 : -0.5));
   on("did-navigate", (_e, url) => {
     if (/^https?:/i.test(url)) tab.lastUrl = url;
+    adblock?.resetTab(wc.id); // the toolbar count is per page (B73)
     tab.loop = null; // a new page: the loop ended with the old one (B70)
     // Sharing covers the site the user shared; going to another site ends it.
     if (tab.agentShared && originOf(url) !== tab.agentOrigin) {
@@ -2027,6 +2031,15 @@ app.whenReady().then(() => {
     userData: app.getPath("userData"),
     fetch: (...args) => globalThis.fetch(...args),
     isEnabled: () => loadSettings().adblock !== false,
+    // A blocked request updates the toolbar count (B73), at most twice a second.
+    onBlocked: (wcId) => {
+      const tab = [...tabs.values()].find((t) => t.view.webContents.id === wcId);
+      if (!tab || tab.id !== activeId || blockedEmitTimer) return;
+      blockedEmitTimer = setTimeout(() => {
+        blockedEmitTimer = null;
+        emitList();
+      }, 500);
+    },
     isAllowedFor: (wcId) => {
       for (const tab of tabs.values()) if (tab.view.webContents.id === wcId) return tab.rule?.adblock !== false;
       return true;
@@ -2232,6 +2245,44 @@ ipcMain.on("chrome:hold", (_e, on) => {
   chromeHold = Boolean(on);
   if (chromeHold && immersive && !chromeShown) setChromeShown(true);
 });
+// Ads and trackers blocked on this page (B73): a native menu under the
+// toolbar shield, with the sites blocked most, the on/off switch, and what
+// NODE sends.
+const PRIVACY_DOC = "https://github.com/westernCasa/node_browser#what-node-sends";
+ipcMain.handle("menu:privacy", (_e, x, y) => {
+  const tab = tabs.get(activeId);
+  if (!win || !tab) return;
+  const wc = tab.view.webContents;
+  const on = loadSettings().adblock !== false;
+  const n = adblock ? adblock.blockedIn(wc.id) : 0;
+  const items = [];
+  if (!on) items.push({ label: "Ad and tracker blocking is off", enabled: false });
+  else if (tab.rule?.adblock === false) items.push({ label: "Not blocking on this site (site rule)", enabled: false });
+  else if (adblock && !/^ready/.test(adblock.stats().status)) items.push({ label: `Block lists: ${adblock.stats().status}`, enabled: false });
+  else {
+    items.push({ label: n === 1 ? "1 ad or tracker blocked on this page" : `${n} ads and trackers blocked on this page`, enabled: false });
+    for (const h of adblock.topHosts(wc.id)) items.push({ label: `${h.host}  ·  ${h.count}`, enabled: false });
+  }
+  items.push(
+    { type: "separator" },
+    {
+      label: "Block Ads and Trackers",
+      type: "checkbox",
+      checked: on,
+      click: () => {
+        saveSettings({ adblock: !on });
+        emitList();
+        sendUi("notice", { message: on ? "Ad and tracker blocking is off. Pages reload with ads." : "Ad and tracker blocking is on." });
+        wc.reload();
+      },
+    },
+    { type: "separator" },
+    { label: "What NODE Sends…", click: () => createTab(PRIVACY_DOC) }
+  );
+  popupHold = true;
+  Menu.buildFromTemplate(items).popup({ window: win, x: Math.round(x), y: Math.round(y), callback: () => (popupHold = false) });
+});
+
 // Capture tools in one native menu under the toolbar button: a native menu
 // draws over the page views, an HTML menu would be hidden behind them.
 ipcMain.handle("menu:capture", (_e, x, y) => {

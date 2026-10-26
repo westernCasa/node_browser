@@ -1012,3 +1012,6 @@ body.chrome-overlay .chrome::before { content: ""; position: absolute; left: 0; 
 @keyframes coachPinchOutB { 0%, 15% { transform: none; } 60%, 100% { transform: translate(7px, 4px); } }
 @media (max-width: 900px) { .coach { gap: 16px; padding-inline: 16px; } .coach .pad { display: none; } .coach .c-ways { flex-basis: 240px; } }
 @media (prefers-reduced-motion: reduce) { .coach, .coach .finger { animation: none; } }
+
+/* B73: the shield next to the address. Count in mono after the icon; muted and crossed out when blocking is off. */
+#shield-btn.muted { color: var(--ink-muted); }

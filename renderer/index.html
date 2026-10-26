@@ -24,6 +24,8 @@
     <symbol id="i-close" viewBox="0 0 20 20"><path d="M5 5l10 10M15 5 5 15"/></symbol>
     <symbol id="i-up" viewBox="0 0 20 20"><path d="M5 12.5l5-5 5 5"/></symbol>
     <symbol id="i-down" viewBox="0 0 20 20"><path d="M5 7.5l5 5 5-5"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 20 20"><path d="M10 2.5l6 2.2v5c0 3.7-2.6 6.4-6 7.8-3.4-1.4-6-4.1-6-7.8v-5z"/></symbol>
+    <symbol id="i-shield-off" viewBox="0 0 20 20"><path d="M10 2.5l6 2.2v5c0 3.7-2.6 6.4-6 7.8-3.4-1.4-6-4.1-6-7.8v-5z"/><path d="M3 3l14 14"/></symbol>
     <symbol id="i-star" viewBox="0 0 20 20"><path d="M10 3l2.1 4.6 4.9.5-3.7 3.3 1.1 4.9-4.4-2.5-4.4 2.5 1.1-4.9L3 8.1l4.9-.5z"/></symbol>
     <symbol id="i-mosaic" viewBox="0 0 20 20"><rect x="3" y="3" width="6" height="6"/><rect x="11" y="3" width="6" height="6"/><rect x="3" y="11" width="6" height="6"/><rect x="11" y="11" width="6" height="6"/></symbol>
     <symbol id="i-focus" viewBox="0 0 20 20"><rect x="3" y="3" width="14" height="14"/></symbol>
@@ -63,6 +65,7 @@
           <input id="omni" type="text" spellcheck="false" placeholder="Search or enter address" list="history-list" autocomplete="off" aria-label="Search or enter address" />
           <datalist id="history-list"></datalist>
         </form>
+        <button class="tb" id="shield-btn" data-tip="Ads and trackers blocked on this page" aria-label="Ads and trackers blocked on this page" aria-haspopup="menu"><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg><span class="count" id="shield-count" hidden></span></button>
         <button class="tb" id="star-btn" data-tip="Bookmark this page" data-keys="mod+D" aria-label="Bookmark this page"><span class="glyph"><svg class="ic" aria-hidden="true"><use href="#i-star"/></svg></span></button>
         <button class="chip" id="zoom-badge" title="Zoom. Click to reset to 100%" hidden>100%</button>
         <div class="findbar" id="findbar" hidden>
@@ -458,6 +461,7 @@
         <h2>Browsing</h2>
         <label class="toggle"><input type="checkbox" id="fr-restore" checked /> Reopen my tabs when NODE starts</label>
         <label class="toggle"><input type="checkbox" id="fr-adblock" checked /> Block ads and trackers</label>
+        <p class="help">NODE blocks ads and trackers on every page with the EasyList and EasyPrivacy lists, built in. The shield next to the address shows how many it blocked on the page you're reading.</p>
       </section>
       <div class="fr-actions"><button type="button" class="chip" id="fr-done">Start browsing</button></div>
     </div>

@@ -122,6 +122,27 @@ The old Tauri setup (`src-tauri/`, `renderer/tauri-bridge.js`) does not compile 
 13. **Previews** on result cards load only when a card scrolls into view, 3 at a time. Wikipedia and Brave results that already include an image skip the fetch.
 14. **Auto** re-searches when you open a new page, select text, or scroll to content with different keywords (at most every 20 seconds). Turn Auto off to search only when you press **Crawl**.
 
+## What NODE sends
+
+NODE has no account and sends no usage data or analytics. The usage summary in Help stays on your computer until you copy it. Diagnostics are only copied when you click Copy Diagnostics.
+
+What leaves your computer, and when:
+
+| What | Sent to | When |
+| --- | --- | --- |
+| Search words: your pinned keywords and the page's top keywords (never the page text) | Wikipedia, DuckDuckGo, Brave Search (with your key), your SearXNG server if you add one | While suggestions are on. A site rule can turn suggestions off for a site |
+| A request for each suggested page, to find its picture | The suggested pages' sites | When suggestions show. No cookies, no sign-ins |
+| Pinned keywords, up to 8 page keywords and the page title | Your local model, or xAI (Grok) with your key | Only if AI query ideas are on (off by default) |
+| The page's readable text, title and address | Your local model, or xAI (Grok) | Only when you ask a question in Ask AI or run the research agent |
+| The address of the page you're reading | Hacker News search (Algolia) and Bluesky search | Only while the Talk tab is open |
+| A check for a new version | GitHub | Every 6 hours in installed copies, if "Check for updates" is on |
+| A download of the ad and tracker block lists | GitHub | About once a week |
+| Google sign-in and Google apps | A separate Chrome-based browser on your computer, with its own NODE profile | When you open a Google account page (Settings → Google window) |
+
+AI agents on your computer can use NODE through its MCP server only if you turn it on. It listens on your computer only (127.0.0.1), never on the network, and agents read pages logged out.
+
+Ads and trackers are blocked on every page with the EasyList and EasyPrivacy lists. The shield next to the address shows how many were blocked on the page; click it for the sites blocked and the switch.
+
 ## Bookmarks, picture-in-picture, ad blocking and Ask AI
 
 - **Bookmarks.** ☆ next to the address bar (or Cmd/Ctrl+D) bookmarks the page; ★ means it is saved. Bookmarks appear first in address-bar suggestions and in the Bookmarks shelf of the Library (Cmd/Ctrl+Shift+B).
