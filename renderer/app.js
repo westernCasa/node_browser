@@ -3077,7 +3077,6 @@ async function openMenu(section = menuSection) {
     menuCloseSeq++; // a close still fading out stops here
     menuReturnFocus = document.activeElement;
     overlayEl.hidden = false;
-    holdChrome("menu", true);
     document.getElementById("menu-btn").setAttribute("aria-expanded", "true");
     // The pages are native views drawn above this window's HTML: hide them,
     // and show a picture of them dimmed behind the menu instead.
@@ -3107,7 +3106,6 @@ async function closeMenu() {
   menuOpen = false;
   const seq = ++menuCloseSeq;
   overlayEl.classList.remove("open");
-  holdChrome("menu", false);
   document.getElementById("menu-btn").setAttribute("aria-expanded", "false");
   const back = menuReturnFocus?.isConnected && !overlayEl.contains(menuReturnFocus) ? menuReturnFocus : document.getElementById("menu-btn");
   back.focus();
