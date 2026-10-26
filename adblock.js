@@ -21,11 +21,12 @@ try {
 
 const REFRESH_MS = 7 * 24 * 60 * 60 * 1000;
 
-function createAdblock({ userData, fetch, isEnabled, isAllowedFor }) {
+function createAdblock({ userData, fetch, isEnabled, isAllowedFor, onBlocked = () => {} }) {
   const cacheFile = path.join(userData, "adblock.bin");
   let blocker = null;
   let blocked = 0;
-  const perTab = new Map(); // webContents id -> blocked count
+  const perTab = new Map(); // webContents id -> blocked count on the current page
+  const perTabHosts = new Map(); // webContents id -> Map(host -> count), for the toolbar menu (B73)
   let status = "loading";
 
   async function load() {
@@ -65,6 +66,16 @@ function createAdblock({ userData, fetch, isEnabled, isAllowedFor }) {
         if (response && response.cancel) {
           blocked++;
           perTab.set(details.webContentsId, (perTab.get(details.webContentsId) || 0) + 1);
+          let host = "";
+          try {
+            host = new URL(details.url).hostname.replace(/^www\./, "");
+          } catch (_) {}
+          if (host) {
+            const hosts = perTabHosts.get(details.webContentsId) || new Map();
+            if (hosts.size < 200 || hosts.has(host)) hosts.set(host, (hosts.get(host) || 0) + 1);
+            perTabHosts.set(details.webContentsId, hosts);
+          }
+          onBlocked(details.webContentsId);
         }
         callback(response || {});
       });
@@ -76,7 +87,12 @@ function createAdblock({ userData, fetch, isEnabled, isAllowedFor }) {
     install,
     stats: () => ({ status, blocked }),
     blockedIn: (wcId) => perTab.get(wcId) || 0,
-    resetTab: (wcId) => perTab.delete(wcId),
+    // The sites blocked most on the page, most first: [{ host, count }].
+    topHosts: (wcId, n = 6) => [...(perTabHosts.get(wcId) || new Map())].sort((a, b) => b[1] - a[1]).slice(0, n).map(([host, count]) => ({ host, count })),
+    resetTab: (wcId) => {
+      perTab.delete(wcId);
+      perTabHosts.delete(wcId);
+    },
   };
 }
 

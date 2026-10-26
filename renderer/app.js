@@ -172,6 +172,7 @@ function renderZoom() {
 
 function renderTabs() {
   if (typeof tourCheck === "function") setTimeout(tourCheck, 0);
+  paintShield();
   renderRuleLine();
   paintAgentButtons();
   if (typeof loadTalk === "function" && talkOpen) loadTalk();
@@ -3391,3 +3392,33 @@ ovEl.addEventListener(
   },
   { passive: false }
 );
+
+
+// ---- Ad and tracker blocking, visible (B73) ----
+// The shield next to the address shows how many ads and trackers NODE
+// blocked on the page; click it for the sites blocked, the switch, and what
+// NODE sends. Off (in Settings or by a site rule): a crossed-out shield.
+const shieldBtn = document.getElementById("shield-btn");
+const shieldCount = document.getElementById("shield-count");
+function paintShield() {
+  if (!shieldBtn) return;
+  const t = tabs.find((x) => x.id === activeId);
+  const mode = t?.blocking || "on";
+  const n = mode === "on" ? t?.blocked || 0 : 0;
+  const glyph = mode === "on" ? "shield" : "shield-off";
+  if (shieldBtn.dataset.glyph !== glyph) {
+    shieldBtn.querySelector("use").setAttribute("href", "#i-" + glyph);
+    shieldBtn.dataset.glyph = glyph;
+  }
+  shieldBtn.classList.toggle("muted", mode !== "on");
+  shieldCount.hidden = !n;
+  shieldCount.textContent = n > 999 ? "999+" : String(n);
+  setTip(
+    shieldBtn,
+    mode === "off" ? "Ad and tracker blocking is off" : mode === "site" ? "Not blocking on this site (site rule)" : n ? `${n} ${n === 1 ? "ad or tracker" : "ads and trackers"} blocked on this page` : "Blocks ads and trackers. None on this page yet"
+  );
+}
+shieldBtn?.addEventListener("click", () => {
+  const r = shieldBtn.getBoundingClientRect();
+  api?.privacyMenu?.(r.left, r.bottom + 4);
+});
