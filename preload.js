@@ -10,6 +10,8 @@ contextBridge.exposeInMainWorld("scout", {
   tabMenu: (id, x, y) => ipcRenderer.invoke("tab:menu", id, x, y),
   loopTab: (id, op, secs) => ipcRenderer.invoke("tab:loop", id, op, secs),
   privacyMenu: (x, y) => ipcRenderer.invoke("menu:privacy", x, y),
+  askScope: (scope, question, history) => ipcRenderer.invoke("ai:ask-scope", scope, question, history),
+  summarizeSession: () => ipcRenderer.invoke("ai:summarize-session"),
   tourStart: () => ipcRenderer.invoke("tour:start"),
   tourEnd: () => ipcRenderer.invoke("tour:end"),
   tourAuto: () => ipcRenderer.invoke("tour:auto"),
