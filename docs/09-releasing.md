@@ -64,3 +64,8 @@ macOS builds use the hardened runtime with the entitlements in `build/entitlemen
 - Without an Apple certificate, the Mac app is ad-hoc signed. Testers open it once with System Settings → Privacy & Security → Open Anyway, and update by downloading the new version by hand.
 - The tag is pushed from your own computer (`git tag v<version> && git push origin v<version>`). Claude's cloud session can push branches but not tags.
 - Never delete or reuse a tag. If a build fails, fix it, bump the patch version in package.json, and tag again.
+
+
+## Merge the release PR before tagging
+
+The tag must point at the commit with the new version in `package.json`. On 2026-10-26 the `v0.9.3` tag was pushed before the release PR was merged, so it pointed at version 0.9.2; that build was cancelled before uploading, and the release went out as 0.9.4. Order: merge the release PR, `git checkout main && git pull`, check `package.json`, then `git tag vX.Y.Z && git push origin vX.Y.Z`. Never move or reuse a tag.
