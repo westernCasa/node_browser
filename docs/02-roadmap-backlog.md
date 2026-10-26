@@ -69,7 +69,7 @@ Effort: XS under 1 hour, S half a day, M 1-2 days, L 3+ days. Finding IDs (C1, K
 | B46 | 4 | Code signing (Apple Developer ID, Windows) and automatic updates | P1 | M | Updates and release workflow done; signing waits on certificates (see 09-releasing.md) |
 | B47 | 4 | Passwords and autofill | P2 | L | Not started |
 | B48 | 4 | Chrome Web Store extensions | P2 | L | Not started |
-| B49 | 4 | AI chat across tabs and cited summaries of a research session | P2 | M | Not started |
+| B49 | 4 | AI chat across tabs and cited summaries of a research session | P2 | M | Done on branch `ai-across-tabs` (PR), not released |
 | B50 | 4 | Sync across devices | P3 | L | Not started |
 | B51 | 5+ | Decide whether to move NODE from Electron to a Chromium-based browser build (as Brave, Vivaldi and Arc do), which Google sign-in accepts; large effort. See `08-engine-decision.md` | P1 | L | Decided 2026-10-14: stay on Electron and finish this build; extension dropped (see 08) |
 | B53 | 4.5 | Agent view: a page's main content as Markdown (`core/markdown.js`), for agents and later for mobile and exports | P1 | S | Done |

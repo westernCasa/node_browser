@@ -97,4 +97,78 @@ async function askPage({ question, page, history = [] }, settings, { fetch: doFe
   return answer;
 }
 
-module.exports = { askPage, complete, canChat, pageMessage, PAGE_CHARS };
+// ---- Several pages at once (B49) ----
+// Ask about the tabs in Mosaic or the pages of a research session, and get an
+// answer that cites its sources by number, [1] to [n]. Each source is
+// { title, url, text }; the text budget is shared between them.
+
+const SOURCES_CHARS = 24000;
+const MAX_SOURCES = 10;
+
+const SYSTEM_SOURCES = [
+  "You answer questions for a researcher, using the numbered sources below: pages they have open or have read.",
+  "After each statement, cite the source or sources it comes from by number in square brackets, like [2] or [1][3].",
+  "Use only these sources. If they do not contain the answer, say so in one sentence and do not guess.",
+  "When sources disagree, say which says what.",
+  "Be brief: a few sentences or a short list. Plain language, no headings.",
+].join(" ");
+
+const SYSTEM_SUMMARY = [
+  "You write a short summary of a research session from the numbered sources below: the pages the researcher read.",
+  "Write in Markdown with exactly these three sections: '## Key findings' (5 to 8 bullet points), '## Where sources disagree' (bullets, or 'Nothing found.'), '## Open questions' (2 to 4 bullets).",
+  "Cite every finding with the source numbers in square brackets, like [2] or [1][3]. Use only these sources.",
+  "Plain language, no introduction and no conclusion.",
+].join(" ");
+
+/** The sources as one message, numbered from 1, sharing SOURCES_CHARS between them. */
+function sourcesMessage(sources) {
+  const list = (sources || []).slice(0, MAX_SOURCES);
+  const each = Math.max(1500, Math.floor(SOURCES_CHARS / Math.max(1, list.length)));
+  return list
+    .map((src, i) => [`[${i + 1}] ${src.title || "(no title)"}`, `Address: ${src.url || "(unknown)"}`, String(src.text || "(no readable text)").slice(0, each)].join("\n"))
+    .join("\n\n---\n\n");
+}
+
+/** The source numbers an answer cites, in order of first use, only those that exist. */
+function citations(text, count) {
+  const seen = [];
+  for (const m of String(text || "").matchAll(/\[(\d{1,2})\]/g)) {
+    const n = Number(m[1]);
+    if (n >= 1 && n <= count && !seen.includes(n)) seen.push(n);
+  }
+  return seen;
+}
+
+function checkSources(sources) {
+  if (!Array.isArray(sources) || !sources.length) throw new AIError("No pages to read. Open some pages first.");
+}
+
+/** Ask a question about several pages; the answer cites them as [1] to [n]. */
+async function askSources({ question, sources, history = [] }, settings, opts = {}) {
+  checkSources(sources);
+  const messages = [
+    { role: "system", content: SYSTEM_SOURCES },
+    { role: "user", content: "Sources:\n\n" + sourcesMessage(sources) },
+    { role: "assistant", content: "I have read the sources. What would you like to know?" },
+    ...history.slice(-8).map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: String(m.content).slice(0, 4000) })),
+    { role: "user", content: String(question).slice(0, 2000) },
+  ];
+  return complete(messages, settings, { maxTokens: 900, ...opts });
+}
+
+/** A cited summary of a research session, in Markdown, with a Sources list at the end. */
+async function summarizeSources({ name = "", sources }, settings, opts = {}) {
+  checkSources(sources);
+  const list = sources.slice(0, MAX_SOURCES);
+  const body = await complete(
+    [
+      { role: "system", content: SYSTEM_SUMMARY },
+      { role: "user", content: `Research session: ${name || "(untitled)"}\n\nSources:\n\n` + sourcesMessage(list) },
+    ],
+    settings,
+    { maxTokens: 1400, ...opts }
+  );
+  return [`# ${name || "Research session"}: summary`, "", body.trim(), "", "## Sources", "", ...list.map((src, i) => `${i + 1}. [${String(src.title || src.url).replace(/([\[\]])/g, "\\$1")}](${src.url})`), ""].join("\n");
+}
+
+module.exports = { askPage, complete, canChat, pageMessage, PAGE_CHARS, askSources, summarizeSources, sourcesMessage, citations, SOURCES_CHARS, MAX_SOURCES };

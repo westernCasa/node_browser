@@ -45,7 +45,7 @@ const { createPreview } = require("./core/preview");
 const { extractionScript, autoplayScript, blockAutoplayScript, centerOnClickScript, pipScript, loopScript, readableTextScript, pauseForLimitScript, resumeScript, anyPlayingScript } = require("./core/page-scripts");
 const { PlaybackLimiter } = require("./core/playback");
 const { fsStorage } = require("./fs-storage");
-const { normalizeUrl, hostOf, SEARCH_URL } = require("./core/urls");
+const { normalizeUrl, hostOf, SEARCH_URL, isSensitiveUrl } = require("./core/urls");
 const { routesToGoogleWindow, MODES: GOOGLE_MODES } = require("./core/google");
 const { createCompanion } = require("./companion");
 const { createAgentServer } = require("./agent-server");
@@ -2541,6 +2541,75 @@ ipcMain.handle("ai:ask", async (_e, id, question, history) => {
     const answer = await Chat.askPage({ question, page, history }, ai, { fetch: (...a) => globalThis.fetch(...a) });
     usage().count("askQuestions");
     return { ok: true, answer, url: page.url, chars: page.text.length };
+  } catch (err) {
+    return { ok: false, error: String(err.message || err) };
+  }
+});
+// ---- Ask AI across several pages (B49) ----
+// "mosaic": the tabs Mosaic shows. "session": the pages of the research
+// session read most recently (open tabs are read as they are; the others are
+// read logged out). Sign-in, account and payment pages are never sent.
+const ASK_SESSION_PAGES = 8;
+async function readTabSource(tab) {
+  const wc = tab.view.webContents;
+  if (tab.sleeping) return agentTools ? agentTools.readText(tab.sleeping.url) : null;
+  const page = await runInPage(wc, readableTextScript(Chat.PAGE_CHARS), true);
+  return { title: page.title || wc.getTitle(), url: page.url || wc.getURL(), text: page.text || "" };
+}
+async function askSourcesFor(scope) {
+  const out = [];
+  const usable = (url) => /^https?:/i.test(url || "") && !isSensitiveUrl(url) && !isPlaceholder(url);
+  if (scope === "mosaic") {
+    for (const id of mosaicIds()) {
+      const tab = tabs.get(id);
+      const url = tab?.sleeping ? tab.sleeping.url : tab?.view.webContents.getURL();
+      if (!tab || !usable(url)) continue;
+      try {
+        const src = await readTabSource(tab);
+        if (src) out.push(src);
+      } catch (_) {}
+    }
+  } else {
+    const trail = (research?.snapshot().trail || []).filter((r) => usable(r.url)).sort((a, b) => b.lastAt - a.lastAt).slice(0, ASK_SESSION_PAGES);
+    for (const row of trail) {
+      const open = [...tabs.values()].find((t) => !t.sleeping && t.view.webContents.getURL() === row.url);
+      try {
+        const src = open ? await readTabSource(open) : agentTools ? await agentTools.readText(row.url) : null;
+        if (src) out.push({ ...src, title: src.title || row.title });
+      } catch (_) {}
+    }
+  }
+  return out.slice(0, Chat.MAX_SOURCES);
+}
+const sourceList = (sources) => sources.map((s, i) => ({ n: i + 1, title: s.title || s.url, url: s.url }));
+ipcMain.handle("ai:ask-scope", async (_e, scope, question, history) => {
+  const ai = loadSettings().ai;
+  if (!Chat.canChat(ai)) return { ok: false, error: "Set up a model first in Settings → AI: a local model (Ollama or LM Studio) or a Grok API key." };
+  const sources = await askSourcesFor(scope === "session" ? "session" : "mosaic");
+  if (!sources.length) return { ok: false, error: scope === "session" ? "This research session has no pages yet. Read a few pages first." : "No pages in Mosaic to read." };
+  try {
+    const answer = await Chat.askSources({ question, sources, history }, ai, { fetch: (...a) => globalThis.fetch(...a) });
+    usage().count("askQuestions");
+    return { ok: true, answer, sources: sourceList(sources), cited: Chat.citations(answer, sources.length) };
+  } catch (err) {
+    return { ok: false, error: String(err.message || err), sources: sourceList(sources) };
+  }
+});
+// A cited summary of the research session, saved to the Library and the session.
+ipcMain.handle("ai:summarize-session", async () => {
+  const ai = loadSettings().ai;
+  if (!Chat.canChat(ai)) return { ok: false, error: "Set up a model first in Settings → AI: a local model (Ollama or LM Studio) or a Grok API key." };
+  const sources = await askSourcesFor("session");
+  if (!sources.length) return { ok: false, error: "This research session has no pages yet. Read a few pages first." };
+  try {
+    const name = research?.snapshot().name || "Research session";
+    const summary = await Chat.summarizeSources({ name, sources }, ai, { fetch: (...a) => globalThis.fetch(...a) });
+    const file = stamp("summary", "md");
+    fs.writeFileSync(path.join(libraryRoot(), "saves", file), summary);
+    addRecord("saves", file, "", `Session summary: ${name}`);
+    research.addReport({ question: "Session summary", file, sources: sources.map((s) => s.url) });
+    usage().count("askQuestions");
+    return { ok: true, summary, file, sources: sourceList(sources) };
   } catch (err) {
     return { ok: false, error: String(err.message || err) };
   }
