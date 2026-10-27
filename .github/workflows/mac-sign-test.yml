@@ -1,0 +1,63 @@
+# Test Mac signing without publishing anything (B46). Run it from the
+# Actions tab: "Test Mac signing" → Run workflow. It builds the Apple-chip app
+# with the Developer ID certificate, notarizes it with Apple, and checks the
+# result the way a Mac does on first open. Needs the repository secrets
+# CSC_LINK, CSC_KEY_PASSWORD, APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD,
+# APPLE_TEAM_ID (docs/09-releasing.md).
+name: Test Mac signing
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sign:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Check the secrets are there
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          missing=""
+          for n in CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; do
+            [ -n "${!n}" ] || missing="$missing $n"
+          done
+          if [ -n "$missing" ]; then echo "::error::Missing repository secrets:$missing"; exit 1; fi
+      - name: Build, sign and notarize (Apple chip, not published)
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -o pipefail
+          npx electron-builder --mac dmg --arm64 --publish never 2>&1 | tee build.log || {
+            echo "::error::Build failed: $(grep -iE 'error|failed|invalid|notar' build.log | tail -3 | tr '\n' ' ')"; exit 1; }
+      - name: Check the signature like a Mac does
+        run: |
+          APP=$(ls -d dist/mac-arm64/*.app | head -1)
+          DMG=$(ls dist/*.dmg | head -1)
+          fail() { echo "::error::$1"; exit 1; }
+          codesign --verify --deep --strict --verbose=2 "$APP" || fail "codesign could not verify the app"
+          AUTH=$(codesign -dvv "$APP" 2>&1 | grep '^Authority=' | head -1)
+          echo "Signed by: $AUTH"
+          echo "$AUTH" | grep -q "Developer ID Application" || fail "the app is not signed with a Developer ID Application certificate ($AUTH)"
+          spctl --assess --type execute --verbose=4 "$APP" 2>&1 | tee spctl.txt
+          grep -q "accepted" spctl.txt || fail "Gatekeeper rejects the app: $(cat spctl.txt | tr '\n' ' ')"
+          grep -q "Notarized Developer ID" spctl.txt || fail "the app is signed but not notarized: $(cat spctl.txt | tr '\n' ' ')"
+          xcrun stapler validate "$APP" || fail "the notarization ticket is not stapled to the app"
+          echo "::notice::Signed and notarized: $AUTH. Gatekeeper accepts it."
+          echo "dmg: $DMG"
