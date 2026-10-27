@@ -75,4 +75,4 @@ How it is built: one set of controls, two places for them. In Sidebar mode `rend
 | Full screen | The sidebar stays; the top bar's sliding toolbar is not used. |
 | Not built yet | MosaicGroup, sidebar width by dragging (220–340), trails that keep their own tabs. |
 
-Tests: `test/e2e/33-sidebar-chrome.js` (32 checks) and `test/e2e/34-command-bar.js` (25 checks, CommandBar, PR #21), in CI on Linux and Windows.
+Tests: `test/e2e/33-sidebar-chrome.js` (32 checks) and `test/e2e/34-command-bar.js` (26 checks, CommandBar, PR #21), in CI on Linux and Windows.

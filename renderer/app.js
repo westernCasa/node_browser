@@ -3852,6 +3852,7 @@ var cmdRows = [];
 var cmdSel = 0;
 var cmdSeq = 0;
 var cmdReturn = null;
+var cmdMoved = false; // the selection was moved with the arrow keys
 const cmdEl = document.getElementById("cmdbar");
 const cmdInput = document.getElementById("cmd-input");
 const cmdList = document.getElementById("cmd-list");
@@ -3985,6 +3986,7 @@ async function renderCommands() {
   }
   if (seq !== cmdSeq) return;
   cmdRows = rows;
+  cmdMoved = false;
   // Selected first: a tab whose title starts with what was typed, else the
   // search or address row, else the first row.
   const strong = rows.findIndex((r) => r.strong);
@@ -4074,6 +4076,7 @@ cmdInput.addEventListener("keydown", (e) => {
     e.preventDefault();
     if (!cmdRows.length) return;
     cmdSel = (cmdSel + (e.key === "ArrowDown" ? 1 : -1) + cmdRows.length) % cmdRows.length;
+    cmdMoved = true;
     paintCommands();
   } else if (e.key === "Enter") {
     e.preventDefault();
@@ -4081,6 +4084,8 @@ cmdInput.addEventListener("keydown", (e) => {
     const pick = (id) => cmdRows.findIndex((r) => r.id === id);
     if ((e.metaKey || e.ctrlKey) && q) return runCommand(pick("agent"));
     if (e.altKey && q) return runCommand(pick("trail-new"));
+    // New-tab mode, nothing typed and nothing picked with the arrows: a blank tab.
+    if (cmdNewTab && !q && !cmdMoved) return runCommand(-1);
     runCommand(cmdSel, { newTab: e.shiftKey });
   } else if (e.key === "Tab" && !e.shiftKey && q && !looksLikeAddress(q)) {
     e.preventDefault();

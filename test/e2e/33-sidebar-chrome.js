@@ -66,6 +66,8 @@ const inSidebar = (ui, sel) => ui.evaluate((s) => Boolean(document.querySelector
   check("clicking a tab row opens it", await ui.$eval("#sidebar .tab:nth-child(2)", (t) => t.classList.contains("active")));
   await ui.click("#sidebar #new-tab");
   await sleep(800);
+  await ui.press("#cmd-input", "Enter"); // New tab opens the CommandBar; Enter with nothing typed: a blank tab
+  await sleep(900);
   check("New tab adds a row", (await ui.$$eval("#sidebar .tab", (t) => t.length)) === rows + 1);
   check("a tab shows its monogram", /^[A-Z·]{1,2}$/.test(await ui.$eval("#sidebar .tab .mono", (m) => m.textContent)));
 

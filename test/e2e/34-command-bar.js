@@ -87,6 +87,14 @@ fs.writeFileSync(path.join(userData, "settings.json"), JSON.stringify({ firstRun
   await ui.click("#sidebar #new-tab");
   await sleep(800);
   check("the sidebar's New tab opens it too", await ui.evaluate(() => cmdOpen && cmdNewTab));
+  const was = await active();
+  await ui.press("#cmd-input", "Enter");
+  await sleep(1000);
+  check("Enter with nothing typed opens a blank tab", (await tabsNow()).length === before + 2 && (await active()) !== was, await active());
+  await ui.evaluate((i) => window.scout.closeTab(i), (await ui.evaluate(() => activeId)));
+  await sleep(800);
+  await ui.click("#sidebar #new-tab");
+  await sleep(800);
   await type(`127.0.0.1:8765/other.html?n=9`);
   await ui.press("#cmd-input", "Enter");
   await sleep(1500);

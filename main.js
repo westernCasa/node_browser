@@ -2458,7 +2458,9 @@ app.on("will-quit", () => {
 // No address (the + button, double-click on the tab bar): a new tab page.
 ipcMain.handle("tab:create", (_e, url) => {
   const id = createTab(url ? url : newTabUrl());
-  if (!url) sendUi("focus-omni");
+  // Top bar: the cursor goes to the address bar. Sidebar: the blank tab was
+  // asked for from the CommandBar, which has just closed.
+  if (!url && !chromeSide) sendUi("focus-omni");
   return id;
 });
 ipcMain.handle("tab:close", (_e, id) => closeTab(id));
