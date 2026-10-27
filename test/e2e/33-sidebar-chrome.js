@@ -66,6 +66,8 @@ const inSidebar = (ui, sel) => ui.evaluate((s) => Boolean(document.querySelector
   check("clicking a tab row opens it", await ui.$eval("#sidebar .tab:nth-child(2)", (t) => t.classList.contains("active")));
   await ui.click("#sidebar #new-tab");
   await sleep(800);
+  await ui.press("#cmd-input", "Enter"); // New tab opens the CommandBar; Enter with nothing typed: a blank tab
+  await sleep(900);
   check("New tab adds a row", (await ui.$$eval("#sidebar .tab", (t) => t.length)) === rows + 1);
   check("a tab shows its monogram", /^[A-Z·]{1,2}$/.test(await ui.$eval("#sidebar .tab .mono", (m) => m.textContent)));
 
@@ -85,8 +87,12 @@ const inSidebar = (ui, sel) => ui.evaluate((s) => Boolean(document.querySelector
   check("the rail shows 5 tools", (await ui.$$eval(".sb-tools .tb", (b) => b.filter((x) => x.offsetParent).length)) === 5);
   check("the rail hides tab titles", await ui.$eval("#sidebar .tab > span:not(.mono)", (s) => getComputedStyle(s).display === "none"));
   await app.evaluate(({ Menu }) => Menu.getApplicationMenu().items.flatMap((m) => m.submenu?.items || []).find((i) => i.label === "Open Location").click());
+  await sleep(700);
+  check("⌘L in the rail opens the CommandBar", (await ui.evaluate(() => cmdOpen)) && (await ui.evaluate(() => document.activeElement?.id)) === "cmd-input");
+  await ui.keyboard.press("Escape");
+  await sleep(500);
+  await menuClick(app, "sidebar-rail");
   await sleep(600);
-  check("⌘L in the rail opens the full sidebar with the address bar focused", (await view(app)).x === 273 && (await ui.evaluate(() => document.activeElement?.id)) === "omni");
 
   // Trails and media.
   await ui.evaluate(() => window.scout.researchNew("Second trail"));
