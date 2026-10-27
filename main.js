@@ -80,6 +80,9 @@ const AGENT_UA = `${USER_AGENT} NODE-agent/${app.getVersion()} (+https://github.
 
 let win;
 let sidebarWidth = SIDEBAR_DEFAULT;
+// Sidebar layout: the sidebar's width (full 272, rail 68, hidden 52), from the renderer.
+let chromeSide = false;
+let chromeLeft = 0;
 let libraryOpen = false; // the overlay menu (or first-run screen) covers the window: page views hidden
 // Full screen hides the toolbar (immersive). It comes back while the pointer
 // is at the top edge, or while the renderer holds it (address bar or find
@@ -184,6 +187,19 @@ let coachHeight = 0;
 function contentRect() {
   const { width, height } = chromeBounds();
   if (htmlFullId) return { x: 0, y: 0, width, height };
+  // Sidebar layout (docs/18-sidebar-chrome.md): the page sits right of the
+  // sidebar inside a 1px frame, 8px from the window's other edges (or from the
+  // suggestions widget, whose column has its own 8px margins). Matches
+  // .page-frame in renderer/styles.css.
+  if (chromeSide) {
+    const right = sidebarWidth > 0 ? sidebarWidth : 8;
+    return {
+      x: chromeLeft + 1,
+      y: 9,
+      width: Math.max(280, width - chromeLeft - right - 2),
+      height: Math.max(200, height - 18 - coachHeight),
+    };
+  }
   // Full screen: the page always starts at the top; the toolbar slides over it.
   const top = immersive ? 0 : CHROME_TOP;
   return {
@@ -397,6 +413,9 @@ function pollChrome() {
 }
 
 function enterImmersive() {
+  // The sidebar layout keeps its sidebar in full screen; the top bar's
+  // sliding toolbar is for the top bar only.
+  if (chromeSide) return;
   immersive = true;
   chromeShown = true;
   sendUi("chrome", { immersive: true, shown: true, hint: true });
@@ -1797,6 +1816,7 @@ function loadSettings() {
   base.mosaicMax = MOSAIC_MAX_CHOICES.includes(raw.mosaicMax) ? raw.mosaicMax : 4;
   base.tabSleep = SLEEP_CHOICES.includes(raw.tabSleep) ? raw.tabSleep : 30;
   base.passwordsOffer = raw.passwordsOffer !== false;
+  base.chromeLayout = raw.chromeLayout === "side" ? "side" : "top";
   // First-run setup is shown once, to new users. Settings saved by an earlier
   // version count as set up. Runs with --user-data-dir (the tests) skip it
   // unless NODE_FIRST_RUN=1.
@@ -1836,6 +1856,7 @@ function saveSettings(next) {
   if (next && typeof next.startPage === "string") current.startPage = /^https?:\/\//i.test(next.startPage.trim()) ? next.startPage.trim() : "";
   if (next && next.firstRunDone) current.firstRunDone = true;
   if (next && "passwordsOffer" in next) current.passwordsOffer = Boolean(next.passwordsOffer);
+  if (next && "chromeLayout" in next) current.chromeLayout = next.chromeLayout === "side" ? "side" : "top";
   if (next && "tabSleep" in next && SLEEP_CHOICES.includes(Number(next.tabSleep))) current.tabSleep = Number(next.tabSleep);
   if (next && MOSAIC_MAX_CHOICES.includes(Number(next.mosaicMax))) {
     current.mosaicMax = Number(next.mosaicMax);
@@ -1875,6 +1896,7 @@ function saveSettings(next) {
     mosaicMax: current.mosaicMax,
     tabSleep: current.tabSleep,
     passwordsOffer: current.passwordsOffer !== false,
+    chromeLayout: current.chromeLayout === "side" ? "side" : "top",
     firstRunDone: Boolean(current.firstRunDone),
     agents: { enabled: current.agents.enabled, port: current.agents.port, token: encryptSecret(current.agents.token) },
     providers: {},
@@ -1925,6 +1947,7 @@ function publicSettings() {
     mosaicMax: s.mosaicMax,
     tabSleep: s.tabSleep,
     passwordsOffer: s.passwordsOffer !== false,
+    chromeLayout: s.chromeLayout === "side" ? "side" : "top",
     firstRunDone: Boolean(s.firstRunDone),
     googleWindow: companion ? companion.status() : null,
     agents: agentsStatus(),
@@ -2179,6 +2202,20 @@ function buildMenu() {
           },
         },
         { label: "Show or Hide Suggestions", accelerator: "CmdOrCtrl+Shift+.", click: () => sendUi("toggle-suggest") },
+        { type: "separator" },
+        {
+          id: "sidebar-layout",
+          label: "Use Sidebar Layout",
+          type: "checkbox",
+          checked: loadSettings().chromeLayout === "side",
+          click: (item) => {
+            saveSettings({ chromeLayout: item.checked ? "side" : "top" });
+            sendUi("chrome-layout", { mode: item.checked ? "side" : "top" });
+          },
+        },
+        { id: "sidebar-toggle", label: "Show or Hide Sidebar", accelerator: "CmdOrCtrl+S", click: () => sendUi("sidebar-toggle") },
+        { id: "sidebar-rail", label: "Compact or Full Sidebar", click: () => sendUi("sidebar-rail") },
+        { type: "separator" },
         { label: "Menu: Library, History, Settings", accelerator: "CmdOrCtrl+,", click: () => sendUi("open-menu", { section: "settings" }) },
         { type: "separator" },
         { label: "Next Tab", accelerator: "Ctrl+Tab", click: () => stepTab(1) },
@@ -2505,6 +2542,22 @@ function onPinch(tab, factor) {
 ipcMain.on("tab:pinch", (_e, id, factor) => {
   const tab = tabs.get(String(id));
   if (tab && !libraryOpen) onPinch(tab, factor);
+});
+ipcMain.handle("layout:chrome", (_e, { mode, left } = {}) => {
+  const side = mode === "side";
+  chromeLeft = side ? Math.max(0, Math.min(400, Math.round(Number(left) || 0))) : 0;
+  if (side !== chromeSide) {
+    chromeSide = side;
+    // Switched while in full screen: the top bar slides; the sidebar stays.
+    if (win?.isFullScreen()) {
+      if (side && immersive) leaveImmersive();
+      else if (!side && !immersive) enterImmersive();
+    }
+    const item = Menu.getApplicationMenu()?.getMenuItemById("sidebar-layout");
+    if (item) item.checked = side;
+  }
+  applyLayout();
+  return { side: chromeSide, left: chromeLeft };
 });
 ipcMain.handle("layout:sidebar", (_e, w) => {
   sidebarWidth = Math.max(160, Math.min(360, Number(w) || SIDEBAR_DEFAULT));

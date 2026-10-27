@@ -186,9 +186,11 @@ function renderTabs() {
   tabsEl.innerHTML = "";
   for (const t of tabs) {
     const el = document.createElement("div");
-    el.className = "tab" + (t.id === activeId ? " active" : "") + (t.sleeping ? " asleep" : "");
+    el.className = "tab" + (t.id === activeId ? " active" : "") + (t.sleeping ? " asleep" : "") + (t.audible && !t.muted ? " playing" : "");
     if (t.sleeping) el.title = "Asleep to save memory. Opens again when you click it.";
-    el.innerHTML = `<span title="${escapeHtml(t.url || "")}">${escapeHtml(t.title || "New tab")}</span>`;
+    // The monogram shows only in the sidebar layout (the rail shows nothing else).
+    el.innerHTML = `<span class="mono" aria-hidden="true">${escapeHtml(monogram(t.title, t.url))}</span><span title="${escapeHtml(t.url || "")}">${escapeHtml(t.title || "New tab")}</span>`;
+    if (document.body.classList.contains("sb-rail")) el.title = `${t.title || "New tab"}${t.sleeping ? " · asleep" : ""}${t.audible && !t.muted ? " · playing" : ""}`;
     if (t.tile) {
       // Chosen for Mosaic (B69).
       const m = document.createElement("i");
@@ -275,8 +277,9 @@ function renderTabs() {
       if (!e.dataTransfer.types.includes("text/scout-tab")) return;
       e.preventDefault();
       const r = el.getBoundingClientRect();
-      el.classList.toggle("drop-before", e.clientX < r.left + r.width / 2);
-      el.classList.toggle("drop-after", e.clientX >= r.left + r.width / 2);
+      const after = document.body.classList.contains("side") ? e.clientY >= r.top + r.height / 2 : e.clientX >= r.left + r.width / 2;
+      el.classList.toggle("drop-before", !after);
+      el.classList.toggle("drop-after", after);
     });
     el.addEventListener("dragleave", () => el.classList.remove("drop-before", "drop-after"));
     el.addEventListener("drop", (e) => {
@@ -286,12 +289,14 @@ function renderTabs() {
       e.preventDefault();
       const r = el.getBoundingClientRect();
       const order = tabs.map((x) => x.id).filter((x) => x !== id);
-      let at = order.indexOf(t.id) + (e.clientX >= r.left + r.width / 2 ? 1 : 0);
+      const after = document.body.classList.contains("side") ? e.clientY >= r.top + r.height / 2 : e.clientX >= r.left + r.width / 2;
+      let at = order.indexOf(t.id) + (after ? 1 : 0);
       order.splice(at, 0, id);
       api?.moveTabs?.(order);
     });
     tabsEl.appendChild(el);
   }
+  if (typeof paintSide === "function") paintSide();
   const current = tabs.find((t) => t.id === activeId);
   // The address bar shows the page's real address, except while the user is
   // typing in it. After Enter (or picking a suggestion) it follows the page again.
@@ -999,6 +1004,7 @@ const paintSound = () => {
   soundBtn.setAttribute("aria-pressed", String(soundAll));
   setTip(soundBtn, soundAll ? "Sound: all playing tabs" : "Sound: this tab only");
   soundBtn.innerHTML = icon(soundAll ? "sound-all" : "sound");
+  if (typeof paintSide === "function") paintSide(false);
 };
 soundBtn.addEventListener("click", () => api?.setSoundAll?.(!soundAll));
 paintSound();
@@ -1513,6 +1519,7 @@ async function renderSources() {
   document.getElementById("start-page").value = settings.startPage || "";
   document.getElementById("mosaic-max").value = String(settings.mosaicMax ?? 4);
   document.getElementById("tab-sleep").value = String(settings.tabSleep ?? 30);
+  document.getElementById("chrome-layout").value = settings.chromeLayout === "side" ? "side" : "top";
   document.getElementById("auto-update").checked = settings.autoUpdate !== false;
   document.getElementById("passkeys").checked = settings.passkeys === true;
   document.getElementById("passkeys").closest(".top").hidden = document.getElementById("passkeys-help").hidden = !/Mac/.test(navigator.platform);
@@ -2358,6 +2365,7 @@ async function refreshSession() {
 
 function adoptSession(s) {
   session = s;
+  if (typeof paintSide === "function") paintSide();
   pinned = [...(s.pins || [])];
   renderKeys();
   // Re-mark visible cards for the new session.
@@ -2541,6 +2549,7 @@ if (api) {
       return renderAgent();
     }
     if (msg.cmd === "focus-omni") {
+      if (typeof sideNeedsAddress === "function") sideNeedsAddress();
       omni.focus();
       omni.select();
     } else if (msg.cmd === "bookmark-toggle") {
@@ -3256,6 +3265,9 @@ api?.onCommand?.((msg) => {
     openMenu(msg.section || menuSection).then(() => msg.box && setTimeout(() => (document.getElementById(msg.box)?.previousElementSibling || document.getElementById(msg.box))?.scrollIntoView({ block: "start" }), 300));
   } else if (msg.cmd === "passwords-changed") renderPasswords().catch(() => {});
   else if (msg.cmd === "overview") openOverview();
+  else if (msg.cmd === "sidebar-toggle") toggleSidebar();
+  else if (msg.cmd === "sidebar-rail") chromeLayout === "side" && setSideState(sideState === "rail" ? "full" : "rail");
+  else if (msg.cmd === "chrome-layout") applyChromeLayout(msg.mode);
   else if (msg.cmd === "tour") startTour();
 });
 
@@ -3641,4 +3653,193 @@ function paintShield() {
 shieldBtn?.addEventListener("click", () => {
   const r = shieldBtn.getBoundingClientRect();
   api?.privacyMenu?.(r.left, r.bottom + 4);
+});
+
+// ---- Sidebar layout (docs/18-sidebar-chrome.md) ----
+// Another view of the same chrome. In Sidebar mode the real toolbar buttons,
+// the address bar and the tab list move into the sidebar's slots, so they keep
+// their handlers and state; Top bar mode puts each back where it was (a
+// comment left in its place marks the spot). Widths: full, rail, hidden.
+var SIDE_W = { full: 272, rail: 68, hidden: 52 };
+var SIDE_SLOTS = {
+  window: ["back", "forward", "reload", "agent-share-btn", "agent-btn", "dl-btn", "fullscreen-btn"],
+  address: ["omni-form", "zoom-badge", "shield-btn"],
+  find: ["findbar"],
+  tools: ["layout-btn", "capture-btn", "suggest-toggle", "sound-btn", "star-btn", "sb-history-btn", "sb-downloads-btn", "menu-btn"],
+  newtab: ["new-tab"],
+  tabs: ["tabs"],
+};
+var chromeLayout = "top";
+var sideState = ["full", "rail", "hidden"].includes(store.get("node.sideState", "full")) ? store.get("node.sideState", "full") : "full";
+var sideLast = sideState === "hidden" ? "full" : sideState;
+var sideTrails = [];
+var sideTrailsAt = 0;
+const sidebarEl = document.getElementById("sidebar");
+
+for (const ids of Object.values(SIDE_SLOTS))
+  for (const id of ids) {
+    const el = document.getElementById(id);
+    if (el && !el.__home) el.before((el.__home = document.createComment(`home of #${id}`)));
+  }
+
+function sideWidth() {
+  return chromeLayout === "side" ? SIDE_W[sideState] : 0;
+}
+function sendChromeLayout() {
+  document.querySelector(".shell").style.setProperty("--side-w", `${sideWidth()}px`);
+  api?.setChromeLayout?.({ mode: chromeLayout, left: sideWidth() });
+}
+
+function applyChromeLayout(mode) {
+  const side = mode === "side";
+  chromeLayout = side ? "side" : "top";
+  document.body.classList.toggle("side", side);
+  for (const [slot, ids] of Object.entries(SIDE_SLOTS)) {
+    const box = sidebarEl.querySelector(`[data-slot="${slot}"]`);
+    for (const id of ids) {
+      const el = document.getElementById(id);
+      if (!el) continue;
+      if (side) box.appendChild(el);
+      else el.__home?.after(el);
+    }
+  }
+  for (const b of document.querySelectorAll(".sb-only")) b.hidden = !side;
+  document.getElementById("page-frame").hidden = !side;
+  setSideState(sideState, { send: false });
+  sendChromeLayout();
+  renderTabs();
+}
+
+function setSideState(state, { send = true } = {}) {
+  sideState = state;
+  if (state !== "hidden") sideLast = state;
+  store.set("node.sideState", state);
+  const side = chromeLayout === "side";
+  document.body.classList.toggle("sb-rail", side && state === "rail");
+  document.body.classList.toggle("sb-hidden", side && state === "hidden");
+  sidebarEl.hidden = !side || state === "hidden";
+  document.getElementById("sb-show-wrap").hidden = !side || state !== "hidden";
+  document.getElementById("sb-hide").setAttribute("aria-expanded", "true");
+  if (send) sendChromeLayout();
+  paintSide();
+}
+function toggleSidebar() {
+  if (chromeLayout !== "side") return;
+  const showing = sideState !== "hidden";
+  setSideState(showing ? "hidden" : sideLast);
+  (showing ? document.getElementById("sb-show") : document.getElementById("sb-hide")).focus();
+}
+// Needs the address bar: show the full sidebar first (rail or hidden).
+function sideNeedsAddress() {
+  if (chromeLayout === "side" && sideState !== "full") setSideState("full");
+}
+
+document.getElementById("sb-hide").addEventListener("click", toggleSidebar);
+document.getElementById("sb-show").addEventListener("click", toggleSidebar);
+document.getElementById("sb-search").addEventListener("click", () => {
+  sideNeedsAddress();
+  omni.focus();
+  omni.select();
+});
+document.getElementById("sb-history-btn").addEventListener("click", () => openMenu("history"));
+document.getElementById("sb-downloads-btn").addEventListener("click", () => openMenu("downloads"));
+document.getElementById("sb-trail-name").addEventListener("click", () => openMenu("trail"));
+document.getElementById("sb-trails-toggle").addEventListener("click", () => {
+  const open = document.getElementById("sb-trails-toggle").getAttribute("aria-expanded") !== "true";
+  store.set("node.sideTrailsOpen", open);
+  paintSide();
+});
+// Right-click the sidebar's empty space: full or rail.
+sidebarEl.addEventListener("contextmenu", (e) => {
+  if (e.target.closest("button, input, .tab, a")) return;
+  e.preventDefault();
+  setSideState(sideState === "rail" ? "full" : "rail");
+});
+
+// Two letters for a tab or trail in the rail.
+function monogram(text, url = "") {
+  let host = "";
+  try {
+    host = new URL(url).hostname.replace(/^(www|en|m|mobile)\./, "");
+  } catch {}
+  if (/^[\d.]+$|^\[|^localhost$/.test(host)) host = ""; // an address like 127.0.0.1: use the title
+  const base = host ? host.split(".")[0] : String(text || "");
+  const words = base.split(/[^A-Za-z0-9]+/).filter(Boolean);
+  if (!words.length) return "·";
+  return (words.length > 1 ? words[0][0] + words[1][0] : words[0][0]).toUpperCase();
+}
+
+async function refreshSideTrails(force = false) {
+  if (!api?.researchList || (!force && Date.now() - sideTrailsAt < 2000)) return;
+  sideTrailsAt = Date.now();
+  try {
+    sideTrails = await api.researchList();
+  } catch {}
+  paintSide(false);
+}
+
+function paintSide(fetch = true) {
+  if (chromeLayout !== "side" || !sidebarEl) return;
+  if (fetch) refreshSideTrails();
+  // Current trail
+  // The list is read again every few seconds, so it has a rename made in the
+  // Menu; the session object has the keywords.
+  const s = typeof session !== "undefined" ? session : null;
+  const cur = sideTrails.find((t) => t.current && (!s || t.id === s.id));
+  document.getElementById("sb-trail-name").textContent = cur?.name || s?.name || "Trail";
+  const pages = cur ? cur.pages : (s?.trail || []).length;
+  document.getElementById("sb-trail-meta").textContent = s ? `${pages} ${pages === 1 ? "PAGE" : "PAGES"} · ${(s.threads || []).length} KW` : "";
+  // Active trails
+  const open = store.get("node.sideTrailsOpen", true);
+  const head = document.getElementById("sb-trails-toggle");
+  head.setAttribute("aria-expanded", String(open));
+  document.getElementById("sb-trail-count").textContent = sideTrails.length || "";
+  document.getElementById("sb-trails-label").textContent = sideState === "rail" ? "Trails" : "Active trails";
+  const list = document.getElementById("sb-trail-list");
+  list.hidden = !open && sideState !== "rail";
+  list.innerHTML = "";
+  for (const t of sideTrails.slice(0, 8)) {
+    const b = document.createElement("button");
+    b.className = "sb-trail-row";
+    b.setAttribute("aria-current", String(Boolean(t.current)));
+    b.title = `${t.name} · ${t.pages} ${t.pages === 1 ? "page" : "pages"}`;
+    b.innerHTML = `<span class="dot" aria-hidden="true"></span><span class="nm"></span><span class="n"></span><span class="mono" aria-hidden="true"></span>`;
+    b.querySelector(".nm").textContent = t.name;
+    b.querySelector(".n").textContent = `${t.pages} ${t.pages === 1 ? "PAGE" : "PAGES"}`;
+    b.querySelector(".mono").textContent = monogram(t.name);
+    b.setAttribute("aria-label", `${t.name}, ${t.pages} pages${t.current ? ", current trail" : ""}`);
+    b.addEventListener("click", async () => {
+      if (t.current) return openMenu("trail");
+      adoptSession(await api.researchSwitch(t.id));
+      await refreshSideTrails(true);
+    });
+    list.appendChild(b);
+  }
+  if (sideState !== "rail") {
+    const add = document.createElement("button");
+    add.className = "sb-trail-row add";
+    add.innerHTML = `<svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg><span class="nm">New trail</span>`;
+    add.addEventListener("click", async () => {
+      document.getElementById("session-new").click();
+      await refreshSideTrails(true);
+      openMenu("trail");
+    });
+    list.appendChild(add);
+  }
+  // Media
+  const playing = (typeof tabs !== "undefined" ? tabs : []).filter((t) => t.audible && !t.muted).length;
+  const media = document.getElementById("sb-media");
+  media.classList.toggle("playing", playing > 0);
+  document.getElementById("sb-playing").textContent = playing ? `${playing} PLAYING` : "NOTHING PLAYING";
+  const snd = document.getElementById("sb-sound");
+  snd.textContent = soundAll ? "SOUND: ALL" : "SOUND: ONE";
+  snd.classList.toggle("all", soundAll);
+}
+
+// The layout setting, at start and when it changes.
+api?.getSettings?.().then((s) => applyChromeLayout(s.chromeLayout === "side" ? "side" : "top"));
+const layoutSelect = document.getElementById("chrome-layout");
+layoutSelect?.addEventListener("change", async () => {
+  await api?.setSettings?.({ chromeLayout: layoutSelect.value });
+  applyChromeLayout(layoutSelect.value);
 });
