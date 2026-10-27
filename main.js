@@ -715,7 +715,10 @@ function attachListeners(tab) {
   on("zoom-changed", (_e, direction) => zoomTab(tab, direction === "in" ? 0.5 : -0.5));
   on("did-navigate", (_e, url) => {
     if (/^https?:/i.test(url)) tab.lastUrl = url;
-    adblock?.resetTab(wc.id); // the toolbar count is per page (B73)
+    // The toolbar count is per page (B73). It starts again when a new page
+    // starts loading (did-start-navigation), not here: by the time
+    // did-navigate arrives, the new page's first requests may already have
+    // been blocked and counted.
     tab.loop = null; // a new page: the loop ended with the old one (B70)
     // Sharing covers the site the user shared; going to another site ends it.
     if (tab.agentShared && originOf(url) !== tab.agentOrigin) {
@@ -767,7 +770,9 @@ function attachListeners(tab) {
   // A page that fails to load shows NODE's error page with Try again; a page
   // whose process crashed shows "This page stopped".
   on("did-start-navigation", (details) => {
-    if (details.isMainFrame && !details.isSameDocument) tab.loadingUrl = details.url;
+    if (!details.isMainFrame || details.isSameDocument) return;
+    tab.loadingUrl = details.url;
+    adblock?.resetTab(wc.id); // a new page: the shield count starts again (B73)
   });
   on("did-fail-load", (_e, code, desc, url, isMainFrame) => {
     if (!isMainFrame || code === -3 || !/^https?:/i.test(url || "")) return; // -3: navigation replaced
