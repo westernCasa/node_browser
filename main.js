@@ -2543,8 +2543,13 @@ function onPinch(tab, factor) {
     focusTile(tab.id);
   }
 }
-ipcMain.on("tab:pinch", (_e, id, factor) => {
-  const tab = tabs.get(String(id));
+// Messages from the page script (view-preload.js) name their tab by the
+// webContents that sent them, never by the id the script read from its
+// process: Chromium can host frames of one site from several tabs in one
+// process (a captcha frame, for example), so that id can be another tab's.
+const senderTab = (e) => tabOfContents(e.sender);
+ipcMain.on("tab:pinch", (e, _id, factor) => {
+  const tab = senderTab(e);
   if (tab && !libraryOpen) onPinch(tab, factor);
 });
 ipcMain.handle("layout:chrome", (_e, { mode, left } = {}) => {
@@ -2841,12 +2846,12 @@ ipcMain.handle("tab:menu", (_e, id, x, y) => {
   popupHold = true;
   Menu.buildFromTemplate(items).popup({ window: win, x: Math.round(x), y: Math.round(y), callback: () => (popupHold = false) });
 });
-ipcMain.on("tab:activity", (_e, id) => {
-  const tab = tabs.get(String(id));
+ipcMain.on("tab:activity", (e) => {
+  const tab = senderTab(e);
   if (tab) tab.activityAt = Date.now();
 });
-ipcMain.on("tab:clicked", (_e, id) => {
-  const tab = tabs.get(String(id));
+ipcMain.on("tab:clicked", (e) => {
+  const tab = senderTab(e);
   if (!tab) return;
   tab.lastGesture = Date.now();
   if (activeId !== tab.id) activateTab(tab.id);
@@ -3046,10 +3051,11 @@ ipcMain.handle("tab:order", (_e, order) => {
 ipcMain.handle("open-external", (_e, url) => {
   if (/^https:\/\//i.test(String(url))) shell.openExternal(String(url));
 });
-ipcMain.on("tab:gesture", (_e, id, dir) => gestureNav(tabs.get(String(id)), dir));
+ipcMain.on("tab:gesture", (e, _id, dir) => gestureNav(senderTab(e), dir));
 
-ipcMain.on("tab:hotkey", (_e, id, key) => {
-  if (key === "shot" && tabs.has(String(id))) runShotFromMain(String(id));
+ipcMain.on("tab:hotkey", (e, _id, key) => {
+  const tab = senderTab(e);
+  if (key === "shot" && tab) runShotFromMain(tab.id);
 });
 ipcMain.handle("tab:audio", (_e, id) => {
   const tab = tabs.get(id);
