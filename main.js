@@ -477,8 +477,36 @@ const MOSAIC_MAX_CHOICES = [4, 6, 9, 0];
 function mosaicMax() {
   return loadSettings().mosaicMax;
 }
+// ---- Trails keep their own tabs (B80, docs/18-sidebar-chrome.md) ----
+// Each tab belongs to the trail (research session) that was current when it
+// opened. Only the current trail's tabs show: in the tab list, Mosaic, the
+// overview and the tab shortcuts. The others stay open out of view and follow
+// the usual sleep rule (B29). Switching back brings them back as they were.
+const currentTrail = () => research?.current?.id || null;
+const inCurrentTrail = (tab) => !tab.trail || !currentTrail() || tab.trail === currentTrail();
+function shownTabs() {
+  return [...tabs.values()].filter(inCurrentTrail);
+}
+const trailActive = new Map(); // trail id → the tab that was active in it
+
+// Runs a change of trail (switch, new) and shows that trail's tabs.
+function changeTrail(fn) {
+  const before = currentTrail();
+  const result = fn();
+  const after = currentTrail();
+  if (before === after) return result;
+  if (activeId) trailActive.set(before, activeId);
+  const shown = shownTabs();
+  let next = trailActive.get(after);
+  if (!shown.some((t) => t.id === next)) next = shown.at(-1)?.id;
+  if (!next) next = createTab(newTabUrl());
+  activateTab(next);
+  saveSessionSoon();
+  return result;
+}
+
 function mosaicIds() {
-  const all = [...tabs.keys()];
+  const all = shownTabs().map((t) => t.id);
   const chosen = all.filter((id) => tabs.get(id).tile);
   const max = mosaicMax() || Infinity;
   if (chosen.length) return chosen.slice(0, max);
@@ -489,7 +517,7 @@ function mosaicIds() {
   return shown;
 }
 function chosenTiles() {
-  return [...tabs.values()].filter((t) => t.tile).length;
+  return shownTabs().filter((t) => t.tile).length;
 }
 
 // opts.animate: "enter" | "exit" | "move", passed only by the Mosaic toggle
@@ -619,7 +647,7 @@ function tabState(tab) {
 
 function emitList() {
   saveSessionSoon();
-  emit({ type: "list", tabs: [...tabs.values()].map(tabState), activeId });
+  emit({ type: "list", tabs: shownTabs().map(tabState), activeId });
 }
 
 // Sound policy (B03). "auto": only the active tab is audible; background and
@@ -1247,10 +1275,10 @@ function saveSessionSoon() {
 function saveSessionNow() {
   clearTimeout(sessionTimer);
   if (pagesReleased) return; // quitting: keep the last saved list
-  const list = [...tabs.values()].map((t) => tabState(t)).filter((t) => /^https?:/i.test(t.url));
+  const list = [...tabs.values()].map((t) => ({ ...tabState(t), trail: t.trail })).filter((t) => /^https?:/i.test(t.url));
   const active = list.findIndex((t) => t.id === activeId);
   try {
-    fs.writeFileSync(sessionFile(), JSON.stringify({ version: 1, layout, active: Math.max(0, active), tabs: list.map((t) => ({ url: t.url, title: t.title, ...(t.tile ? { tile: true } : {}) })) }));
+    fs.writeFileSync(sessionFile(), JSON.stringify({ version: 1, layout, active: Math.max(0, active), tabs: list.map((t) => ({ url: t.url, title: t.title, ...(t.tile ? { tile: true } : {}), ...(t.trail ? { trail: t.trail } : {}) })) }));
   } catch (_) {}
 }
 function restoreSession() {
@@ -1261,9 +1289,11 @@ function restoreSession() {
   const list = (saved?.tabs || []).filter((t) => /^https?:/i.test(t?.url || "")).slice(0, 100);
   if (!list.length || loadSettings().restoreTabs === false) return false;
   const active = Math.min(Math.max(0, saved.active || 0), list.length - 1);
-  list.forEach((t, i) => createTab(t.url, { background: i !== active, sleeping: i !== active, restore: true, title: t.title, tile: t.tile === true }));
-  const ids = [...tabs.keys()];
-  if (ids[active]) activateTab(ids[active]);
+  // Tabs saved before trails kept tabs have none: they join the current trail.
+  const ids = list.map((t, i) => createTab(t.url, { background: i !== active, sleeping: i !== active, restore: true, title: t.title, tile: t.tile === true, trail: typeof t.trail === "string" ? t.trail : undefined }));
+  const target = tabs.get(ids[active]);
+  if (target && inCurrentTrail(target)) activateTab(target.id);
+  else activateTab(shownTabs().at(-1)?.id || createTab(newTabUrl()));
   return true;
 }
 
@@ -1478,7 +1508,7 @@ function createTab(url, opts = {}) {
   });
   view.setBackgroundColor("#ffffff"); // pages without their own background expect white
   view.webContents.setUserAgent(USER_AGENT);
-  const tab = { id, view, audio: "auto", audioByUser: false, lastGesture: 0, lastActive: Date.now(), idleMs: 0, tile: Boolean(opts.tile) };
+  const tab = { id, view, audio: "auto", audioByUser: false, lastGesture: 0, lastActive: Date.now(), idleMs: 0, tile: Boolean(opts.tile), trail: opts.trail || currentTrail() };
   refreshRule(tab, normalizeUrl(url));
   tabs.set(id, tab);
   win.contentView.addChildView(view);
@@ -1543,7 +1573,7 @@ function closeTab(id) {
   }
   playback.closed(id);
   if (activeId === id) {
-    activeId = [...tabs.keys()].at(-1) || null;
+    activeId = shownTabs().at(-1)?.id || null;
   }
   if (!activeId) createTab(newTabUrl());
   applyLayout(layout === "mosaic" ? { animate: "move" } : {});
@@ -1678,7 +1708,7 @@ function watchDownloads(ses) {
 }
 
 function stepTab(dir) {
-  const ids = [...tabs.keys()];
+  const ids = shownTabs().map((t) => t.id);
   if (ids.length < 2) return;
   const i = ids.indexOf(activeId);
   activateTab(ids[(i + dir + ids.length) % ids.length]);
@@ -1690,7 +1720,7 @@ function pickTab(index) {
     const id = mosaicIds()[index];
     if (id) return focusTile(id);
   }
-  const ids = [...tabs.keys()];
+  const ids = shownTabs().map((t) => t.id);
   const id = index < 0 ? ids.at(-1) : ids[index];
   if (id) activateTab(id);
 }
@@ -2796,7 +2826,7 @@ async function thumbOf(tab) {
 ipcMain.handle("overview:open", async () => {
   const rect = contentRect();
   const out = [];
-  for (const tab of tabs.values()) {
+  for (const tab of shownTabs()) {
     const thumb = tab.attached && !tab.sleeping ? await thumbOf(tab) : tab.thumb || "";
     out.push({ ...tabState(tab), thumb, rect: tab.attached ? tab.view.getBounds() : null });
   }
@@ -2810,7 +2840,7 @@ ipcMain.handle("overview:close", (_e, ids) => {
     const pick = new Set(ids.map(String));
     const max = mosaicMax() || Infinity;
     let n = 0;
-    for (const t of tabs.values()) t.tile = pick.has(t.id) && n++ < max;
+    for (const t of shownTabs()) t.tile = pick.has(t.id) && n++ < max;
     layout = "mosaic";
     const shown = mosaicIds();
     if (shown.length && !shown.includes(activeId)) activeId = shown[0];
@@ -2839,7 +2869,7 @@ ipcMain.handle("tab:menu", (_e, id, x, y) => {
     items.push({
       label: "Show All Tabs in Mosaic",
       click: () => {
-        for (const t of tabs.values()) t.tile = false;
+        for (const t of shownTabs()) t.tile = false;
         applyLayout(layout === "mosaic" ? { animate: "move" } : {});
         emitList();
         saveSessionSoon();
@@ -3046,10 +3076,13 @@ function gestureNav(tab, dir) {
 }
 // Tab order after dragging a tab in the tab bar.
 ipcMain.handle("tab:order", (_e, order) => {
-  if (!Array.isArray(order) || order.length !== tabs.size || !order.every((id) => tabs.has(String(id)))) return;
+  // The order of the tabs shown (the current trail's); other trails' tabs keep theirs.
+  const shown = shownTabs();
+  if (!Array.isArray(order) || order.length !== shown.length || !order.every((id) => shown.some((t) => t.id === String(id)))) return;
   const moved = order.map((id) => [String(id), tabs.get(String(id))]);
+  const others = [...tabs].filter(([, t]) => !inCurrentTrail(t));
   tabs.clear();
-  for (const [id, tab] of moved) tabs.set(id, tab);
+  for (const [id, tab] of [...moved, ...others]) tabs.set(id, tab);
   applyLayout();
   emitList();
 });
@@ -3333,14 +3366,14 @@ function extensionFor(contentType, url, kind) {
 
 // ---- Research session IPC (B17) ----
 ipcMain.handle("research:get", () => research.snapshot());
-ipcMain.handle("research:list", () => research.list());
+ipcMain.handle("research:list", () => research.list().map((s) => ({ ...s, tabs: [...tabs.values()].filter((t) => t.trail === s.id && /^https?:/i.test(tabState(t).url)).length })));
 ipcMain.handle("research:new", (_e, name) => {
-  research.create(name);
+  changeTrail(() => research.create(name));
   usage().count("sessions");
   return research.snapshot();
 });
 ipcMain.handle("research:switch", (_e, id) => {
-  research.switchTo(String(id));
+  changeTrail(() => research.switchTo(String(id)));
   return research.snapshot();
 });
 ipcMain.handle("research:rename", (_e, name) => {

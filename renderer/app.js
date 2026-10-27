@@ -3800,12 +3800,13 @@ function paintSide(fetch = true) {
     const b = document.createElement("button");
     b.className = "sb-trail-row";
     b.setAttribute("aria-current", String(Boolean(t.current)));
-    b.title = `${t.name} · ${t.pages} ${t.pages === 1 ? "page" : "pages"}`;
+    const nt = t.tabs ?? 0;
+    b.title = `${t.name} · ${nt} ${nt === 1 ? "tab" : "tabs"} · ${t.pages} ${t.pages === 1 ? "page" : "pages"}`;
     b.innerHTML = `<span class="dot" aria-hidden="true"></span><span class="nm"></span><span class="n"></span><span class="mono" aria-hidden="true"></span>`;
     b.querySelector(".nm").textContent = t.name;
-    b.querySelector(".n").textContent = `${t.pages} ${t.pages === 1 ? "PAGE" : "PAGES"}`;
+    b.querySelector(".n").textContent = `${nt} ${nt === 1 ? "TAB" : "TABS"}`;
     b.querySelector(".mono").textContent = monogram(t.name);
-    b.setAttribute("aria-label", `${t.name}, ${t.pages} pages${t.current ? ", current trail" : ""}`);
+    b.setAttribute("aria-label", `${t.name}, ${nt} ${nt === 1 ? "tab" : "tabs"}${t.current ? ", current trail" : ""}`);
     b.addEventListener("click", async () => {
       if (t.current) return openMenu("trail");
       adoptSession(await api.researchSwitch(t.id));
@@ -3945,7 +3946,7 @@ async function renderCommands() {
       id: `trail-${t.id}`,
       icon: "trail",
       html: cmdBold(t.name, words),
-      key: `${t.pages} ${t.pages === 1 ? "page" : "pages"}${t.current ? " · current" : " · switch trail"}`,
+      key: `${t.tabs ?? 0} ${(t.tabs ?? 0) === 1 ? "tab" : "tabs"}${t.current ? " · current" : " · switch trail"}`,
       run: async () => {
         if (!t.current) adoptSession(await api.researchSwitch(t.id));
         refreshSideTrails(true);

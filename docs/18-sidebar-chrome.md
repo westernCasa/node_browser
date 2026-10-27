@@ -54,7 +54,7 @@ Uses the existing tokens. Tile borders fade on at `motion-base` / `ease-enter` a
 ## Open questions
 
 - Pinned sites were in the first mockup and were replaced by the tool tiles. If they come back, they go above the tab list as one row.
-- How a trail stores its tabs when it is not current (all asleep, or kept loaded up to a limit).
+- ~~How a trail stores its tabs when it is not current (all asleep, or kept loaded up to a limit).~~ Decided 2026-10-27: kept loaded, out of view, under the usual sleep rule (asleep after 30 minutes of use, never while playing). Can change to "asleep at once" later.
 
 ## In the Electron build (B80, first version, 2026-10-27)
 
@@ -69,10 +69,12 @@ How it is built: one set of controls, two places for them. In Sidebar mode `rend
 | TrailHeader | The current research session's name, pages and keywords (threads). Click: Menu → Trail. |
 | ToolGrid | 8 tiles, 4 × 2. History and Downloads tiles open those Menu sections. Mosaic on and Suggestions open: white border; Sound: all: violet. |
 | Tabs | Vertical list with a monogram, title, sound, close; current tab white border; asleep "zz"; drag to reorder up and down. New tab on top. |
-| ActiveTrails | Research sessions, newest first (up to 8): click to switch, New trail, folds open and closed. Switching changes the session only; tabs stay as they are (open question above). |
+| ActiveTrails | Research sessions, newest first (up to 8), with their number of tabs: click to switch, New trail, folds open and closed. Each trail keeps its own tabs (below). |
 | MediaStrip | Number of tabs playing and the sound mode (SOUND: ONE / ALL, violet for all). |
 | Widths | Full 272 px, rail 68 px, hidden (a 52 px column with the show button). ⌘S hides and shows; right-click the sidebar's empty space or View → Compact or Full Sidebar switches full and rail. ⌘L in the rail or hidden opens the full sidebar with the address bar focused. Remembered per computer. |
 | Full screen | The sidebar stays; the top bar's sliding toolbar is not used. |
-| Not built yet | MosaicGroup, sidebar width by dragging (220–340), trails that keep their own tabs. |
+| Not built yet | MosaicGroup, sidebar width by dragging (220–340). |
 
-Tests: `test/e2e/33-sidebar-chrome.js` (32 checks) and `test/e2e/34-command-bar.js` (26 checks, CommandBar, PR #21), in CI on Linux and Windows.
+**Trails keep their own tabs (PR #29).** Each tab belongs to the trail that was current when it opened. Switching trails (sidebar, CommandBar, or Menu → Trail in either layout) shows that trail's tabs and the tab that was active there; the other trails' tabs stay open out of view and follow the usual sleep rule. A trail with no tabs opens one new tab. The tab list, Mosaic, the tab overview, Next and Previous Tab, ⌘1–9, closing and reordering work on the current trail's tabs. Saved with the open tabs (`trail` in `tabs.json`); tabs saved by an earlier version join the current trail.
+
+Tests: `test/e2e/33-sidebar-chrome.js` (32 checks) and `test/e2e/34-command-bar.js` (26 checks, CommandBar, PR #21) and `test/e2e/36-trail-tabs.js` (13 checks, PR #29), in CI on Linux and Windows.
