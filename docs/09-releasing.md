@@ -46,6 +46,10 @@ To sign, add these repository secrets (GitHub → Settings → Secrets and varia
 | `APPLE_TEAM_ID` | 10-character team ID | developer.apple.com → Membership |
 | `WIN_CSC_LINK`, `WIN_CSC_KEY_PASSWORD` | Windows code signing certificate (optional) | A code signing provider (OV or EV certificate), or Azure Trusted Signing |
 
+To check the Mac secrets before a release, run **Actions → Test Mac signing → Run workflow** (`.github/workflows/mac-sign-test.yml`). It builds the Apple-chip app, signs and notarizes it, and checks it the way a Mac does on first open (codesign, Gatekeeper, the stapled ticket). Nothing is published.
+
+Making the certificate on a Mac: Keychain Access → Certificate Assistant → Request a Certificate From a Certificate Authority (saved to disk); developer.apple.com → Certificates → + → **Developer ID Application** (G2 Sub-CA), upload the request, download the .cer; import it into the **login** keychain, not iCloud (iCloud gives error -25294): `security import <file>.cer -k ~/Library/Keychains/login.keychain-db`; then My Certificates → right-click the certificate → Export as .p12 with a password; `base64 -i <file>.p12 | pbcopy` for `CSC_LINK`.
+
 macOS builds use the hardened runtime with the entitlements in `build/entitlements.mac.plist`.
 
 ## Before a release
