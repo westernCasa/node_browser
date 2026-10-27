@@ -2126,6 +2126,8 @@ function buildMenu() {
           label: "New Tab",
           accelerator: "CmdOrCtrl+T",
           click: () => {
+            // Sidebar layout: ⌘T opens the CommandBar; the tab opens from there.
+            if (chromeSide) return sendUi("focus-omni", { newTab: true });
             createTab(newTabUrl());
             sendUi("focus-omni");
           },

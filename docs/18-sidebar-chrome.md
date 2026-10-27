@@ -64,7 +64,8 @@ How it is built: one set of controls, two places for them. In Sidebar mode `rend
 | --- | --- |
 | Layout switch | Settings → Tabs → Layout (Top bar or Sidebar), and View → Use Sidebar Layout. Saved (`chromeLayout` in settings). Top bar stays the default. |
 | Window row | Hide sidebar, back, forward, reload, full screen; agent and download buttons when they show. The system's own title bar keeps the traffic lights, so they are not drawn. The row drags the window. |
-| Address | The real address bar in a field, with the shield and zoom. Not yet a button that opens the CommandBar. |
+| Address | The real address bar in a field, with the shield and zoom. Clicking it opens the CommandBar. |
+| CommandBar | ⌘L, the address field or the rail's search button open it on the current address (selected); ⌘T and New tab open it empty in new-tab mode. Over a dimmed picture of the window, like the Menu (the pages are hidden while it is open). Groups: Open tabs (title or address), Trails (switch; start a new trail with what was typed), Ask (ask about this page; run the research agent), Search (search or go to an address; bookmarks and history not open). Selected first: a tab whose title starts with what was typed, else Search or Go to. Keys: ↑↓ move, ↵ open, ⇧↵ new tab, Tab ask, ⌘↵ agent, ⌥↵ new trail, Esc close. Fades in at `motion-base` / `ease-enter`, out at `motion-fast`. The top bar keeps its own address bar. Not yet: trail keywords row, search suggestions from the search engine. |
 | TrailHeader | The current research session's name, pages and keywords (threads). Click: Menu → Trail. |
 | ToolGrid | 8 tiles, 4 × 2. History and Downloads tiles open those Menu sections. Mosaic on and Suggestions open: white border; Sound: all: violet. |
 | Tabs | Vertical list with a monogram, title, sound, close; current tab white border; asleep "zz"; drag to reorder up and down. New tab on top. |
@@ -72,6 +73,6 @@ How it is built: one set of controls, two places for them. In Sidebar mode `rend
 | MediaStrip | Number of tabs playing and the sound mode (SOUND: ONE / ALL, violet for all). |
 | Widths | Full 272 px, rail 68 px, hidden (a 52 px column with the show button). ⌘S hides and shows; right-click the sidebar's empty space or View → Compact or Full Sidebar switches full and rail. ⌘L in the rail or hidden opens the full sidebar with the address bar focused. Remembered per computer. |
 | Full screen | The sidebar stays; the top bar's sliding toolbar is not used. |
-| Not built yet | CommandBar, MosaicGroup, sidebar width by dragging (220–340), trails that keep their own tabs. |
+| Not built yet | MosaicGroup, sidebar width by dragging (220–340), trails that keep their own tabs. |
 
-Test: `test/e2e/33-sidebar-chrome.js` (32 checks), in CI on Linux and Windows.
+Tests: `test/e2e/33-sidebar-chrome.js` (32 checks) and `test/e2e/34-command-bar.js` (25 checks, CommandBar, PR #21), in CI on Linux and Windows.

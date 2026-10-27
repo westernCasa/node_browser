@@ -2549,7 +2549,7 @@ if (api) {
       return renderAgent();
     }
     if (msg.cmd === "focus-omni") {
-      if (typeof sideNeedsAddress === "function") sideNeedsAddress();
+      if (typeof chromeLayout !== "undefined" && chromeLayout === "side") return openCommandBar({ newTab: Boolean(msg.newTab) });
       omni.focus();
       omni.select();
     } else if (msg.cmd === "bookmark-toggle") {
@@ -3736,11 +3736,7 @@ function sideNeedsAddress() {
 
 document.getElementById("sb-hide").addEventListener("click", toggleSidebar);
 document.getElementById("sb-show").addEventListener("click", toggleSidebar);
-document.getElementById("sb-search").addEventListener("click", () => {
-  sideNeedsAddress();
-  omni.focus();
-  omni.select();
-});
+document.getElementById("sb-search").addEventListener("click", () => openCommandBar());
 document.getElementById("sb-history-btn").addEventListener("click", () => openMenu("history"));
 document.getElementById("sb-downloads-btn").addEventListener("click", () => openMenu("downloads"));
 document.getElementById("sb-trail-name").addEventListener("click", () => openMenu("trail"));
@@ -3785,10 +3781,12 @@ function paintSide(fetch = true) {
   // The list is read again every few seconds, so it has a rename made in the
   // Menu; the session object has the keywords.
   const s = typeof session !== "undefined" ? session : null;
-  const cur = sideTrails.find((t) => t.current && (!s || t.id === s.id));
+  const cur = sideTrails.find((t) => t.current);
+  const same = s && (!cur || cur.id === s.id);
+  if (s && cur && !same && api?.researchGet) api.researchGet().then((fresh) => fresh?.id === cur.id && adoptSession(fresh)); // switched elsewhere
   document.getElementById("sb-trail-name").textContent = cur?.name || s?.name || "Trail";
   const pages = cur ? cur.pages : (s?.trail || []).length;
-  document.getElementById("sb-trail-meta").textContent = s ? `${pages} ${pages === 1 ? "PAGE" : "PAGES"} · ${(s.threads || []).length} KW` : "";
+  document.getElementById("sb-trail-meta").textContent = `${pages} ${pages === 1 ? "PAGE" : "PAGES"}${same ? ` · ${(s.threads || []).length} KW` : ""}`;
   // Active trails
   const open = store.get("node.sideTrailsOpen", true);
   const head = document.getElementById("sb-trails-toggle");
@@ -3843,3 +3841,270 @@ layoutSelect?.addEventListener("change", async () => {
   await api?.setSettings?.({ chromeLayout: layoutSelect.value });
   applyChromeLayout(layoutSelect.value);
 });
+
+// ---- CommandBar (sidebar layout, docs/18-sidebar-chrome.md) ----
+// ⌘L (or the address field) opens it on the current address; ⌘T and New tab
+// open it empty and Enter opens a new tab. Groups: Open tabs, Trails, Ask,
+// Search. Keys: ↑↓ move, ↵ open, ⇧↵ new tab, Tab ask, ⌘↵ agent, ⌥↵ new trail.
+var cmdOpen = false;
+var cmdNewTab = false;
+var cmdRows = [];
+var cmdSel = 0;
+var cmdSeq = 0;
+var cmdReturn = null;
+const cmdEl = document.getElementById("cmdbar");
+const cmdInput = document.getElementById("cmd-input");
+const cmdList = document.getElementById("cmd-list");
+
+const looksLikeAddress = (q) => /^[a-z][a-z0-9+.-]*:\/\//i.test(q) || /^(localhost|[\w-]+(\.[\w-]+)+)(:\d+)?(\/\S*)?$/i.test(q);
+const cmdWords = (q) => q.toLowerCase().split(/\s+/).filter(Boolean);
+const cmdMatch = (words, ...fields) => {
+  const hay = fields.join(" ").toLowerCase();
+  return words.every((w) => hay.includes(w));
+};
+// The words typed, in bold, in a title.
+function cmdBold(text, words) {
+  let html = escapeHtml(text);
+  for (const w of words.filter((w) => w.length > 1).slice(0, 4)) html = html.replace(new RegExp(`(${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "ig"), "<strong>$1</strong>");
+  return html;
+}
+
+async function openCommandBar({ newTab = false, text = null } = {}) {
+  if (chromeLayout !== "side" || !api) return false;
+  if (menuOpen) await closeMenu();
+  cmdNewTab = newTab;
+  document.getElementById("cmd-mode").hidden = !newTab;
+  const current = tabs.find((t) => t.id === activeId);
+  const value = text != null ? text : newTab ? "" : current && !/^about:|^file:/.test(current.url || "") ? current.url || "" : "";
+  if (!cmdOpen) {
+    cmdOpen = true;
+    cmdSeq++;
+    const active = document.activeElement;
+    cmdReturn = active && active !== omni && !cmdEl.contains(active) ? active : null;
+    cmdEl.hidden = false;
+    const r = await api.setLibraryOpen?.(true, { snapshot: true });
+    const shots = document.getElementById("cmd-shots");
+    shots.innerHTML = "";
+    for (const shot of r?.shots || []) {
+      const img = document.createElement("img");
+      img.alt = "";
+      img.src = shot.src;
+      Object.assign(img.style, { left: `${shot.rect.x}px`, top: `${shot.rect.y}px`, width: `${shot.rect.width}px`, height: `${shot.rect.height}px` });
+      shots.appendChild(img);
+    }
+    if (!cmdOpen) return true;
+    void cmdEl.offsetWidth;
+    cmdEl.classList.add("open");
+  }
+  cmdInput.value = value;
+  cmdInput.focus();
+  cmdInput.select();
+  refreshSideTrails(true);
+  await renderCommands();
+  return true;
+}
+
+async function closeCommandBar() {
+  if (!cmdOpen) return;
+  cmdOpen = false;
+  const seq = ++cmdSeq;
+  cmdEl.classList.remove("open");
+  if (cmdReturn?.isConnected) cmdReturn.focus();
+  else document.activeElement?.blur?.();
+  await new Promise((r) => setTimeout(r, motionMs("--motion-fast")));
+  if (seq !== cmdSeq) return;
+  if (!menuOpen) await api?.setLibraryOpen?.(false);
+  if (seq !== cmdSeq) return;
+  cmdEl.hidden = true;
+  document.getElementById("cmd-shots").innerHTML = "";
+}
+
+async function renderCommands() {
+  const seq = ++cmdSeq;
+  const q = cmdInput.value.trim();
+  const words = cmdWords(q);
+  const rows = [];
+  const add = (group, row) => rows.push({ group, ...row });
+  // Open tabs
+  const open = tabs.filter((t) => !words.length || cmdMatch(words, t.title || "", t.url || "")).slice(0, words.length ? 5 : 6);
+  for (const t of open)
+    add("Open tabs", {
+      id: `tab-${t.id}`,
+      mono: monogram(t.title, t.url),
+      html: cmdBold(t.title || t.url || "New tab", words),
+      key: t.audible && !t.muted ? "Playing" : t.sleeping ? "Asleep" : t.id === activeId ? "Current" : "Switch ↵",
+      live: t.audible && !t.muted,
+      run: () => api.activateTab(t.id),
+      strong: words.length && (t.title || "").toLowerCase().startsWith(q.toLowerCase()),
+    });
+  // Trails
+  const trails = sideTrails.filter((t) => !words.length || cmdMatch(words, t.name)).slice(0, words.length ? 3 : 4);
+  for (const t of trails)
+    add("Trails", {
+      id: `trail-${t.id}`,
+      icon: "trail",
+      html: cmdBold(t.name, words),
+      key: `${t.pages} ${t.pages === 1 ? "page" : "pages"}${t.current ? " · current" : " · switch trail"}`,
+      run: async () => {
+        if (!t.current) adoptSession(await api.researchSwitch(t.id));
+        refreshSideTrails(true);
+      },
+    });
+  if (q)
+    add("Trails", {
+      id: "trail-new",
+      icon: "plus",
+      html: `Start a new trail “${escapeHtml(q)}”`,
+      key: "⌥↵",
+      run: () => cmdNewTrail(q),
+    });
+  // Ask
+  if (q && !looksLikeAddress(q)) {
+    add("Ask", { id: "ask", icon: "ask", html: `Ask about this page: ${escapeHtml(q)}`, key: "Tab", run: () => cmdAsk(q) });
+    add("Ask", { id: "agent", icon: "agent", html: `Run the research agent on “${escapeHtml(q)}”`, key: "⌘↵", run: () => cmdAgent(q) });
+  }
+  // Search and go
+  if (q) {
+    const addr = looksLikeAddress(q);
+    add("Search", { id: "go", icon: addr ? "go" : "search", html: addr ? `Go to ${escapeHtml(q)}` : `Search for “${escapeHtml(q)}”`, key: addr ? "Open ↵" : "Brave", run: (newTab) => cmdGo(q, newTab), primary: true });
+  }
+  if (q && api.historySearch) {
+    const marks = api.bookmarkSearch ? await api.bookmarkSearch(q, 3) : [];
+    const hist = await api.historySearch(q, 6);
+    if (seq !== cmdSeq) return; // typed again meanwhile
+    const seen = new Set(tabs.map((t) => t.url));
+    for (const r of [...marks.map((m) => ({ ...m, star: true })), ...hist]) {
+      if (seen.has(r.url) || rows.filter((x) => x.group === "Search").length >= 6) continue;
+      seen.add(r.url);
+      let host = "";
+      try {
+        host = new URL(r.url).hostname.replace(/^www\./, "");
+      } catch {}
+      add("Search", { id: `url-${r.url}`, mono: monogram(r.title, r.url), html: `${cmdBold(r.title || r.url, words)}<span class="u">${escapeHtml(host)}</span>`, key: r.star ? "Bookmark" : "History", run: (newTab) => cmdGo(r.url, newTab) });
+    }
+  }
+  if (seq !== cmdSeq) return;
+  cmdRows = rows;
+  // Selected first: a tab whose title starts with what was typed, else the
+  // search or address row, else the first row.
+  const strong = rows.findIndex((r) => r.strong);
+  const primary = rows.findIndex((r) => r.primary);
+  cmdSel = strong >= 0 ? strong : primary >= 0 ? primary : 0;
+  paintCommands();
+}
+
+function paintCommands() {
+  cmdList.innerHTML = "";
+  let group = "";
+  cmdRows.forEach((r, i) => {
+    if (r.group !== group) {
+      group = r.group;
+      const h = document.createElement("div");
+      h.className = "cmd-group";
+      h.textContent = group;
+      h.setAttribute("role", "presentation");
+      cmdList.appendChild(h);
+    }
+    const el = document.createElement("div");
+    el.className = "cmd-row";
+    el.id = `cmd-row-${i}`;
+    el.setAttribute("role", "option");
+    el.setAttribute("aria-selected", String(i === cmdSel));
+    el.innerHTML = `${r.mono ? `<span class="mono" aria-hidden="true">${escapeHtml(r.mono)}</span>` : icon(r.icon || "tab")}<span class="t">${r.html}</span><span class="k${r.live ? " live" : ""}">${escapeHtml(r.key || "")}</span>`;
+    el.addEventListener("mousedown", (e) => e.preventDefault()); // keep the cursor in the field
+    el.addEventListener("click", (e) => runCommand(i, { newTab: e.shiftKey || e.metaKey || e.ctrlKey }));
+    cmdList.appendChild(el);
+  });
+  if (!cmdRows.length) {
+    const p = document.createElement("div");
+    p.className = "cmd-empty";
+    p.textContent = "Type an address, words to search for, or a question about this page.";
+    cmdList.appendChild(p);
+  }
+  cmdInput.setAttribute("aria-activedescendant", cmdRows.length ? `cmd-row-${cmdSel}` : "");
+  document.getElementById(`cmd-row-${cmdSel}`)?.scrollIntoView({ block: "nearest" });
+}
+
+async function runCommand(i, { newTab = false } = {}) {
+  const r = cmdRows[i];
+  if (!r) {
+    // Nothing typed in new-tab mode: a new tab with the start page.
+    if (cmdNewTab && !cmdInput.value.trim()) {
+      await closeCommandBar();
+      api.createTab("");
+    }
+    return;
+  }
+  await closeCommandBar();
+  await r.run(newTab || cmdNewTab);
+}
+async function cmdGo(q, newTab) {
+  if (newTab || !activeId) await api.createTab(q);
+  else await api.navigate(activeId, q);
+}
+async function cmdAsk(q) {
+  setPanelOpen(true, { animate: true });
+  await openAsk();
+  sendAsk(q);
+}
+function cmdAgent(q) {
+  setPanelOpen(true, { animate: true });
+  showPane("agent");
+  const input = document.getElementById("agent-input");
+  input.value = q;
+  document.getElementById("agent-form").requestSubmit();
+}
+async function cmdNewTrail(q) {
+  adoptSession(await api.researchNew(q));
+  await refreshSideTrails(true);
+}
+
+let cmdTimer = null;
+cmdInput.addEventListener("input", () => {
+  clearTimeout(cmdTimer);
+  cmdTimer = setTimeout(renderCommands, 80);
+});
+cmdInput.addEventListener("keydown", (e) => {
+  const q = cmdInput.value.trim();
+  if (e.key === "Escape") {
+    e.preventDefault();
+    e.stopPropagation();
+    closeCommandBar();
+  } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    e.preventDefault();
+    if (!cmdRows.length) return;
+    cmdSel = (cmdSel + (e.key === "ArrowDown" ? 1 : -1) + cmdRows.length) % cmdRows.length;
+    paintCommands();
+  } else if (e.key === "Enter") {
+    e.preventDefault();
+    clearTimeout(cmdTimer);
+    const pick = (id) => cmdRows.findIndex((r) => r.id === id);
+    if ((e.metaKey || e.ctrlKey) && q) return runCommand(pick("agent"));
+    if (e.altKey && q) return runCommand(pick("trail-new"));
+    runCommand(cmdSel, { newTab: e.shiftKey });
+  } else if (e.key === "Tab" && !e.shiftKey && q && !looksLikeAddress(q)) {
+    e.preventDefault();
+    runCommand(cmdRows.findIndex((r) => r.id === "ask"));
+  } else if (e.key === "Tab") {
+    e.preventDefault(); // focus stays in the field
+  }
+});
+document.getElementById("cmd-scrim").addEventListener("click", closeCommandBar);
+
+// Ways in, in the sidebar layout: the address field, the rail's search
+// button, ⌘L (focus-omni), ⌘T and New tab.
+omni.addEventListener("focus", () => {
+  if (chromeLayout === "side" && !cmdOpen) {
+    omni.blur();
+    openCommandBar();
+  }
+});
+document.getElementById("new-tab").addEventListener(
+  "click",
+  (e) => {
+    if (chromeLayout !== "side") return;
+    e.stopImmediatePropagation();
+    openCommandBar({ newTab: true });
+  },
+  true
+);

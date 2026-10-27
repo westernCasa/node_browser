@@ -1170,3 +1170,35 @@ body.sb-rail .sb-trail-row .mono { display: inline; font: 11px/1 var(--mono); }
   .sb-tools .tb, .sb-trails-head .chev { transition-duration: var(--motion-fast); }
   .sb-trails-head .chev { transition-property: opacity; }
 }
+
+/* ---- CommandBar (sidebar layout, docs/18-sidebar-chrome.md) ----
+   Over a dimmed picture of the window (the pages are native views drawn
+   above this HTML, so they are hidden while it is open, as for the Menu).
+   Fades in with --motion-base / --ease-enter and out faster. */
+.cmdbar { position: fixed; inset: 0; z-index: 30; }
+.cmdbar[hidden] { display: none; }
+.cmd-shots img { position: absolute; display: block; }
+.cmd-scrim { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.78); }
+.cmd-panel { position: absolute; left: 50%; top: 120px; width: min(680px, calc(100vw - 32px)); max-height: calc(100vh - 160px); transform: translateX(-50%); display: flex; flex-direction: column; background: var(--surface-raised); border: 1px solid var(--line); }
+.cmdbar .cmd-scrim, .cmdbar .cmd-panel { opacity: 0; transition: opacity var(--motion-fast) var(--ease-exit); }
+.cmdbar.open .cmd-scrim, .cmdbar.open .cmd-panel { opacity: 1; transition: opacity var(--motion-base) var(--ease-enter); }
+.cmd-field { height: 64px; flex: none; box-sizing: border-box; display: flex; align-items: center; gap: 12px; padding: 0 20px; border-bottom: 1px solid var(--line); color: var(--ink-muted); }
+.cmd-field .ic { width: 20px; height: 20px; flex: none; }
+#cmd-input { flex: 1 1 auto; min-width: 0; height: 40px; background: transparent; border: 0; outline: none; box-shadow: none; padding: 0; color: var(--ink); font: 20px/28px var(--sans); }
+#cmd-input::placeholder { color: var(--ink-muted); }
+.cmd-mode { height: 28px; display: inline-flex; align-items: center; padding: 0 8px; border: 1px solid var(--line); border-radius: var(--radius-sm); font: 600 12px/16px var(--sans); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-muted); }
+.cmd-list { overflow-y: auto; padding-bottom: 8px; }
+.cmd-group { padding: 16px 20px 4px; font: 600 12px/16px var(--sans); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-muted); }
+.cmd-row { margin: 0 8px; min-height: 44px; box-sizing: border-box; display: flex; align-items: center; gap: 12px; padding: 0 12px; border: 1px solid transparent; border-radius: var(--radius-sm); cursor: pointer; color: var(--ink); }
+.cmd-row:hover { background: var(--surface); }
+.cmd-row[aria-selected="true"] { background: var(--surface); border-color: var(--ink); }
+.cmd-row .ic { width: 20px; height: 20px; flex: none; color: var(--ink-muted); }
+.cmd-row .mono { width: 20px; height: 20px; flex: none; box-sizing: border-box; display: flex; align-items: center; justify-content: center; border: 1px solid var(--line); border-radius: var(--radius-sm); font: 9px/1 var(--mono); }
+.cmd-row .t { flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 14px; line-height: 20px; }
+.cmd-row .t strong { font-weight: 600; }
+.cmd-row .u { color: var(--ink-muted); font: 12px/16px var(--mono); margin-left: 8px; }
+.cmd-row .k { flex: none; font: 12px/16px var(--mono); color: var(--ink-muted); text-transform: uppercase; }
+.cmd-row .k.live { color: var(--live); }
+.cmd-empty { padding: 16px 20px; color: var(--ink-muted); font-size: 14px; }
+.cmd-keys { height: 40px; flex: none; box-sizing: border-box; display: flex; align-items: center; gap: 20px; padding: 0 20px; border-top: 1px solid var(--line); font: 12px/16px var(--mono); color: var(--ink-muted); text-transform: uppercase; }
+@media (max-width: 760px) { .cmd-keys span:nth-child(n+4):not(:last-child) { display: none; } }

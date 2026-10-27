@@ -49,6 +49,8 @@
     <symbol id="i-agent" viewBox="0 0 20 20"><circle cx="5" cy="10" r="2"/><circle cx="15" cy="5" r="2"/><circle cx="15" cy="15" r="2"/><path d="M6.8 9.1l6.4-3.2M6.8 10.9l6.4 3.2"/></symbol>
     <symbol id="i-sidebar" viewBox="0 0 20 20"><rect x="3" y="4" width="14" height="12"/><path d="M8 4v12"/></symbol>
     <symbol id="i-search" viewBox="0 0 20 20"><circle cx="9" cy="9" r="5"/><path d="m13 13 4 4"/></symbol>
+    <symbol id="i-tab" viewBox="0 0 20 20"><rect x="3" y="5" width="14" height="11"/><path d="M3 8h14"/></symbol>
+    <symbol id="i-go" viewBox="0 0 20 20"><path d="M4 10h11M11 6l4 4-4 4"/></symbol>
     <symbol id="i-talk" viewBox="0 0 20 20"><path d="M2.5 3.5h10v7h-6l-3 2.5v-2.5h-1z"/><path d="M15 7h2.5v7h-1v2.5l-3-2.5h-5v-1.5"/></symbol>
   </svg>
   <div class="shell">
@@ -84,6 +86,21 @@
     </nav>
     <div class="sb-show" id="sb-show-wrap" hidden><button class="tb" id="sb-show" data-tip="Show sidebar" data-keys="mod+S" aria-label="Show sidebar" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="#i-sidebar"/></svg></button></div>
     <div class="page-frame" id="page-frame" hidden aria-hidden="true"></div>
+    <!-- CommandBar (sidebar layout): go, search, switch tabs and trails, ask.
+         Drawn over a dimmed picture of the window, like the Menu. -->
+    <div class="cmdbar" id="cmdbar" hidden>
+      <div class="cmd-shots" id="cmd-shots" aria-hidden="true"></div>
+      <div class="cmd-scrim" id="cmd-scrim"></div>
+      <div class="cmd-panel" role="dialog" aria-modal="true" aria-label="Go to, search or ask">
+        <div class="cmd-field">
+          <svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>
+          <input id="cmd-input" type="text" spellcheck="false" autocomplete="off" role="combobox" aria-expanded="true" aria-controls="cmd-list" aria-autocomplete="list" aria-label="Address, search or question" placeholder="Search, enter an address, or ask" />
+          <span class="cmd-mode" id="cmd-mode" hidden>New tab</span>
+        </div>
+        <div class="cmd-list" id="cmd-list" role="listbox" aria-label="Results"></div>
+        <div class="cmd-keys" aria-hidden="true"><span>↑↓ Move</span><span>↵ Open</span><span>⇧↵ New tab</span><span>Tab Ask</span><span>⌘↵ Agent</span><span class="sb-grow"></span><span>Esc</span></div>
+      </div>
+    </div>
     <header class="chrome">
       <div class="tabrow">
         <svg class="brand" viewBox="0 0 24 24" aria-label="NODE" role="img"><defs><linearGradient id="brand-g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#c4b5fd"/><stop offset="0.55" stop-color="#8b5cf6"/><stop offset="1" stop-color="#6d28d9"/></linearGradient></defs><g transform="matrix(1.20193,0,0,1.20193,-1.2237,-2.42319)"><path fill="url(#brand-g)" d="M10.004,12.998L1.067,12.998C1.035,12.67 1.018,12.337 1.018,12C1.018,11.663 1.035,11.33 1.067,11.002L8.593,11.002L3.273,5.682C3.696,5.166 4.169,4.693 4.684,4.271L10.004,9.591L10.004,2.065C10.332,2.033 10.665,2.016 11.002,2.016C11.339,2.016 11.672,2.033 12,2.065L12,11.002L20.937,11.002C20.969,11.33 20.986,11.663 20.986,12C20.986,12.337 20.969,12.67 20.937,12.998L13.411,12.998L18.731,18.318C18.309,18.834 17.836,19.307 17.32,19.729L12,14.409L12,21.935C11.672,21.967 11.339,21.984 11.002,21.984C10.665,21.984 10.332,21.967 10.004,21.935L10.004,12.998Z"/></g></svg>

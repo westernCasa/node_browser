@@ -85,8 +85,12 @@ const inSidebar = (ui, sel) => ui.evaluate((s) => Boolean(document.querySelector
   check("the rail shows 5 tools", (await ui.$$eval(".sb-tools .tb", (b) => b.filter((x) => x.offsetParent).length)) === 5);
   check("the rail hides tab titles", await ui.$eval("#sidebar .tab > span:not(.mono)", (s) => getComputedStyle(s).display === "none"));
   await app.evaluate(({ Menu }) => Menu.getApplicationMenu().items.flatMap((m) => m.submenu?.items || []).find((i) => i.label === "Open Location").click());
+  await sleep(700);
+  check("⌘L in the rail opens the CommandBar", (await ui.evaluate(() => cmdOpen)) && (await ui.evaluate(() => document.activeElement?.id)) === "cmd-input");
+  await ui.keyboard.press("Escape");
+  await sleep(500);
+  await menuClick(app, "sidebar-rail");
   await sleep(600);
-  check("⌘L in the rail opens the full sidebar with the address bar focused", (await view(app)).x === 273 && (await ui.evaluate(() => document.activeElement?.id)) === "omni");
 
   // Trails and media.
   await ui.evaluate(() => window.scout.researchNew("Second trail"));
