@@ -52,7 +52,8 @@ async function launch() {
   const summary = await ui.evaluate(() => window.scout.copyUsage());
   console.log(summary.split("\n").map((l) => "    " + l).join("\n"));
   const n = (label) => Number((summary.match(new RegExp(label + ": (\\d+)")) || [])[1] || 0);
-  check("summary counts days, version and system", /Days used: 1 /.test(summary) && /Version \d+\.\d+\.\d+ · (Linux|Windows|macOS) /.test(summary));
+  // 1 day, or 2 when the run crosses midnight (it did on CI on Oct 27).
+  check("summary counts days, version and system", /Days used: [12] /.test(summary) && /Version \d+\.\d+\.\d+ · (Linux|Windows|macOS) /.test(summary));
   check("suggestions shown and opened are counted", n("Suggestions shown") >= 3 && /opened: [1-9]/.test(summary), `${n("Suggestions shown")} shown`);
   check("pins and hides are counted", n("Keywords pinned") === 1 && /hidden: 1/.test(summary));
   check("trail pages are counted", n("Trail pages") >= 2, String(n("Trail pages")));
@@ -80,7 +81,7 @@ async function launch() {
   ({ app, ui } = await launch());
   await sleep(8500);
   const notice = await ui.evaluate(() => { const e = document.getElementById("notice"); return { shown: !e.hidden, text: e.textContent, buttons: [...e.querySelectorAll("button")].map((b) => b.textContent) }; });
-  check("survey prompt after 3 days of use", notice.shown && /3 days/.test(notice.text) && /survey/i.test(notice.text), notice.text.slice(0, 80));
+  check("survey prompt after 3 days of use", notice.shown && /\b[34] days/.test(notice.text) && /survey/i.test(notice.text), notice.text.slice(0, 80));
   check("prompt choices: Take survey, Later, Don't ask again", notice.buttons.join("|") === "Take survey|Later|Don't ask again", notice.buttons.join("|"));
   await ui.click("#notice button:has-text('Later')");
   await sleep(500);
