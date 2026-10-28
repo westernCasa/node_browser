@@ -98,6 +98,25 @@ class ResearchStore {
     return this.current;
   }
 
+  // Makes a session built elsewhere (a shared trail) the current one.
+  adopt(session) {
+    if (this.current) this.saveNow();
+    this.current = { ...blank(session.name), ...session, id: session.id || newId() };
+    prune(this.current);
+    this.saveNow();
+    return this.current;
+  }
+
+  // Saves a session that is not the current one (or the current one).
+  write(session) {
+    if (session.id === this.current.id) {
+      this.current = session;
+      return this.saveNow();
+    }
+    session.updated = Date.now();
+    this.storage.write(this.file(session.id), JSON.stringify(session, null, 2));
+  }
+
   list() {
     const out = [];
     for (const f of this.storage.list()) {

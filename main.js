@@ -55,6 +55,7 @@ const { createUpdater, RELEASES } = require("./updater");
 const { runResearch } = require("./core/agent");
 const Talk = require("./core/talk");
 const TrailFile = require("./core/trail-file");
+const TrailApply = require("./core/trail-apply");
 let research = null; // current research session store (B17), created when the app is ready
 
 const HOME_URL = "https://en.wikipedia.org/wiki/Main_Page";
@@ -834,6 +835,18 @@ function attachListeners(tab) {
   };
   on("will-navigate", (e) => {
     if (e.isMainFrame === false) return;
+    // A trail file dropped on a page opens the shared-trail preview instead.
+    if (/^file:/i.test(e.url)) {
+      let file = "";
+      try {
+        file = require("url").fileURLToPath(e.url);
+      } catch (_) {}
+      if (file && isTrailPath(file)) {
+        e.preventDefault();
+        openSharedTrail(file);
+        return;
+      }
+    }
     // The × on a start-page tile: forget that page and show the start page again.
     if (isStartPage(e.url)) {
       let gone = "";
@@ -2188,6 +2201,7 @@ function buildMenu() {
         { label: "Bookmarks", accelerator: "CmdOrCtrl+Shift+B", click: () => sendUi("open-bookmarks") },
         { type: "separator" },
         { label: "Share Trail…", click: () => sendUi("share-trail") },
+        { label: "Open Shared Trail…", click: () => chooseSharedTrail() },
         { type: "separator" },
         { label: "Screenshot Tab", accelerator: "CmdOrCtrl+Shift+S", click: () => runShotFromMain(activeId) },
         { label: "Print…", accelerator: "CmdOrCtrl+P", click: () => activeWc()?.print({}, () => {}) },
@@ -2390,8 +2404,49 @@ function createWindow() {
   win.webContents.on("render-process-gone", (_e, d) => log().error(`interface stopped: ${d.reason}`));
   win.webContents.on("did-finish-load", () => {
     if (!tabs.size && !restoreSession()) createTab(newTabUrl());
+    // Trail files opened from Finder or Explorer before the window was ready.
+    uiReady = true;
+    setTimeout(() => outsideFiles.splice(0).forEach(openFromOutside), 600);
   });
 }
+
+// ---- Trail files from outside NODE (B82 step 6) ----
+// Open With in Finder (macOS), a .md path on the command line (Windows "Open
+// with", Linux), a file dropped on the window or on a page. A trail file opens
+// the shared-trail preview; any other Markdown file opens in a tab to read.
+let uiReady = false;
+const outsideFiles = [];
+const looksLikeMd = (f) => /\.(md|markdown)$/i.test(f || "");
+function isTrailPath(file) {
+  try {
+    if (!looksLikeMd(file) || fs.statSync(file).size > SHARED_MAX) return false;
+    const fd = fs.openSync(file, "r");
+    const buf = Buffer.alloc(200);
+    fs.readSync(fd, buf, 0, 200, 0);
+    fs.closeSync(fd);
+    return TrailFile.isTrailFile(buf.toString("utf8"));
+  } catch (_) {
+    return false;
+  }
+}
+function openFromOutside(file) {
+  if (!uiReady || !win) return outsideFiles.push(file);
+  if (win.isMinimized()) win.restore();
+  win.focus();
+  if (isTrailPath(file)) return openSharedTrail(file);
+  if (fs.existsSync(file)) createTab(require("url").pathToFileURL(file).toString());
+}
+app.on("open-file", (e, file) => {
+  e.preventDefault();
+  openFromOutside(file);
+});
+for (const arg of process.argv.slice(1)) if (looksLikeMd(arg) && path.isAbsolute(arg) && fs.existsSync(arg)) outsideFiles.push(arg);
+ipcMain.handle("trail:dropped", (_e, file) => {
+  const f = String(file || "");
+  if (!path.isAbsolute(f) || !looksLikeMd(f)) return { ok: false, error: "Drop a .trail.md file to open a shared trail." };
+  if (!isTrailPath(f)) return { ok: false, error: `${path.basename(f)} is not a NODE trail file.` };
+  return openSharedTrail(f);
+});
 
 protocol.registerSchemesAsPrivileged([
   { scheme: "scoutlib", privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, bypassCSP: true } },
@@ -2477,6 +2532,7 @@ app.whenReady().then(() => {
   global.nodeTest = {
   claudeDesktopEntry, sleepIdleTabs,
   setTrailSavePath: (p) => (trailSavePath = p),
+  openSharedTrail, openFromOutside,
   setPasswordAsk: (answer) => (passwordAsk = async (opts) => ((global.nodeTest.lastPasswordAsk = opts), answer)),
   loginMenu: (id) => loginMenuItems(tabs.get(id)).map((i) => i.label),
   setPasswordAuth: (answer) => ((passwordAuth = async () => answer), (passwordAuthUntil = 0)),
@@ -3425,8 +3481,8 @@ ipcMain.handle("threads:remove", (_e, id) => research.removeThread(String(id)) &
 ipcMain.handle("threads:suggestions", () => research.threadSuggestions());
 // ---- Sharing a trail as a file (B82 step 4, docs/19-trail-sharing.md) ----
 // Reports are read from the Library; a missing file is left out.
-function trailReports() {
-  return (research.current.reports || [])
+function trailReports(session = research.current) {
+  return (session.reports || [])
     .map((r) => {
       let text = "";
       try {
@@ -3434,7 +3490,7 @@ function trailReports() {
       } catch (_) {
         return null;
       }
-      return { id: TrailFile.hashId("report", r.file, r.at), title: r.question || "Report", by: "NODE research agent", at: r.at, text };
+      return { id: r.id || TrailFile.hashId("report", r.file, r.at), title: r.question || "Report", by: r.by || "NODE research agent", at: r.at, text };
     })
     .filter(Boolean);
 }
@@ -3491,6 +3547,89 @@ ipcMain.handle("trail:share-save", async (_e, opts = {}) => {
   usage().count("trailsShared");
   return { ok: true, file, name: path.basename(file) };
 });
+// ---- Opening a shared trail (B82 step 5) ----
+// The file is read and checked; the Trail section shows a preview, then Open
+// as New Trail or Merge Into one of yours. Nothing is changed until then.
+let sharedTrail = null; // { file, trail }
+const SHARED_MAX = 5 * 1024 * 1024;
+function sharedPreview() {
+  const t = sharedTrail.trail;
+  const count = (l) => (l || []).reduce((n, r) => n + 1 + count(r.replies), 0);
+  return {
+    file: path.basename(sharedTrail.file),
+    name: t.name,
+    from: t.exportedBy,
+    at: t.exportedAt,
+    pages: t.pages.length,
+    threads: t.threads.length,
+    replies: t.threads.reduce((n, x) => n + count(x.replies), 0),
+    notes: t.pages.reduce((n, p) => n + (p.notes || []).length, 0),
+    reports: t.reports.length,
+    tabs: t.tabs.length,
+    extra: t.extra.length,
+    trails: research.list().map((x) => ({ id: x.id, name: x.name, pages: x.current ? research.current.trail.length : x.pages, current: x.current, shared: (research.read(x.id)?.sharedId || "") === t.id && Boolean(t.id) })),
+  };
+}
+function openSharedTrail(file) {
+  let text = "";
+  try {
+    if (fs.statSync(file).size > SHARED_MAX) throw new Error("The file is too large for a trail (over 5 MB).");
+    text = fs.readFileSync(file, "utf8");
+    sharedTrail = { file, trail: TrailFile.fromMarkdown(text) };
+  } catch (err) {
+    sharedTrail = null;
+    sendUi("shared-trail", { payload: { error: `${path.basename(file)}: ${err.message}` } });
+    return { ok: false, error: err.message };
+  }
+  sendUi("shared-trail", { payload: sharedPreview() });
+  return { ok: true };
+}
+async function chooseSharedTrail() {
+  const r = await dialog.showOpenDialog(win, { title: "Open Shared Trail", properties: ["openFile"], filters: [{ name: "NODE trail", extensions: ["md"] }] });
+  if (!r.canceled && r.filePaths[0]) openSharedTrail(r.filePaths[0]);
+}
+// Reports from a shared trail are saved in the Library like the agent's.
+let sharedReportN = 0;
+function saveSharedReports(session, reports) {
+  for (const r of reports) {
+    const file = stamp(`shared-report-${++sharedReportN}`, "md");
+    fs.writeFileSync(path.join(libraryRoot(), "saves", file), `# ${r.title}\n\n${r.text}\n`);
+    addRecord("saves", file, "", `Shared report: ${r.title}`);
+    (session.reports = session.reports || []).push({ id: r.id, at: r.at || Date.now(), question: r.title, file, sources: [], by: r.by || "" });
+  }
+}
+const sharedBase = (session) => TrailFile.fromSession(session, { by: loadSettings().displayName || "", reports: trailReports(session) });
+ipcMain.handle("trail:shared-choose", () => chooseSharedTrail());
+ipcMain.handle("trail:shared-preview", () => (sharedTrail ? sharedPreview() : null));
+ipcMain.handle("trail:shared-plan", (_e, id) => {
+  const target = sharedTrail && research.read(String(id));
+  return target ? TrailFile.mergePlan(sharedBase(target), sharedTrail.trail) : null;
+});
+ipcMain.handle("trail:shared-open", (_e, opts = {}) => {
+  if (!sharedTrail) return { ok: false, error: "No shared trail is open." };
+  const { trail } = sharedTrail;
+  const { session, reports } = TrailApply.sessionFromTrail(trail, {});
+  saveSharedReports(session, reports);
+  changeTrail(() => research.adopt(session));
+  if (opts.tabs) for (const u of trail.tabs.slice(0, 20)) createTab(u, { background: true, sleeping: true });
+  sharedTrail = null;
+  usage().count("sessions");
+  return { ok: true, snapshot: research.snapshot() };
+});
+ipcMain.handle("trail:shared-merge", (_e, id, answers = {}) => {
+  if (!sharedTrail) return { ok: false, error: "No shared trail is open." };
+  const target = research.read(String(id));
+  if (!target) return { ok: false, error: "That trail could not be read." };
+  const base = sharedBase(target);
+  const merged = TrailFile.merge(base, sharedTrail.trail, answers);
+  const { reports, counts } = TrailApply.applyMerged(target, merged, sharedTrail.trail, { baseReportIds: base.reports.map((r) => r.id) });
+  saveSharedReports(target, reports);
+  research.write(target);
+  changeTrail(() => research.switchTo(target.id));
+  sharedTrail = null;
+  return { ok: true, counts, snapshot: research.snapshot() };
+});
+ipcMain.handle("trail:shared-close", () => (sharedTrail = null));
 ipcMain.handle("trail:show-file", (_e, file) => file && fs.existsSync(file) && shell.showItemInFolder(file));
 ipcMain.handle("notes:add", (_e, url, text) => research.addNote(String(url), { text, by: authorName() }) && research.snapshot());
 ipcMain.handle("notes:remove", (_e, url, id) => research.removeNote(String(url), String(id)) && research.snapshot());

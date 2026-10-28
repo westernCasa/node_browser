@@ -1273,3 +1273,11 @@ body.sb-rail .sb-resize, body.sb-rail .sb-mosaic { display: none; }
 .share-pages { list-style: none; margin: 0; padding: 0; max-height: 240px; overflow: auto; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .share-pages li { padding: 3px 0; font-size: 12px; overflow-wrap: anywhere; }
 .share-pages .when { color: var(--mute); }
+.shared-title { font-weight: 600; margin: 0; overflow-wrap: anywhere; }
+.shared-choice { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 6px 0; border-top: 1px solid var(--line); }
+.shared-choice .field { width: 100%; }
+.share-sheet .field, .name-ask .field { display: block; width: 100%; margin-top: 6px; }
+.share-sheet .field span, .name-ask .field span { display: block; color: var(--mute); font-size: 11px; margin-bottom: 2px; }
+.share-sheet .field select { width: 100%; height: 26px; border: 1px solid var(--line); background: var(--bg-2); color: var(--text); border-radius: var(--radius-sm); font: 12px/1 inherit; }
+.name-ask .field input { width: 100%; box-sizing: border-box; }
+#shared-questions { width: 100%; }

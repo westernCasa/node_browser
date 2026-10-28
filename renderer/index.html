@@ -310,6 +310,25 @@
             <button class="chip" id="session-new">New</button>
             <button class="chip" id="session-export" title="Save the session as Markdown notes in the Library">Export</button>
             <button class="chip" id="share-open" title="Save this trail as a file to send to someone">Share…</button>
+            <button class="chip" id="shared-choose" title="Open a .trail.md file someone sent you">Open Shared…</button>
+          </div>
+          <div class="share-sheet" id="shared-sheet" hidden>
+            <p class="kicker sub">Shared trail</p>
+            <p class="shared-title" id="shared-title"></p>
+            <p class="help" id="shared-summary"></p>
+            <div class="shared-choice">
+              <button class="chip" id="shared-open-new">Open as New Trail</button>
+              <label class="toggle" id="shared-tabs-row"><input type="checkbox" id="shared-tabs" /> <span id="shared-tabs-label"></span></label>
+            </div>
+            <div class="shared-choice">
+              <label class="field"><span>Or merge into one of your trails</span><select id="shared-target"></select></label>
+              <p class="help" id="shared-plan"></p>
+              <div id="shared-questions"></div>
+              <button class="chip" id="shared-merge">Merge</button>
+            </div>
+            <p class="help">Nothing in your trails is removed by a merge. Everyone's replies and notes are kept, each with who wrote it.</p>
+            <div class="actions-row"><button class="chip ghost" id="shared-cancel">Cancel</button></div>
+            <p class="help" id="shared-msg" role="status"></p>
           </div>
           <div class="share-sheet" id="share-sheet" hidden>
             <p class="kicker sub">Share trail</p>

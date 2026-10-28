@@ -2694,7 +2694,7 @@ function notesBlock(r) {
 // go with them, and the open tabs (off). Save File writes <name>.trail.md.
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 async function openShareSheet() {
-  if (!document.getElementById("trail-pane") || document.getElementById("trail-pane").hidden) await openMenu("trail");
+  if (!menuOpen || menuSection !== "trail") await openMenu("trail");
   const p = await api.trailSharePreview();
   const sheet = document.getElementById("share-sheet");
   document.getElementById("share-msg").textContent = "";
@@ -2753,6 +2753,127 @@ document.getElementById("share-save").addEventListener("click", async () => {
   const show = el("button", "link-btn", "Show in Folder");
   show.addEventListener("click", () => api.trailShowFile(r.file));
   msg.appendChild(show);
+});
+
+// ---- Opening a shared trail (B82 step 5) ----
+// A preview, then Open as New Trail, or Merge Into one of yours with a summary
+// of what is new and the questions NODE does not decide alone.
+let sharedInfo = null;
+async function showSharedTrail(p) {
+  if (!menuOpen || menuSection !== "trail") await openMenu("trail");
+  const sheet = document.getElementById("shared-sheet");
+  const msg = document.getElementById("shared-msg");
+  msg.textContent = "";
+  sheet.hidden = false;
+  if (!p || p.error) {
+    sharedInfo = null;
+    document.getElementById("shared-title").textContent = "This file could not be opened";
+    document.getElementById("shared-summary").textContent = p?.error || "";
+    sheet.querySelectorAll(".shared-choice").forEach((x) => (x.hidden = true));
+    return;
+  }
+  sharedInfo = p;
+  sheet.querySelectorAll(".shared-choice").forEach((x) => (x.hidden = false));
+  document.getElementById("shared-title").textContent = `“${p.name}”${p.from ? ` from ${p.from}` : ""}${p.at ? `, ${new Date(p.at).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}` : ""}`;
+  document.getElementById("shared-summary").textContent =
+    `${plural(p.pages, "page", "pages")}, ${plural(p.threads, "thread", "threads")} with ${plural(p.replies, "reply", "replies")}, ${plural(p.notes, "note", "notes")}, ${plural(p.reports, "report", "reports")}.` +
+    (p.extra ? ` ${plural(p.extra, "section", "sections")} NODE does not know will be kept as they are.` : "");
+  document.getElementById("shared-tabs-row").hidden = !p.tabs;
+  document.getElementById("shared-tabs").checked = false;
+  document.getElementById("shared-tabs-label").textContent = `Also open its ${plural(p.tabs, "tab", "tabs")}`;
+  const sel = document.getElementById("shared-target");
+  sel.innerHTML = "";
+  // The trail it came from (opened or merged before) is offered first.
+  const order = [...p.trails].sort((a, b) => (b.shared - a.shared) || (b.current - a.current));
+  for (const t of order) {
+    const o = el("option", "", `${t.name} (${plural(t.pages, "page", "pages")})${t.shared ? " · this trail, from before" : t.current ? " · current" : ""}`);
+    o.value = t.id;
+    sel.appendChild(o);
+  }
+  await paintSharedPlan();
+  sheet.scrollIntoView({ block: "nearest" });
+  document.getElementById("shared-open-new").focus();
+}
+async function paintSharedPlan() {
+  const plan = await api.sharedPlan(document.getElementById("shared-target").value);
+  const out = document.getElementById("shared-plan");
+  const qs = document.getElementById("shared-questions");
+  qs.innerHTML = "";
+  if (!plan) return (out.textContent = "");
+  const adds = [
+    plan.newPages && plural(plan.newPages, "page", "pages"),
+    plan.newThreads && plural(plan.newThreads, "thread", "threads"),
+    plan.newReplies && plural(plan.newReplies, "reply", "replies"),
+    plan.newNotes && plural(plan.newNotes, "note", "notes"),
+    plan.newReports && plural(plan.newReports, "report", "reports"),
+  ].filter(Boolean);
+  out.textContent = (adds.length ? `Adds ${adds.join(", ")}.` : "Nothing new: this trail already has everything in the file.") + (plan.combinedPages ? ` ${plural(plan.combinedPages, "page is", "pages are")} in both and will be combined.` : "");
+  const choice = (name, label, options) => {
+    const row = el("label", "field");
+    const select = el("select");
+    select.dataset.q = name;
+    for (const [value, text] of options) {
+      const o = el("option", "", text);
+      o.value = value;
+      select.appendChild(o);
+    }
+    row.append(el("span", "", label), select);
+    qs.appendChild(row);
+  };
+  for (const q of plan.questions) {
+    if (q.kind === "status") choice(`status:${q.threadId}`, `“${q.title}” is ${q.ours} in yours and ${q.theirs} in theirs.`, [["ours", `Keep ${q.ours}`], ["theirs", `Make it ${q.theirs}`]]);
+    if (q.kind === "tags") choice("tags", `Tags differ on ${plural(q.count, "item", "items")}.`, [["both", "Keep both"], ["ours", "Keep yours"], ["theirs", "Use theirs"]]);
+    if (q.kind === "pins") choice("pins", `Pinned keywords differ. Yours: ${q.ours.join(", ") || "none"}. Theirs: ${q.theirs.join(", ") || "none"}.`, [["both", "Keep both"], ["ours", "Keep yours"], ["theirs", "Use theirs"]]);
+  }
+}
+function sharedAnswers() {
+  const answers = { status: {} };
+  for (const s of document.querySelectorAll("#shared-questions select")) {
+    const [kind, id] = s.dataset.q.split(":");
+    if (kind === "status") answers.status[id] = s.value;
+    else answers[kind] = s.value;
+  }
+  return answers;
+}
+async function sharedDone(r, text) {
+  const msg = document.getElementById("shared-msg");
+  if (!r.ok) return (msg.textContent = r.error);
+  adoptSession(r.snapshot);
+  document.getElementById("shared-sheet").hidden = true;
+  sharedInfo = null;
+  await renderTrail();
+  document.getElementById("session-meta").textContent = `${text} ` + document.getElementById("session-meta").textContent;
+}
+document.getElementById("shared-choose").addEventListener("click", () => api.sharedChoose());
+document.getElementById("shared-target").addEventListener("change", paintSharedPlan);
+document.getElementById("shared-open-new").addEventListener("click", async () => {
+  const r = await api.sharedOpen({ tabs: document.getElementById("shared-tabs").checked });
+  await sharedDone(r, "Opened as a new trail.");
+});
+document.getElementById("shared-merge").addEventListener("click", async () => {
+  const r = await api.sharedMerge(document.getElementById("shared-target").value, sharedAnswers());
+  const c = r.counts || {};
+  await sharedDone(r, `Merged: ${plural(c.pages || 0, "new page", "new pages")}, ${plural(c.threads || 0, "new thread", "new threads")}.`);
+});
+document.getElementById("shared-cancel").addEventListener("click", () => {
+  api.sharedClose();
+  sharedInfo = null;
+  document.getElementById("shared-sheet").hidden = true;
+});
+
+// A .trail.md file dropped on the tab bar, sidebar or Menu opens the preview.
+document.addEventListener("dragover", (e) => {
+  if ([...(e.dataTransfer?.items || [])].some((i) => i.kind === "file")) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+  }
+});
+document.addEventListener("drop", async (e) => {
+  const file = e.dataTransfer?.files?.[0];
+  if (!file) return;
+  e.preventDefault();
+  const r = await api.trailDropped(file);
+  if (r && !r.ok && r.error) showSharedTrail({ error: r.error });
 });
 
 let renameTimer = null;
@@ -2857,6 +2978,8 @@ if (api) {
       omni.select();
     } else if (msg.cmd === "bookmark-toggle") {
       toggleBookmark();
+    } else if (msg.cmd === "shared-trail") {
+      showSharedTrail(msg.payload);
     } else if (msg.cmd === "share-trail") {
       openShareSheet();
     } else if (msg.cmd === "open-bookmarks") {

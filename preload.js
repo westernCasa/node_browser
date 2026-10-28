@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require("electron");
+const { contextBridge, ipcRenderer, webUtils } = require("electron");
 
 contextBridge.exposeInMainWorld("scout", {
   createTab: (url) => ipcRenderer.invoke("tab:create", url),
@@ -60,6 +60,14 @@ contextBridge.exposeInMainWorld("scout", {
   trailSharePreview: () => ipcRenderer.invoke("trail:share-preview"),
   trailShareSave: (opts) => ipcRenderer.invoke("trail:share-save", opts),
   trailShowFile: (file) => ipcRenderer.invoke("trail:show-file", file),
+  sharedChoose: () => ipcRenderer.invoke("trail:shared-choose"),
+  sharedPreview: () => ipcRenderer.invoke("trail:shared-preview"),
+  sharedPlan: (id) => ipcRenderer.invoke("trail:shared-plan", id),
+  sharedOpen: (opts) => ipcRenderer.invoke("trail:shared-open", opts),
+  sharedMerge: (id, answers) => ipcRenderer.invoke("trail:shared-merge", id, answers),
+  sharedClose: () => ipcRenderer.invoke("trail:shared-close"),
+  // A file dropped on NODE's own window (not on a page).
+  trailDropped: (file) => ipcRenderer.invoke("trail:dropped", webUtils.getPathForFile(file)),
   noteRemove: (url, id) => ipcRenderer.invoke("notes:remove", url, id),
   findStop: (id) => ipcRenderer.invoke("find:stop", id),
   zoom: (id, step) => ipcRenderer.invoke("tab:zoom", id, step),

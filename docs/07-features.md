@@ -47,6 +47,8 @@ NODE is a research browser that reads the page you are on, picks out keywords, a
 ## Desktop: trail, history, find, zoom
 
 - Research sessions: pages read with keywords, recurring keywords, opened and hidden results, read marks, pins per session, rename, switch, new, export to Markdown.
+- Threads in a trail (B82): questions or lines of inquiry with replies that can be answered (like Reddit), resolve with a conclusion, tags, linked pages; recurring keywords offered as threads. Notes on each page. Your name on them comes from Settings → Sharing.
+- Trail sharing (B82, phase 1): File → Share Trail… saves the trail as a `.trail.md` Markdown file (untick pages; reports on, open tabs off; no sign-in pages, private address parts or tracking codes). File → Open Shared Trail…, Open With or dropping the file shows a preview, then Open as New Trail or Merge into one of yours (nothing removed; asks about thread status, tags and pinned keywords). The file reads well in any app, and a person or an AI can add replies and pages to it. See `19-trail-sharing.md`.
 - History shelf (Cmd+Y), find in page (Cmd+F), per-tab zoom with badge.
 
 ## Desktop: site rules, safety, speed

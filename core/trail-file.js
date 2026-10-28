@@ -361,6 +361,11 @@ function fromMarkdown(text) {
   }
   flushExtra();
   for (const r of trail.reports) r.text = r.text.trim();
+  // A file can be edited by anyone: sign-in and payment pages, and addresses
+  // that are not web pages, are never taken in.
+  trail.pages = trail.pages.filter((p) => /^https?:/i.test(p.url) && !isSensitiveUrl(p.url));
+  trail.tabs = trail.tabs.filter((u) => /^https?:/i.test(u) && !isSensitiveUrl(u));
+  for (const t of trail.threads) t.pages = (t.pages || []).filter((u) => /^https?:/i.test(u) && !isSensitiveUrl(u));
   return trail;
 }
 
