@@ -14,6 +14,12 @@ function newId() {
   return new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14) + "-" + Math.random().toString(36).slice(2, 6);
 }
 
+function shortId(prefix) {
+  return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+}
+const clean = (t, max) => String(t || "").replace(/\r\n/g, "\n").trim().slice(0, max);
+const cleanTags = (tags) => [...new Set((tags || []).map((t) => String(t).trim().replace(/^#/, "").slice(0, 40)).filter(Boolean))].slice(0, 8);
+
 function blank(name) {
   const now = Date.now();
   return {
@@ -98,7 +104,7 @@ class ResearchStore {
       if (!f.endsWith(".json")) continue;
       try {
         const s = JSON.parse(this.storage.read(f));
-        out.push({ id: s.id, name: s.name, started: s.started, updated: s.updated, pages: s.trail.length, captures: (s.captures || []).length, current: s.id === this.current.id });
+        out.push({ id: s.id, name: s.name, started: s.started, updated: s.updated, pages: s.trail.length, captures: (s.captures || []).length, threadCount: (s.threadList || []).length, current: s.id === this.current.id });
       } catch (_) {}
     }
     return out.sort((a, b) => b.updated - a.updated);
@@ -173,6 +179,117 @@ class ResearchStore {
 
   snapshot() {
     return { ...this.current, threads: this.threads() };
+  }
+
+  // ---- Threads people write (B82) ----
+  // A thread is a question or topic in the trail, with replies that can be
+  // answered, like a Reddit thread. Kept in session.threadList (session.threads
+  // is the keyword list sent to the renderer, so the name is different).
+  // { id, title, status: open|resolved, conclusion, tags, pages, by, at, replies: [{ id, by, at, text, replies }] }
+  threadList(session = this.current) {
+    return (session.threadList = session.threadList || []);
+  }
+
+  findThread(id) {
+    return this.threadList().find((t) => t.id === id) || null;
+  }
+
+  // The reply with this id anywhere in the thread, or null.
+  findReply(thread, id) {
+    const walk = (list) => {
+      for (const r of list || []) {
+        if (r.id === id) return r;
+        const hit = walk(r.replies);
+        if (hit) return hit;
+      }
+      return null;
+    };
+    return walk(thread?.replies);
+  }
+
+  addThread({ title, by = "", text = "", tags = [], pages = [] } = {}) {
+    const name = clean(title, 200);
+    if (!name) return null;
+    const thread = { id: shortId("t"), title: name, status: "open", conclusion: "", tags: cleanTags(tags), pages: pages.filter((u) => /^https?:/i.test(u || "") && !isSensitiveUrl(u)).slice(0, 20), by: clean(by, 60), at: Date.now(), replies: [] };
+    this.threadList().push(thread);
+    if (clean(text, 4000)) thread.replies.push({ id: shortId("r"), by: thread.by, at: thread.at, text: clean(text, 4000), replies: [] });
+    this.saveSoon();
+    return thread;
+  }
+
+  // A reply to the thread (parentId empty) or to one of its replies.
+  reply(threadId, { parentId = "", by = "", text = "" } = {}) {
+    const thread = this.findThread(threadId);
+    const body = clean(text, 4000);
+    if (!thread || !body) return null;
+    const parent = parentId ? this.findReply(thread, parentId) : thread;
+    if (!parent) return null;
+    const r = { id: shortId("r"), by: clean(by, 60), at: Date.now(), text: body, replies: [] };
+    (parent.replies = parent.replies || []).push(r);
+    this.saveSoon();
+    return r;
+  }
+
+  resolveThread(id, conclusion = "") {
+    const t = this.findThread(id);
+    if (!t) return null;
+    t.status = "resolved";
+    if (clean(conclusion, 2000)) t.conclusion = clean(conclusion, 2000);
+    this.saveSoon();
+    return t;
+  }
+
+  reopenThread(id) {
+    const t = this.findThread(id);
+    if (!t) return null;
+    t.status = "open";
+    this.saveSoon();
+    return t;
+  }
+
+  editThread(id, { title, tags, pages } = {}) {
+    const t = this.findThread(id);
+    if (!t) return null;
+    if (title !== undefined && clean(title, 200)) t.title = clean(title, 200);
+    if (tags !== undefined) t.tags = cleanTags(tags);
+    if (pages !== undefined) t.pages = pages.filter((u) => /^https?:/i.test(u || "") && !isSensitiveUrl(u)).slice(0, 20);
+    this.saveSoon();
+    return t;
+  }
+
+  removeThread(id) {
+    const list = this.threadList();
+    const i = list.findIndex((t) => t.id === id);
+    if (i < 0) return false;
+    list.splice(i, 1);
+    this.saveSoon();
+    return true;
+  }
+
+  // Recurring keywords that have no thread yet: suggestions to start one.
+  threadSuggestions(limit = 3) {
+    const have = new Set(this.threadList().flatMap((t) => [t.title.toLowerCase(), ...t.tags.map((x) => x.toLowerCase())]));
+    return this.threads(10).filter((k) => !have.has(k.term.toLowerCase())).slice(0, limit);
+  }
+
+  // ---- Page notes (B82) ----
+  addNote(url, { by = "", text = "" } = {}) {
+    const row = this.current.trail.find((r) => r.url === url);
+    const body = clean(text, 2000);
+    if (!row || !body) return null;
+    const note = { id: shortId("n"), by: clean(by, 60), at: Date.now(), text: body };
+    (row.notes = row.notes || []).push(note);
+    this.saveSoon();
+    return note;
+  }
+
+  removeNote(url, id) {
+    const row = this.current.trail.find((r) => r.url === url);
+    const i = (row?.notes || []).findIndex((n) => n.id === id);
+    if (i < 0) return false;
+    row.notes.splice(i, 1);
+    this.saveSoon();
+    return true;
   }
 
   // A saved session by id (the current one if it matches), or null.

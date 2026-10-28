@@ -1854,6 +1854,7 @@ function loadSettings() {
   base.tabSleep = SLEEP_CHOICES.includes(raw.tabSleep) ? raw.tabSleep : 30;
   base.passwordsOffer = raw.passwordsOffer !== false;
   base.chromeLayout = raw.chromeLayout === "side" ? "side" : "top";
+  base.displayName = typeof raw.displayName === "string" ? raw.displayName.trim().slice(0, 60) : "";
   // First-run setup is shown once, to new users. Settings saved by an earlier
   // version count as set up. Runs with --user-data-dir (the tests) skip it
   // unless NODE_FIRST_RUN=1.
@@ -1894,6 +1895,7 @@ function saveSettings(next) {
   if (next && next.firstRunDone) current.firstRunDone = true;
   if (next && "passwordsOffer" in next) current.passwordsOffer = Boolean(next.passwordsOffer);
   if (next && "chromeLayout" in next) current.chromeLayout = next.chromeLayout === "side" ? "side" : "top";
+  if (next && typeof next.displayName === "string") current.displayName = next.displayName.trim().replace(/\s+/g, " ").slice(0, 60);
   if (next && "tabSleep" in next && SLEEP_CHOICES.includes(Number(next.tabSleep))) current.tabSleep = Number(next.tabSleep);
   if (next && MOSAIC_MAX_CHOICES.includes(Number(next.mosaicMax))) {
     current.mosaicMax = Number(next.mosaicMax);
@@ -1934,6 +1936,7 @@ function saveSettings(next) {
     tabSleep: current.tabSleep,
     passwordsOffer: current.passwordsOffer !== false,
     chromeLayout: current.chromeLayout === "side" ? "side" : "top",
+    displayName: current.displayName || "",
     firstRunDone: Boolean(current.firstRunDone),
     agents: { enabled: current.agents.enabled, port: current.agents.port, token: encryptSecret(current.agents.token) },
     providers: {},
@@ -1985,6 +1988,7 @@ function publicSettings() {
     tabSleep: s.tabSleep,
     passwordsOffer: s.passwordsOffer !== false,
     chromeLayout: s.chromeLayout === "side" ? "side" : "top",
+    displayName: s.displayName || "",
     firstRunDone: Boolean(s.firstRunDone),
     googleWindow: companion ? companion.status() : null,
     agents: agentsStatus(),
@@ -3405,6 +3409,18 @@ ipcMain.handle("usage:copy", () => {
   return text;
 });
 ipcMain.handle("research:dismiss", (_e, url) => research.dismiss(url));
+// Threads people write in the trail, and notes on pages (B82). The author is
+// the display name from Settings → Sharing; the renderer asks for one first.
+const authorName = () => loadSettings().displayName || "";
+ipcMain.handle("threads:add", (_e, d = {}) => research.addThread({ ...d, by: authorName() }) && research.snapshot());
+ipcMain.handle("threads:reply", (_e, threadId, parentId, text) => research.reply(String(threadId), { parentId: String(parentId || ""), text, by: authorName() }) && research.snapshot());
+ipcMain.handle("threads:resolve", (_e, id, conclusion) => research.resolveThread(String(id), conclusion) && research.snapshot());
+ipcMain.handle("threads:reopen", (_e, id) => research.reopenThread(String(id)) && research.snapshot());
+ipcMain.handle("threads:edit", (_e, id, d = {}) => research.editThread(String(id), d) && research.snapshot());
+ipcMain.handle("threads:remove", (_e, id) => research.removeThread(String(id)) && research.snapshot());
+ipcMain.handle("threads:suggestions", () => research.threadSuggestions());
+ipcMain.handle("notes:add", (_e, url, text) => research.addNote(String(url), { text, by: authorName() }) && research.snapshot());
+ipcMain.handle("notes:remove", (_e, url, id) => research.removeNote(String(url), String(id)) && research.snapshot());
 ipcMain.handle("research:undismiss", () => research.undismissAll());
 ipcMain.handle("research:export", () => {
   const name = stamp("session", "md");
