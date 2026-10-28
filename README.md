@@ -6,7 +6,7 @@
 
 NODE Research Browser (NODE for short) is a desktop browser for niche research. It reads the page you are on, picks out its keywords, and suggests the next pages to read in a side panel. Media plays in up to four tabs at once, side by side, and every page you read is kept in a research trail you can export.
 
-Built with Electron and plain JavaScript, with an Expo mobile app (iPhone and Android, in testing) that shares the same core logic. Status: released, version 0.9.8, updated often.
+Built with Electron and plain JavaScript, with an Expo mobile app (iPhone and Android, in testing) that shares the same core logic. Status: released, version 0.9.9, updated often.
 
 ## What it does
 
