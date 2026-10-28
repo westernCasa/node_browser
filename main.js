@@ -56,6 +56,7 @@ const { runResearch } = require("./core/agent");
 const Talk = require("./core/talk");
 const TrailFile = require("./core/trail-file");
 const TrailApply = require("./core/trail-apply");
+const ShareLink = require("./core/share-link");
 let research = null; // current research session store (B17), created when the app is ready
 
 const HOME_URL = "https://en.wikipedia.org/wiki/Main_Page";
@@ -835,6 +836,12 @@ function attachListeners(tab) {
   };
   on("will-navigate", (e) => {
     if (e.isMainFrame === false) return;
+    // A share link clicked in a page opens the shared-trail preview.
+    if (isShareLink(e.url)) {
+      e.preventDefault();
+      openShareLink(e.url);
+      return;
+    }
     // A trail file dropped on a page opens the shared-trail preview instead.
     if (/^file:/i.test(e.url)) {
       let file = "";
@@ -2406,7 +2413,10 @@ function createWindow() {
     if (!tabs.size && !restoreSession()) createTab(newTabUrl());
     // Trail files opened from Finder or Explorer before the window was ready.
     uiReady = true;
-    setTimeout(() => outsideFiles.splice(0).forEach(openFromOutside), 600);
+    setTimeout(() => {
+      outsideFiles.splice(0).forEach(openFromOutside);
+      outsideLinks.splice(0).forEach(openFromProtocol);
+    }, 600);
   });
 }
 
@@ -2440,6 +2450,38 @@ app.on("open-file", (e, file) => {
   e.preventDefault();
   openFromOutside(file);
 });
+// noderesearch://open?link=… from the share web page's Open in NODE.
+// macOS sends open-url; Windows and Linux start NODE again with the address,
+// which the running copy receives as second-instance.
+const PROTOCOL = "noderesearch";
+const outsideLinks = [];
+function openFromProtocol(address) {
+  if (!uiReady || !win) return outsideLinks.push(address);
+  openShareLink(address);
+}
+app.on("open-url", (e, address) => {
+  e.preventDefault();
+  openFromProtocol(address);
+});
+for (const arg of process.argv.slice(1)) if (arg.startsWith(`${PROTOCOL}:`)) outsideLinks.push(arg);
+// One NODE at a time per profile, so links and files go to the open window.
+// Test runs (their own --user-data-dir) are not affected by each other.
+if (!app.requestSingleInstanceLock()) app.quit();
+else
+  app.on("second-instance", (_e, argv) => {
+    for (const arg of argv.slice(1)) {
+      if (arg.startsWith(`${PROTOCOL}:`)) openFromProtocol(arg);
+      else if (looksLikeMd(arg) && path.isAbsolute(arg) && fs.existsSync(arg)) openFromOutside(arg);
+    }
+    if (win) {
+      if (win.isMinimized()) win.restore();
+      win.focus();
+    }
+  });
+if (!app.commandLine.hasSwitch("user-data-dir")) {
+  if (process.defaultApp && process.argv[1]) app.setAsDefaultProtocolClient(PROTOCOL, process.execPath, [path.resolve(process.argv[1])]);
+  else app.setAsDefaultProtocolClient(PROTOCOL);
+}
 for (const arg of process.argv.slice(1)) if (looksLikeMd(arg) && path.isAbsolute(arg) && fs.existsSync(arg)) outsideFiles.push(arg);
 ipcMain.handle("trail:dropped", (_e, file) => {
   const f = String(file || "");
@@ -2532,7 +2574,7 @@ app.whenReady().then(() => {
   global.nodeTest = {
   claudeDesktopEntry, sleepIdleTabs,
   setTrailSavePath: (p) => (trailSavePath = p),
-  openSharedTrail, openFromOutside,
+  openSharedTrail, openFromOutside, openShareLink,
   setPasswordAsk: (answer) => (passwordAsk = async (opts) => ((global.nodeTest.lastPasswordAsk = opts), answer)),
   loginMenu: (id) => loginMenuItems(tabs.get(id)).map((i) => i.label),
   setPasswordAuth: (answer) => ((passwordAuth = async () => answer), (passwordAuthUntil = 0)),
@@ -2558,6 +2600,7 @@ app.on("will-quit", () => {
 
 // No address (the + button, double-click on the tab bar): a new tab page.
 ipcMain.handle("tab:create", (_e, url) => {
+  if (url && isShareLink(url)) return void openShareLink(url);
   const id = createTab(url ? url : newTabUrl());
   // Top bar: the cursor goes to the address bar. Sidebar: the blank tab was
   // asked for from the CommandBar, which has just closed.
@@ -2569,6 +2612,7 @@ ipcMain.handle("tab:activate", (_e, id) => activateTab(id));
 ipcMain.handle("tab:navigate", (_e, id, url) => {
   const tab = tabs.get(id);
   if (!tab) return;
+  if (isShareLink(url)) return void openShareLink(url);
   tab.sleeping = null;
   tab.view.webContents.loadURL(loadTarget(url, id));
 });
@@ -3556,7 +3600,8 @@ function sharedPreview() {
   const t = sharedTrail.trail;
   const count = (l) => (l || []).reduce((n, r) => n + 1 + count(r.replies), 0);
   return {
-    file: path.basename(sharedTrail.file),
+    file: sharedTrail.link ? "" : path.basename(sharedTrail.file),
+    viaLink: Boolean(sharedTrail.link),
     name: t.name,
     from: t.exportedBy,
     at: t.exportedAt,
@@ -3599,6 +3644,109 @@ function saveSharedReports(session, reports) {
   }
 }
 const sharedBase = (session) => TrailFile.fromSession(session, { by: loadSettings().displayName || "", reports: trailReports(session) });
+// ---- Share links (B82 phase 2, worker/) ----
+// The trail file is encrypted here; the share server stores what it cannot
+// read. Links you made are listed (with the key to remove them) in
+// shares.json, so you can copy one again or stop sharing it.
+const sharesFile = () => path.join(app.getPath("userData"), "shares.json");
+function readShares() {
+  try {
+    const list = JSON.parse(fs.readFileSync(sharesFile(), "utf8"));
+    return Array.isArray(list) ? list.filter((x) => x.expiresAt > Date.now()) : [];
+  } catch (_) {
+    return [];
+  }
+}
+const writeShares = (list) => fs.writeFileSync(sharesFile(), JSON.stringify(list, null, 2));
+const shareApi = () => process.env.NODE_SHARE_API || ShareLink.API_BASE;
+const shareLinkBase = () => process.env.NODE_SHARE_LINK_BASE || ShareLink.LINK_BASE;
+async function shareFetch(url, init = {}, ms = 15000) {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), ms);
+  try {
+    return await globalThis.fetch(url, { ...init, signal: ctl.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+const shareError = async (r) => {
+  try {
+    return (await r.json()).error || `The share server answered ${r.status}.`;
+  } catch (_) {
+    return `The share server answered ${r.status}.`;
+  }
+};
+ipcMain.handle("trail:link-create", async (_e, opts = {}) => {
+  const { bytes, key } = ShareLink.seal(trailFileText(opts));
+  if (bytes.length > ShareLink.MAX_BYTES) return { ok: false, error: "This trail is too large to share as a link (over 1 MB). Save it as a file instead, or untick some pages." };
+  let r;
+  try {
+    r = await shareFetch(`${shareApi()}/api/trails`, { method: "POST", headers: { "content-type": "application/octet-stream" }, body: bytes });
+  } catch (err) {
+    return { ok: false, error: "NODE could not reach the share server. Check your connection, or save the trail as a file instead." };
+  }
+  if (r.status !== 201) return { ok: false, error: await shareError(r) };
+  const made = await r.json();
+  const link = ShareLink.linkFor(made.id, key, shareLinkBase());
+  const list = readShares();
+  list.unshift({ id: made.id, link, deleteToken: made.deleteToken, api: shareApi(), name: research.current.name, trail: research.current.id, createdAt: Date.now(), expiresAt: made.expiresAt });
+  writeShares(list);
+  usage().count("trailsShared");
+  return { ok: true, link, id: made.id, expiresAt: made.expiresAt };
+});
+ipcMain.handle("trail:links", () => readShares().map(({ deleteToken, ...rest }) => rest));
+ipcMain.handle("trail:link-copy", (_e, id) => {
+  const s = readShares().find((x) => x.id === id);
+  if (s) clipboard.writeText(s.link);
+  return Boolean(s);
+});
+ipcMain.handle("trail:link-remove", async (_e, id) => {
+  const list = readShares();
+  const s = list.find((x) => x.id === id);
+  if (!s) return { ok: true };
+  try {
+    const r = await shareFetch(`${s.api}/api/trails/${s.id}`, { method: "DELETE", headers: { authorization: `Bearer ${s.deleteToken}` } });
+    if (r.status !== 204 && r.status !== 404) return { ok: false, error: await shareError(r) };
+  } catch (_) {
+    return { ok: false, error: "NODE could not reach the share server, so the link still works. Try again when you are online." };
+  }
+  writeShares(list.filter((x) => x.id !== id));
+  return { ok: true };
+});
+// A share link opened in NODE: typed or pasted in the address bar, clicked in
+// a page, or from the web page's Open in NODE (noderesearch://).
+async function openShareLink(text) {
+  const parsed = ShareLink.parseLink(text, { api: shareApi() });
+  if (!parsed) return { ok: false, error: "This is not a NODE share link." };
+  const fail = (error) => {
+    sharedTrail = null;
+    sendUi("shared-trail", { payload: { error } });
+    return { ok: false, error };
+  };
+  if (!parsed.key) return fail("This link is missing its key (the part after #). Ask the sender to copy the whole link again.");
+  let r;
+  try {
+    r = await shareFetch(`${parsed.api}/api/trails/${parsed.id}`);
+  } catch (_) {
+    return fail("NODE could not reach the share server. Check your connection and try again.");
+  }
+  if (r.status === 404) return fail("This link has expired or was removed. Shared trails are kept for 30 days.");
+  if (!r.ok) return fail(await shareError(r));
+  try {
+    const text = ShareLink.unseal(Buffer.from(await r.arrayBuffer()), parsed.key);
+    sharedTrail = { file: "", link: parsed.id, trail: TrailFile.fromMarkdown(text) };
+  } catch (err) {
+    return fail(err.message);
+  }
+  if (win) {
+    if (win.isMinimized()) win.restore();
+    win.focus();
+  }
+  sendUi("shared-trail", { payload: sharedPreview() });
+  return { ok: true };
+}
+const isShareLink = (url) => Boolean(ShareLink.parseLink(url, { api: shareApi() }));
+ipcMain.handle("trail:link-open", (_e, text) => openShareLink(String(text || "")));
 ipcMain.handle("trail:shared-choose", () => chooseSharedTrail());
 ipcMain.handle("trail:shared-preview", () => (sharedTrail ? sharedPreview() : null));
 ipcMain.handle("trail:shared-plan", (_e, id) => {
