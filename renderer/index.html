@@ -341,12 +341,22 @@
             <ul class="share-pages" id="share-pages"></ul>
             <label class="toggle"><input type="checkbox" id="share-reports" checked /> <span id="share-reports-label">Research reports</span></label>
             <label class="toggle"><input type="checkbox" id="share-tabs" /> <span id="share-tabs-label">Open tabs</span></label>
-            <p class="help">Never in the file: sign-in, account and payment pages, private parts of addresses (tokens, keys, session codes), tracking codes, and anything outside this trail. Screenshots and saved pages are not in the file.</p>
+            <p class="help">Never shared: sign-in, account and payment pages, private parts of addresses (tokens, keys, session codes), tracking codes, and anything outside this trail. Screenshots and saved pages are not included.</p>
             <div class="actions-row">
+              <button class="chip" id="share-link">Create Link</button>
               <button class="chip" id="share-save">Save File…</button>
               <button class="chip ghost" id="share-cancel">Cancel</button>
             </div>
+            <div class="link-made" id="link-made" hidden>
+              <div class="link-row"><input id="link-text" type="text" readonly spellcheck="false" /><button class="chip" id="link-copy">Copy</button></div>
+              <p class="help" id="link-note"></p>
+            </div>
+            <p class="help">A link works for 30 days. The trail is encrypted on this computer before it is uploaded, and the key is only in the link, so the NODE share server cannot read it. Anyone you give the link to can read the trail, in NODE or in a web browser.</p>
             <p class="help" id="share-msg" role="status"></p>
+            <div id="links-box" hidden>
+              <p class="kicker sub">Your shared links</p>
+              <ul class="share-pages" id="links-list"></ul>
+            </div>
           </div>
           <p class="help" id="session-meta"></p>
           <p class="kicker sub">Threads</p>

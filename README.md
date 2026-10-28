@@ -141,6 +141,8 @@ What leaves your computer, and when:
 | A check for a new version | GitHub | Every 6 hours in installed copies, if "Check for updates" is on |
 | A download of the ad and tracker block lists (uBlock Origin's default lists; with cookie notices on, also the cookie-notice lists) | GitHub | About once a week |
 | Google sign-in and Google apps | A separate Chrome-based browser on your computer, with its own NODE profile | When you open a Google account page (Settings → Google window) |
+| A shared trail, encrypted on your computer (the key stays in the link, so the server cannot read it) | NODE's share server (a Cloudflare Worker), which deletes it after 30 days | Only when you click Create Link in Share Trail. Stop Sharing deletes it sooner |
+| The id of a shared trail | NODE's share server | When you open a share link someone sent you |
 
 Saved passwords are never sent anywhere. They are encrypted with your computer's own secure storage (Keychain on a Mac, Windows' data protection, a keyring on Linux) and kept on this computer. A saved login is filled only on the site it was saved for, and only when you pick it.
 

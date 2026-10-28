@@ -2724,6 +2724,8 @@ async function openShareSheet() {
   document.getElementById("share-tabs").checked = false;
   document.getElementById("share-tabs").disabled = !p.tabs;
   paintShareCount();
+  document.getElementById("link-made").hidden = true;
+  await paintLinks();
   sheet.hidden = false;
   sheet.scrollIntoView({ block: "nearest" });
   document.getElementById("share-save").focus();
@@ -2739,6 +2741,70 @@ document.getElementById("share-open").addEventListener("click", openShareSheet);
 document.getElementById("share-cancel").addEventListener("click", () => (document.getElementById("share-sheet").hidden = true));
 document.getElementById("share-all").addEventListener("click", () => (shareBoxes().forEach((b) => (b.checked = true)), paintShareCount()));
 document.getElementById("share-none").addEventListener("click", () => (shareBoxes().forEach((b) => (b.checked = false)), paintShareCount()));
+// Share links (B82 phase 2): the same choices, uploaded encrypted.
+const shareChoices = () => ({
+  pages: shareBoxes().filter((b) => b.checked).map((b) => b.value),
+  reports: document.getElementById("share-reports").checked,
+  tabs: document.getElementById("share-tabs").checked,
+});
+const dayText = (ms) => new Date(ms).toLocaleDateString([], { month: "short", day: "numeric" });
+document.getElementById("share-link").addEventListener("click", async () => {
+  const btn = document.getElementById("share-link");
+  const msg = document.getElementById("share-msg");
+  msg.textContent = "Encrypting and uploading…";
+  btn.disabled = true;
+  const r = await api.linkCreate(shareChoices());
+  btn.disabled = false;
+  if (!r.ok) return (msg.textContent = r.error);
+  msg.textContent = "";
+  document.getElementById("link-text").value = r.link;
+  document.getElementById("link-note").textContent = `Link made. It works until ${dayText(r.expiresAt)}. Copy it and send it with any app.`;
+  document.getElementById("link-made").hidden = false;
+  document.getElementById("link-text").select();
+  await paintLinks();
+});
+document.getElementById("link-copy").addEventListener("click", async () => {
+  const text = document.getElementById("link-text").value;
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (_) {
+    document.getElementById("link-text").select();
+    document.execCommand("copy");
+  }
+  document.getElementById("link-copy").textContent = "Copied";
+  setTimeout(() => (document.getElementById("link-copy").textContent = "Copy"), 1500);
+});
+async function paintLinks() {
+  const list = (await api.linksList?.()) || [];
+  const box = document.getElementById("links-box");
+  const ul = document.getElementById("links-list");
+  box.hidden = !list.length;
+  ul.innerHTML = "";
+  for (const s of list) {
+    const li = el("li", "link-item");
+    li.append(el("span", "", s.name), el("span", "when", ` · made ${dayText(s.createdAt)} · works until ${dayText(s.expiresAt)} `));
+    const copy = el("button", "link-btn", "Copy Link");
+    copy.addEventListener("click", async () => {
+      await api.linkCopy(s.id);
+      copy.textContent = "Copied";
+      setTimeout(() => (copy.textContent = "Copy Link"), 1500);
+    });
+    const stop = el("button", "link-btn", "Stop Sharing");
+    stop.addEventListener("click", async () => {
+      if (stop.dataset.armed !== "1") {
+        stop.dataset.armed = "1";
+        stop.textContent = "Stop sharing? The link stops working for everyone.";
+        return;
+      }
+      const r = await api.linkRemove(s.id);
+      if (!r.ok) return (document.getElementById("share-msg").textContent = r.error);
+      await paintLinks();
+    });
+    li.append(copy, " ", stop);
+    ul.appendChild(li);
+  }
+}
+
 document.getElementById("share-save").addEventListener("click", async () => {
   const msg = document.getElementById("share-msg");
   msg.textContent = "";

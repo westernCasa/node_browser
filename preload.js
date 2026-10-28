@@ -66,6 +66,11 @@ contextBridge.exposeInMainWorld("scout", {
   sharedOpen: (opts) => ipcRenderer.invoke("trail:shared-open", opts),
   sharedMerge: (id, answers) => ipcRenderer.invoke("trail:shared-merge", id, answers),
   sharedClose: () => ipcRenderer.invoke("trail:shared-close"),
+  linkCreate: (opts) => ipcRenderer.invoke("trail:link-create", opts),
+  linksList: () => ipcRenderer.invoke("trail:links"),
+  linkCopy: (id) => ipcRenderer.invoke("trail:link-copy", id),
+  linkRemove: (id) => ipcRenderer.invoke("trail:link-remove", id),
+  linkOpen: (text) => ipcRenderer.invoke("trail:link-open", text),
   // A file dropped on NODE's own window (not on a page).
   trailDropped: (file) => ipcRenderer.invoke("trail:dropped", webUtils.getPathForFile(file)),
   noteRemove: (url, id) => ipcRenderer.invoke("notes:remove", url, id),

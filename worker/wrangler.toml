@@ -1,0 +1,20 @@
+# NODE share links (B82 phase 2). Deployed by .github/workflows/deploy-share.yml.
+name = "node-share"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+workers_dev = true
+
+# Encrypted trails. Deleted after 30 days by a lifecycle rule (the deploy
+# workflow sets it) and by a date check in the Worker.
+[[r2_buckets]]
+binding = "TRAILS"
+bucket_name = "node-share-trails"
+
+# At most 10 new links a minute from one network address.
+[[ratelimits]]
+name = "UPLOAD_LIMIT"
+namespace_id = "1001"
+simple = { limit = 10, period = 60 }
+
+[observability]
+enabled = false

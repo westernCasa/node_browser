@@ -162,3 +162,20 @@ All seven steps are built.
 Not in phase 1: screenshots and saved pages (a Markdown file cannot carry them; they come with the share link), and registering NODE for Markdown on Windows (the installer would make NODE the default for every .md file).
 
 Each trail keeps a short history of where its parts came from (`shareLog` in the session file: opened or merged, from whom, how many pages and threads). It is not shown yet.
+
+## Phase 2 in the Electron build: share links (2026-10-28)
+
+Decided by Sven, 2026-10-28: Cloudflare (a Worker and an R2 bucket). Links on noderesearch.app; people without NODE can read a trail in their browser.
+
+- **Create Link** in the Share Trail sheet: the same choices as the file (pages, reports, open tabs). NODE encrypts the trail file (gzip, then AES-256-GCM with a new random key) and uploads it. The link is `https://noderesearch.app/t/<id>#k=<key>`. It works for 30 days.
+- **Your shared links** in the sheet: Copy Link, and Stop Sharing (asks once more, then deletes it from the server; the link stops working for everyone). Kept in `shares.json` in NODE's data folder, with the delete key.
+- **Opening a link in NODE:** paste it in the address bar or the CommandBar, click it in a page, or click Open in NODE on the web page (`noderesearch://open?link=…`, registered by the installer). It shows the same preview as a file: Open as New Trail or Merge.
+- **The web page** (`/t/<id>`): decrypts in the browser and shows the trail as plain Markdown made safe (no HTML from the file is used; only http and https links). Strict content policy, no referrer, not indexed. Open in NODE and Download NODE.
+- **The server** (`worker/`): stores only NODE's encrypted format, at most 1 MB, at most 10 new links a minute from one address; a hash of the delete key; deletes after 30 days. See `worker/README.md`.
+- **NODE runs once per profile** now, so a link or file opened from outside goes to the open window (Windows and Linux).
+- README → What NODE sends has two new rows.
+
+Tests: `test/share-link-demo.js` (encryption and links), `test/share-worker-demo.js` (the Worker), `test/e2e/40-share-link.js` (the real Worker on a local server: create, open in a second NODE, noderesearch://, web page, Stop Sharing).
+
+Before links work for testers: Sven creates the Cloudflare account and adds the two GitHub secrets; the deploy workflow runs; the workers.dev address is checked against `core/share-link.js` and `site/vercel.json`.
+
