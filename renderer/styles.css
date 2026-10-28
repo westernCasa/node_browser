@@ -1268,3 +1268,8 @@ body.sb-rail .sb-resize, body.sb-rail .sb-mosaic { display: none; }
 .inline-form textarea { resize: vertical; }
 .thread-tags { display: flex; flex-wrap: wrap; gap: 4px; }
 .thread-tags span { font-size: 11px; border: 1px solid var(--line); border-radius: var(--radius-md); padding: 1px 6px; color: var(--mute); }
+.share-sheet { border: 1px solid var(--line); padding: 10px; margin: 6px 0 10px; display: flex; flex-direction: column; gap: 6px; }
+.share-pages-head { display: flex; gap: 12px; align-items: baseline; font-size: 12px; }
+.share-pages { list-style: none; margin: 0; padding: 0; max-height: 240px; overflow: auto; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.share-pages li { padding: 3px 0; font-size: 12px; overflow-wrap: anywhere; }
+.share-pages .when { color: var(--mute); }
