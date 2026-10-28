@@ -1202,3 +1202,29 @@ body.sb-rail .sb-trail-row .mono { display: inline; font: 11px/1 var(--mono); }
 .cmd-empty { padding: 16px 20px; color: var(--ink-muted); font-size: 14px; }
 .cmd-keys { height: 40px; flex: none; box-sizing: border-box; display: flex; align-items: center; gap: 20px; padding: 0 20px; border-top: 1px solid var(--line); font: 12px/16px var(--mono); color: var(--ink-muted); text-transform: uppercase; }
 @media (max-width: 760px) { .cmd-keys span:nth-child(n+4):not(:last-child) { display: none; } }
+
+/* Mosaic group (sidebar): the tiles, above the tabs, while Mosaic is on. */
+.sb-mosaic { flex: none; display: flex; flex-direction: column; gap: 2px; padding: 8px; border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.sb-mosaic[hidden], .sb-tabs-head[hidden] { display: none; }
+.sb-mosaic-head { height: 28px; display: flex; align-items: center; gap: 8px; }
+.sb-mosaic-head .ic { width: 16px; height: 16px; }
+.sb-mosaic-head .sb-label { flex: 1 1 auto; color: var(--ink); }
+.sb-mosaic-list { display: flex; flex-direction: column; gap: 2px; }
+.sb-mosaic-row { all: unset; box-sizing: border-box; height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 4px; border: 1px solid transparent; border-radius: var(--radius-sm); cursor: pointer; font-size: 14px; }
+.sb-mosaic-row:hover { background: var(--surface-raised); }
+.sb-mosaic-row:focus-visible { outline: 2px solid var(--signal); outline-offset: -2px; }
+.sb-mosaic-row[aria-current="true"] { background: var(--surface-raised); border-color: var(--ink); }
+.sb-mosaic-row .n { width: 16px; flex: none; font: 11px/1 var(--mono); color: var(--ink-muted); }
+.sb-mosaic-row .nm { flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.sb-mosaic-row .k { flex: none; font: 12px/1 var(--mono); text-transform: uppercase; }
+.sb-mosaic-row .k.live { color: var(--live); }
+.sb-tabs-head { height: 24px; display: flex; align-items: center; justify-content: space-between; padding: 4px 8px 0; }
+body.side.sb-mosaic-on .sidebar .tab.in-mosaic { display: none; }
+
+/* Width handle on the sidebar's right edge (full width only). */
+.sidebar { position: relative; }
+.sb-resize { position: absolute; top: 0; right: 0; bottom: 0; width: 6px; cursor: col-resize; -webkit-app-region: no-drag; z-index: 2; }
+.sb-resize:hover, .sb-resize:focus-visible, body.sb-resizing .sb-resize { background: linear-gradient(to right, transparent 2px, var(--line) 2px, var(--line) 4px, transparent 4px); outline: none; }
+.sb-resize:focus-visible { background: linear-gradient(to right, transparent 2px, var(--signal) 2px, var(--signal) 4px, transparent 4px); }
+body.sb-resizing { cursor: col-resize; user-select: none; }
+body.sb-rail .sb-resize, body.sb-rail .sb-mosaic { display: none; }

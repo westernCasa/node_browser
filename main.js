@@ -606,6 +606,8 @@ function layoutViews({ animate } = {}) {
 }
 
 function emit(payload) {
+  // The tabs Mosaic shows, for the sidebar's Mosaic group (B80).
+  if (payload && (payload.type === "list" || payload.type === "update")) payload = { ...payload, mosaic: layout === "mosaic" ? mosaicIds() : [] };
   win?.webContents.send("tab:event", payload);
 }
 
@@ -2529,6 +2531,7 @@ function setLayoutMode(mode, { tell = false } = {}) {
   if (layout === "mosaic" && before !== "mosaic") usage().count("mosaic");
   applyLayout(layout !== before ? { animate: layout === "mosaic" ? "enter" : "exit" } : {});
   if (tell && layout !== before) sendUi("layout", { mode: layout });
+  if (layout !== before) emitList();
   return layout;
 }
 // Mosaic → Focus on one tile (pinch out on it, or ⌘1 to ⌘4).

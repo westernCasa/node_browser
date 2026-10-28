@@ -26,7 +26,7 @@ A second layout for NODE's browser chrome, from the "NODE Sidebar Chrome" mockup
 
 | State | Width | What changes |
 | --- | --- | --- |
-| Expanded | `sidebar-width` 272 px (220–340) | Everything above. |
+| Expanded | `sidebar-width` 272 px (220–340, drag the edge) | Everything above. |
 | Rail | `rail-width` 68 px | 44 px tiles. 5 tools (Bookmark, History, Downloads go to Menu). Trail monograms. No MediaStrip. |
 | Hidden | 0, with one 36 px show-sidebar button | Full screen or reading. ⌘S toggles. |
 
@@ -73,7 +73,9 @@ How it is built: one set of controls, two places for them. In Sidebar mode `rend
 | MediaStrip | Number of tabs playing and the sound mode (SOUND: ONE / ALL, violet for all). |
 | Widths | Full 272 px, rail 68 px, hidden (a 52 px column with the show button). ⌘S hides and shows; right-click the sidebar's empty space or View → Compact or Full Sidebar switches full and rail. ⌘L in the rail or hidden opens the full sidebar with the address bar focused. Remembered per computer. |
 | Full screen | The sidebar stays; the top bar's sliding toolbar is not used. |
-| Not built yet | MosaicGroup, sidebar width by dragging (220–340). |
+| MosaicGroup | While Mosaic is on (full width only): a bordered group above the tabs lists the tiles in order, with their number and "Playing"; the current tile has the white border; click a row to focus that tile. The tabs not in Mosaic sit under a "Tabs" heading with their count. (PR #30) |
+| Width | Drag the sidebar's right edge (220–340 px), or focus the edge and use ← → (8 px), Home and End; double-click resets to 272. The page follows the drag; not animated. Remembered per computer. (PR #30) |
+| Not built yet | Everything in the spec is built. Open: pinned sites (open question above). |
 
 **Trails keep their own tabs (PR #29).** Each tab belongs to the trail that was current when it opened. Switching trails (sidebar, CommandBar, or Menu → Trail in either layout) shows that trail's tabs and the tab that was active there; the other trails' tabs stay open out of view and follow the usual sleep rule. A trail with no tabs opens one new tab. The tab list, Mosaic, the tab overview, Next and Previous Tab, ⌘1–9, closing and reordering work on the current trail's tabs. Saved with the open tabs (`trail` in `tabs.json`); tabs saved by an earlier version join the current trail.
 

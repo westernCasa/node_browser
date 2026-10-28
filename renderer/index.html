@@ -73,8 +73,13 @@
       </div>
       <div class="sb-tools sb-slot" data-slot="tools" role="toolbar" aria-label="Tools"></div>
       <div class="sb-line" aria-hidden="true"></div>
+      <section class="sb-mosaic" id="sb-mosaic" aria-label="Tabs in Mosaic" hidden>
+        <div class="sb-mosaic-head"><svg class="ic" aria-hidden="true"><use href="#i-mosaic"/></svg><span class="sb-label">Mosaic</span><span class="sb-meta" id="sb-mosaic-count"></span></div>
+        <div class="sb-mosaic-list" id="sb-mosaic-list"></div>
+      </section>
       <div class="sb-tabs">
         <span class="sb-slot" data-slot="newtab"></span>
+        <div class="sb-tabs-head" id="sb-tabs-head" hidden><span class="sb-label">Tabs</span><span class="sb-meta" id="sb-tabs-count"></span></div>
         <span class="sb-slot sb-tablist" data-slot="tabs"></span>
       </div>
       <span class="sb-grow"></span>
@@ -82,6 +87,7 @@
         <button class="sb-trails-head" id="sb-trails-toggle" aria-expanded="true" aria-controls="sb-trail-list"><svg class="ic chev" aria-hidden="true"><use href="#i-forward"/></svg><span class="sb-label" id="sb-trails-label">Active trails</span><span class="sb-meta" id="sb-trail-count"></span></button>
         <div class="sb-trail-list" id="sb-trail-list"></div>
       </section>
+      <div class="sb-resize" id="sb-resize" role="separator" aria-orientation="vertical" aria-label="Sidebar width" tabindex="0" title="Drag to change the width. Double-click: back to 272."></div>
       <div class="sb-media" id="sb-media" role="status"><span class="dot" aria-hidden="true"></span><span id="sb-playing"></span><span class="sb-grow"></span><span id="sb-sound"></span></div>
     </nav>
     <div class="sb-show" id="sb-show-wrap" hidden><button class="tb" id="sb-show" data-tip="Show sidebar" data-keys="mod+S" aria-label="Show sidebar" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="#i-sidebar"/></svg></button></div>
