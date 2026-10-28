@@ -309,6 +309,25 @@
             <select id="session-select" title="Switch session"></select>
             <button class="chip" id="session-new">New</button>
             <button class="chip" id="session-export" title="Save the session as Markdown notes in the Library">Export</button>
+            <button class="chip" id="share-open" title="Save this trail as a file to send to someone">Share…</button>
+          </div>
+          <div class="share-sheet" id="share-sheet" hidden>
+            <p class="kicker sub">Share trail</p>
+            <p class="help" id="share-summary"></p>
+            <div class="share-pages-head">
+              <span id="share-pages-count"></span>
+              <button class="link-btn" id="share-all" type="button">Tick all</button>
+              <button class="link-btn" id="share-none" type="button">Untick all</button>
+            </div>
+            <ul class="share-pages" id="share-pages"></ul>
+            <label class="toggle"><input type="checkbox" id="share-reports" checked /> <span id="share-reports-label">Research reports</span></label>
+            <label class="toggle"><input type="checkbox" id="share-tabs" /> <span id="share-tabs-label">Open tabs</span></label>
+            <p class="help">Never in the file: sign-in, account and payment pages, private parts of addresses (tokens, keys, session codes), tracking codes, and anything outside this trail. Screenshots and saved pages are not in the file.</p>
+            <div class="actions-row">
+              <button class="chip" id="share-save">Save File…</button>
+              <button class="chip ghost" id="share-cancel">Cancel</button>
+            </div>
+            <p class="help" id="share-msg" role="status"></p>
           </div>
           <p class="help" id="session-meta"></p>
           <p class="kicker sub">Threads</p>

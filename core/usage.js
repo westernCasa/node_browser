@@ -10,6 +10,7 @@ const COUNTS = {
   pins: "Keywords pinned",
   hides: "Keywords hidden",
   trailPages: "Trail pages",
+  trailsShared: "Trails shared",
   sessions: "Research sessions started",
   captures: "Screenshots and saves",
   mosaic: "Times Mosaic was turned on",

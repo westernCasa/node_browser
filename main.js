@@ -54,6 +54,7 @@ const { createLog } = require("./log");
 const { createUpdater, RELEASES } = require("./updater");
 const { runResearch } = require("./core/agent");
 const Talk = require("./core/talk");
+const TrailFile = require("./core/trail-file");
 let research = null; // current research session store (B17), created when the app is ready
 
 const HOME_URL = "https://en.wikipedia.org/wiki/Main_Page";
@@ -2186,6 +2187,8 @@ function buildMenu() {
         { label: "Bookmark This Page", accelerator: "CmdOrCtrl+D", click: () => sendUi("bookmark-toggle") },
         { label: "Bookmarks", accelerator: "CmdOrCtrl+Shift+B", click: () => sendUi("open-bookmarks") },
         { type: "separator" },
+        { label: "Share Trail…", click: () => sendUi("share-trail") },
+        { type: "separator" },
         { label: "Screenshot Tab", accelerator: "CmdOrCtrl+Shift+S", click: () => runShotFromMain(activeId) },
         { label: "Print…", accelerator: "CmdOrCtrl+P", click: () => activeWc()?.print({}, () => {}) },
         { label: "Save Page as PDF", click: () => savePdf(activeId) },
@@ -2473,6 +2476,7 @@ app.whenReady().then(() => {
   global.nodeCompanion = companion; // for the e2e tests
   global.nodeTest = {
   claudeDesktopEntry, sleepIdleTabs,
+  setTrailSavePath: (p) => (trailSavePath = p),
   setPasswordAsk: (answer) => (passwordAsk = async (opts) => ((global.nodeTest.lastPasswordAsk = opts), answer)),
   loginMenu: (id) => loginMenuItems(tabs.get(id)).map((i) => i.label),
   setPasswordAuth: (answer) => ((passwordAuth = async () => answer), (passwordAuthUntil = 0)),
@@ -3419,6 +3423,75 @@ ipcMain.handle("threads:reopen", (_e, id) => research.reopenThread(String(id)) &
 ipcMain.handle("threads:edit", (_e, id, d = {}) => research.editThread(String(id), d) && research.snapshot());
 ipcMain.handle("threads:remove", (_e, id) => research.removeThread(String(id)) && research.snapshot());
 ipcMain.handle("threads:suggestions", () => research.threadSuggestions());
+// ---- Sharing a trail as a file (B82 step 4, docs/19-trail-sharing.md) ----
+// Reports are read from the Library; a missing file is left out.
+function trailReports() {
+  return (research.current.reports || [])
+    .map((r) => {
+      let text = "";
+      try {
+        text = fs.readFileSync(path.join(libraryRoot(), "saves", path.basename(r.file || "")), "utf8");
+      } catch (_) {
+        return null;
+      }
+      return { id: TrailFile.hashId("report", r.file, r.at), title: r.question || "Report", by: "NODE research agent", at: r.at, text };
+    })
+    .filter(Boolean);
+}
+const trailTabUrls = () => shownTabs().map((t) => tabState(t).url).filter((u) => /^https?:/i.test(u) && !isSensitiveUrl(u));
+ipcMain.handle("trail:share-preview", () => {
+  const s = research.current;
+  const pages = (s.trail || []).filter((r) => !isSensitiveUrl(r.url)).map((r) => ({ url: r.url, title: r.title || r.url, lastAt: r.lastAt, notes: (r.notes || []).length }));
+  const threads = s.threadList || [];
+  const count = (l) => (l || []).reduce((n, r) => n + 1 + count(r.replies), 0);
+  return {
+    name: s.name,
+    by: loadSettings().displayName || "",
+    pages: pages.reverse(),
+    threads: threads.length,
+    replies: threads.reduce((n, t) => n + count(t.replies), 0),
+    notes: pages.reduce((n, p) => n + p.notes, 0),
+    reports: trailReports().length,
+    captures: (s.captures || []).length,
+    tabs: trailTabUrls().length,
+    pins: (s.pins || []).length,
+  };
+});
+// Builds the file text. opts: { pages: [urls], reports: bool, tabs: bool }.
+function trailFileText(opts = {}) {
+  const by = loadSettings().displayName || "";
+  const trail = TrailFile.fromSession(research.current, {
+    by,
+    pages: Array.isArray(opts.pages) ? opts.pages.map(String) : null,
+    reports: opts.reports === false ? [] : trailReports(),
+    includeTabs: opts.tabs ? trailTabUrls() : [],
+  });
+  return TrailFile.toMarkdown(trail, { by });
+}
+const trailFileName = (name) => `${String(name || "Trail").replace(/[\\/:*?"<>|\u0000-\u001f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 80) || "Trail"}.trail.md`;
+let trailSavePath = null; // tests set a path instead of the Save dialog
+ipcMain.handle("trail:share-save", async (_e, opts = {}) => {
+  const text = trailFileText(opts);
+  let file = trailSavePath;
+  if (!file) {
+    const r = await dialog.showSaveDialog(win, {
+      title: "Save Trail File",
+      defaultPath: path.join(app.getPath("downloads"), trailFileName(research.current.name)),
+      filters: [{ name: "NODE trail", extensions: ["md"] }],
+      buttonLabel: "Save",
+    });
+    if (r.canceled || !r.filePath) return { ok: false, canceled: true };
+    file = r.filePath.endsWith(".md") ? r.filePath : `${r.filePath}.trail.md`;
+  }
+  try {
+    fs.writeFileSync(file, text);
+  } catch (err) {
+    return { ok: false, error: `The file could not be saved: ${err.message}` };
+  }
+  usage().count("trailsShared");
+  return { ok: true, file, name: path.basename(file) };
+});
+ipcMain.handle("trail:show-file", (_e, file) => file && fs.existsSync(file) && shell.showItemInFolder(file));
 ipcMain.handle("notes:add", (_e, url, text) => research.addNote(String(url), { text, by: authorName() }) && research.snapshot());
 ipcMain.handle("notes:remove", (_e, url, id) => research.removeNote(String(url), String(id)) && research.snapshot());
 ipcMain.handle("research:undismiss", () => research.undismissAll());

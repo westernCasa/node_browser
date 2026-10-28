@@ -64,7 +64,9 @@ function fromSession(session, { by = "", pages = null, reports = [], includeTabs
     .filter((r) => !isSensitiveUrl(r.url) && (!keep || keep.has(r.url)))
     .map((r) => ({ id: r.id || hashId("page", pageKey(r.url) || r.url), url: cleanUrl(r.url), title: r.title || r.url, firstAt: r.firstAt || 0, lastAt: r.lastAt || 0, keywords: r.keywords || [], tags: r.tags || [], notes: (r.notes || []).map((n) => ({ ...n })) }))
     .filter((r) => r.url);
-  const threads = (session.threadList || []).map((t) => ({ ...t, pages: (t.pages || []).map(cleanUrl).filter(Boolean), replies: cloneReplies(t.replies) }));
+  // A page left out of the export is left out of threads' page links too.
+  const threadPage = (u) => !isSensitiveUrl(u) && (!keep || keep.has(u));
+  const threads = (session.threadList || []).map((t) => ({ ...t, pages: (t.pages || []).filter(threadPage).map(cleanUrl).filter(Boolean), replies: cloneReplies(t.replies) }));
   return {
     id: session.id,
     name: session.name,

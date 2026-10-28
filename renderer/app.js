@@ -2689,6 +2689,72 @@ function notesBlock(r) {
   return wrap;
 }
 
+// ---- Share a trail as a file (B82 step 4) ----
+// The sheet lists every page (all ticked), the threads, notes and reports that
+// go with them, and the open tabs (off). Save File writes <name>.trail.md.
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+async function openShareSheet() {
+  if (!document.getElementById("trail-pane") || document.getElementById("trail-pane").hidden) await openMenu("trail");
+  const p = await api.trailSharePreview();
+  const sheet = document.getElementById("share-sheet");
+  document.getElementById("share-msg").textContent = "";
+  document.getElementById("share-summary").textContent =
+    `“${p.name}”: ${plural(p.threads, "thread", "threads")} with ${plural(p.replies, "reply", "replies")}, ${plural(p.notes, "note", "notes")}${p.pins ? `, ${plural(p.pins, "pinned keyword", "pinned keywords")}` : ""}.` +
+    (p.by ? ` Your name on it: ${p.by}.` : " No name is set yet (Settings → Sharing).");
+  const list = document.getElementById("share-pages");
+  list.innerHTML = "";
+  for (const page of p.pages) {
+    const li = el("li");
+    const label = el("label", "toggle");
+    const box = el("input");
+    box.type = "checkbox";
+    box.checked = true;
+    box.value = page.url;
+    box.addEventListener("change", paintShareCount);
+    const text = el("span", "", page.title);
+    text.title = page.url;
+    label.append(box, " ", text, el("span", "when", ` · ${hostOf(page.url)}`));
+    li.appendChild(label);
+    list.appendChild(li);
+  }
+  document.getElementById("share-reports-label").textContent = `Research reports (${p.reports})`;
+  document.getElementById("share-reports").disabled = !p.reports;
+  document.getElementById("share-reports").checked = p.reports > 0; // shared by default when there are any
+  document.getElementById("share-tabs-label").textContent = `Open tabs in this trail (${p.tabs})`;
+  document.getElementById("share-tabs").checked = false;
+  document.getElementById("share-tabs").disabled = !p.tabs;
+  paintShareCount();
+  sheet.hidden = false;
+  sheet.scrollIntoView({ block: "nearest" });
+  document.getElementById("share-save").focus();
+}
+function shareBoxes() {
+  return [...document.querySelectorAll("#share-pages input[type=checkbox]")];
+}
+function paintShareCount() {
+  const boxes = shareBoxes();
+  document.getElementById("share-pages-count").textContent = `Pages: ${boxes.filter((b) => b.checked).length} of ${boxes.length}`;
+}
+document.getElementById("share-open").addEventListener("click", openShareSheet);
+document.getElementById("share-cancel").addEventListener("click", () => (document.getElementById("share-sheet").hidden = true));
+document.getElementById("share-all").addEventListener("click", () => (shareBoxes().forEach((b) => (b.checked = true)), paintShareCount()));
+document.getElementById("share-none").addEventListener("click", () => (shareBoxes().forEach((b) => (b.checked = false)), paintShareCount()));
+document.getElementById("share-save").addEventListener("click", async () => {
+  const msg = document.getElementById("share-msg");
+  msg.textContent = "";
+  const r = await api.trailShareSave({
+    pages: shareBoxes().filter((b) => b.checked).map((b) => b.value),
+    reports: document.getElementById("share-reports").checked,
+    tabs: document.getElementById("share-tabs").checked,
+  });
+  if (r.canceled) return;
+  if (!r.ok) return (msg.textContent = r.error);
+  msg.textContent = `Saved ${r.name}. Send it with any app: Messages, email, Telegram, Discord or AirDrop. `;
+  const show = el("button", "link-btn", "Show in Folder");
+  show.addEventListener("click", () => api.trailShowFile(r.file));
+  msg.appendChild(show);
+});
+
 let renameTimer = null;
 sessionName.addEventListener("input", () => {
   clearTimeout(renameTimer);
@@ -2791,6 +2857,8 @@ if (api) {
       omni.select();
     } else if (msg.cmd === "bookmark-toggle") {
       toggleBookmark();
+    } else if (msg.cmd === "share-trail") {
+      openShareSheet();
     } else if (msg.cmd === "open-bookmarks") {
       shelfFolder = "bookmarks";
       document.querySelectorAll("#shelf-filters .chip").forEach((c) => c.classList.toggle("active", c.dataset.folder === "bookmarks"));
