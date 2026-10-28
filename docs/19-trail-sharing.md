@@ -145,3 +145,20 @@ Status: open · Tags: temperature
 5. Open Shared Trail: preview, Open as New Trail, Merge Into with the summary and the questions (thread status, tags and keywords).
 6. Opening `.trail.md` files from Finder and Explorer (as an extra "Open with" choice, not the default for all Markdown) and by dragging onto NODE.
 7. Tests: export removes sensitive pages and private address parts; merging gives the same result whichever order two trails are merged in; merging the same trail twice changes nothing the second time.
+
+## Phase 1 in the Electron build (2026-10-28)
+
+All seven steps are built.
+
+| Step | Where | PR |
+| --- | --- | --- |
+| 1–2. Threads, replies, notes, name | Menu → Trail → Threads; Add note under each page; Settings → Sharing. The sidebar's trail line counts threads. `core/research.js` | #34 |
+| 3. File format | `core/trail-file.js` | #33 |
+| 4. Share Trail… | File → Share Trail… or Share… in Menu → Trail. Pages ticked, reports on, open tabs off. Save File… writes `<name>.trail.md` | #35 |
+| 5. Open Shared Trail… | File → Open Shared Trail… or Open Shared… in Menu → Trail. Preview; Open as New Trail (optionally with its tabs, asleep); Merge Into with what is new and the questions. The trail a file came from is offered first. `core/trail-apply.js` | #36 |
+| 6. From outside NODE | Mac: NODE is an extra Open With choice for Markdown files (rank Alternate, so never the default). Windows and Linux: a path on the command line (Open with → Choose another app). Dropping a file on NODE's window or on a page. A Markdown file that is not a trail opens in a tab to read | #36 |
+| 7. Tests | `test/trail-file-demo.js`, `test/threads-demo.js`, `test/trail-open-demo.js`; e2e 37, 38, 39 | #33–#36 |
+
+Not in phase 1: screenshots and saved pages (a Markdown file cannot carry them; they come with the share link), and registering NODE for Markdown on Windows (the installer would make NODE the default for every .md file).
+
+Each trail keeps a short history of where its parts came from (`shareLog` in the session file: opened or merged, from whom, how many pages and threads). It is not shown yet.
