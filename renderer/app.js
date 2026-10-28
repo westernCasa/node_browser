@@ -186,7 +186,7 @@ function renderTabs() {
   tabsEl.innerHTML = "";
   for (const t of tabs) {
     const el = document.createElement("div");
-    el.className = "tab" + (t.id === activeId ? " active" : "") + (t.sleeping ? " asleep" : "") + (t.audible && !t.muted ? " playing" : "");
+    el.className = "tab" + (t.id === activeId ? " active" : "") + (t.sleeping ? " asleep" : "") + (t.audible && !t.muted ? " playing" : "") + (typeof mosaicShown !== "undefined" && mosaicShown.includes(t.id) ? " in-mosaic" : "");
     if (t.sleeping) el.title = "Asleep to save memory. Opens again when you click it.";
     // The monogram shows only in the sidebar layout (the rail shows nothing else).
     el.innerHTML = `<span class="mono" aria-hidden="true">${escapeHtml(monogram(t.title, t.url))}</span><span title="${escapeHtml(t.url || "")}">${escapeHtml(t.title || "New tab")}</span>`;
@@ -983,6 +983,7 @@ function paintLayout(animate = false) {
   setTip(layoutBtn, mosaic ? "Focus: back to one tab" : "Mosaic: tile your tabs");
   layoutBtn.innerHTML = icon(mosaic ? "focus" : "mosaic", "label");
   if (animate) playOnce(layoutBtn.firstElementChild, "rise");
+  if (typeof paintSide === "function") paintSide(false);
   if (typeof tourCheck === "function") setTimeout(tourCheck, 0);
 }
 // Right-click the Mosaic button: the tab overview, to pick the tiles (B71).
@@ -2503,6 +2504,7 @@ startCrawlClock();
 if (api) {
   api.onTabEvent((payload) => {
     if (payload.tabs) tabs = payload.tabs;
+    if (Array.isArray(payload.mosaic)) mosaicShown = payload.mosaic;
     if (payload.activeId) activeId = payload.activeId;
     if (payload.tab) {
       tabs = tabs.map((t) => (t.id === payload.tab.id ? payload.tab : t));
@@ -3660,7 +3662,11 @@ shieldBtn?.addEventListener("click", () => {
 // the address bar and the tab list move into the sidebar's slots, so they keep
 // their handlers and state; Top bar mode puts each back where it was (a
 // comment left in its place marks the spot). Widths: full, rail, hidden.
-var SIDE_W = { full: 272, rail: 68, hidden: 52 };
+var SIDE_MIN = 220;
+var SIDE_MAX = 340;
+var SIDE_DEFAULT = 272;
+var SIDE_W = { full: Math.min(SIDE_MAX, Math.max(SIDE_MIN, Number(store.get("node.sideWidth", SIDE_DEFAULT)) || SIDE_DEFAULT)), rail: 68, hidden: 52 };
+var mosaicShown = []; // the tabs Mosaic shows (from main), for the Mosaic group
 var SIDE_SLOTS = {
   window: ["back", "forward", "reload", "agent-share-btn", "agent-btn", "dl-btn", "fullscreen-btn"],
   address: ["omni-form", "zoom-badge", "shield-btn"],
@@ -3824,6 +3830,32 @@ function paintSide(fetch = true) {
       openMenu("trail");
     });
     list.appendChild(add);
+  }
+  // Mosaic group: the tiles, above the tabs, while Mosaic is on (not in the rail).
+  const group = document.getElementById("sb-mosaic");
+  const inMosaic = layout === "mosaic" && sideState === "full" && mosaicShown.length > 0;
+  group.hidden = !inMosaic;
+  document.body.classList.toggle("sb-mosaic-on", inMosaic);
+  const tabsHead = document.getElementById("sb-tabs-head");
+  tabsHead.hidden = !inMosaic;
+  if (inMosaic) {
+    const list = document.getElementById("sb-mosaic-list");
+    list.innerHTML = "";
+    mosaicShown.forEach((id, i) => {
+      const t = tabs.find((x) => x.id === id);
+      if (!t) return;
+      const row = document.createElement("button");
+      row.className = "sb-mosaic-row";
+      row.setAttribute("aria-current", String(id === activeId));
+      const playingNow = t.audible && !t.muted;
+      row.innerHTML = `<span class="n">${i + 1}</span><span class="nm"></span>${playingNow ? '<span class="k live">Playing</span>' : ""}`;
+      row.querySelector(".nm").textContent = t.title || t.url || "New tab";
+      row.title = `Tile ${i + 1}${i < 4 ? ` (${keyLabel(`mod+${i + 1}`)})` : ""}: ${t.title || t.url}`;
+      row.addEventListener("click", () => api?.activateTab(id));
+      list.appendChild(row);
+    });
+    document.getElementById("sb-mosaic-count").textContent = `${mosaicShown.length} / ${tabs.length}`;
+    document.getElementById("sb-tabs-count").textContent = String(tabs.filter((t) => !mosaicShown.includes(t.id)).length);
   }
   // Media
   const playing = (typeof tabs !== "undefined" ? tabs : []).filter((t) => t.audible && !t.muted).length;
@@ -4114,3 +4146,51 @@ document.getElementById("new-tab").addEventListener(
   },
   true
 );
+
+// Sidebar width (full): drag the right edge, 220–340px; ←/→ on the handle;
+// double-click resets to 272. Not animated: the page follows the drag.
+(function sidebarResize() {
+  const handle = document.getElementById("sb-resize");
+  if (!handle) return;
+  const paintHandle = () => {
+    handle.setAttribute("aria-valuemin", String(SIDE_MIN));
+    handle.setAttribute("aria-valuemax", String(SIDE_MAX));
+    handle.setAttribute("aria-valuenow", String(SIDE_W.full));
+  };
+  const setWidth = (w, { save = true } = {}) => {
+    SIDE_W.full = Math.round(Math.min(SIDE_MAX, Math.max(SIDE_MIN, w)));
+    if (save) store.set("node.sideWidth", SIDE_W.full);
+    paintHandle();
+    if (chromeLayout === "side" && sideState === "full") sendChromeLayout();
+  };
+  paintHandle();
+  let frame = 0;
+  handle.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    handle.setPointerCapture(e.pointerId);
+    document.body.classList.add("sb-resizing");
+    const move = (ev) => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => setWidth(ev.clientX, { save: false }));
+    };
+    const up = () => {
+      handle.removeEventListener("pointermove", move);
+      document.body.classList.remove("sb-resizing");
+      setWidth(SIDE_W.full);
+    };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", up, { once: true });
+    handle.addEventListener("pointercancel", up, { once: true });
+  });
+  handle.addEventListener("dblclick", () => setWidth(SIDE_DEFAULT));
+  handle.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+      e.preventDefault();
+      setWidth(SIDE_W.full + (e.key === "ArrowRight" ? 8 : -8));
+    } else if (e.key === "Home" || e.key === "End") {
+      e.preventDefault();
+      setWidth(e.key === "Home" ? SIDE_MIN : SIDE_MAX);
+    }
+  });
+})();

@@ -113,6 +113,32 @@ const inSidebar = (ui, sel) => ui.evaluate((s) => Boolean(document.querySelector
   check("Sound: all turns the tile and the strip violet", (await ui.$eval("#sb-sound", (s) => s.textContent)) === "SOUND: ALL" && (await ui.$eval("#sidebar #sound-btn", (b) => getComputedStyle(b).borderColor)) === "rgb(177, 140, 255)");
   await ui.click("#sidebar #sound-btn");
 
+  // Mosaic group: the tiles above the tabs, the rest under Tabs.
+  await ui.click("#sidebar #layout-btn");
+  await sleep(1200);
+  const groupRows = await ui.$$eval("#sb-mosaic .sb-mosaic-row", (r) => r.length);
+  check("Mosaic on: the Mosaic group lists the tiles", !(await ui.$eval("#sb-mosaic", (g) => g.hidden)) && groupRows >= 2, String(groupRows));
+  check("tiles leave the tab list; the rest sit under Tabs", (await ui.$$eval("#sidebar .tab", (t) => t.filter((x) => x.offsetParent).length)) === (await ui.$$eval("#sidebar .tab", (t) => t.length)) - groupRows && !(await ui.$eval("#sb-tabs-head", (h) => h.hidden)));
+  await ui.click("#sb-mosaic .sb-mosaic-row:nth-child(2)");
+  await sleep(600);
+  check("clicking a row focuses that tile", await ui.$eval("#sb-mosaic .sb-mosaic-row:nth-child(2)", (r) => r.getAttribute("aria-current") === "true"));
+  await ui.click("#sidebar #layout-btn");
+  await sleep(1000);
+  check("Mosaic off: the group goes away", await ui.$eval("#sb-mosaic", (g) => g.hidden));
+
+  // Width: the handle on the right edge, by keyboard; double-click resets.
+  await ui.focus("#sb-resize");
+  await ui.keyboard.press("ArrowRight");
+  await ui.keyboard.press("ArrowRight");
+  await sleep(500);
+  check("the width handle widens the sidebar and the page follows", (await view(app)).x === 273 + 16, JSON.stringify(await view(app)));
+  await ui.keyboard.press("End");
+  await sleep(400);
+  check("no wider than 340", (await view(app)).x === 341);
+  await ui.dblclick("#sb-resize");
+  await sleep(400);
+  check("double-click: back to 272", (await view(app)).x === 273);
+
   // Full screen keeps the sidebar; no sliding toolbar.
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].emit("enter-full-screen"));
   await sleep(600);
