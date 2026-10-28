@@ -1,10 +1,12 @@
-# NODE
+# NODE Research Browser
 
-![NODE, a research browser, showing an article with keyword suggestions in the side panel](docs/media/hero.png)
+**[noderesearch.app](https://noderesearch.app)** · [Download](https://github.com/westernCasa/node_browser/releases/latest) · Free and open source for macOS, Windows and Linux
 
-NODE is a desktop browser for niche research. It reads the page you are on, picks out its keywords, and suggests the next pages to read in a side panel. Media plays in up to four tabs at once, side by side, and every page you read is kept in a research trail you can export.
+![NODE Research Browser showing an article with keyword suggestions in the side panel](docs/media/hero.png)
 
-Built with Electron and plain JavaScript, with an Expo mobile app (iPhone and Android, in testing) that shares the same core logic. Status: personal project, version 0.4, in active development.
+NODE Research Browser (NODE for short) is a desktop browser for niche research. It reads the page you are on, picks out its keywords, and suggests the next pages to read in a side panel. Media plays in up to four tabs at once, side by side, and every page you read is kept in a research trail you can export.
+
+Built with Electron and plain JavaScript, with an Expo mobile app (iPhone and Android, in testing) that shares the same core logic. Status: released, version 0.9.8, updated often.
 
 ## What it does
 
@@ -28,11 +30,11 @@ NODE was called Scout until October 2026. The bundle ID `app.scout.browser` and 
 
 ## Download
 
-Installers for macOS, Windows and Linux are on the [Releases page](https://github.com/westernCasa/node_browser/releases) once a version is published. NODE updates itself from there. Until the builds are signed, macOS asks you to right-click NODE → Open the first time. How releases are made: [docs/09-releasing.md](docs/09-releasing.md).
+Download NODE for your computer at [noderesearch.app](https://noderesearch.app), or pick a file from the [latest release](https://github.com/westernCasa/node_browser/releases/latest): `.dmg` for macOS (Apple chip or Intel), `.exe` for Windows, `.AppImage` or `.deb` for Linux. The Mac app is signed and notarized by Apple. NODE updates itself on macOS and Windows. How releases are made: [docs/09-releasing.md](docs/09-releasing.md).
 
-## Beta feedback
+## Feedback
 
-NODE is in beta. If you have used it for a few days, please fill in the [beta feedback survey](https://github.com/westernCasa/node_browser/issues/new?template=beta-feedback.yml) (about 4 minutes). It decides what gets fixed and built next. No GitHub account, or prefer to answer privately? Use the [anonymous survey](https://forms.gle/XuMGZUzScNYPyP319) instead.
+If you have used NODE for a few days, please fill in the [feedback survey](https://github.com/westernCasa/node_browser/issues/new?template=beta-feedback.yml) (about 4 minutes). It decides what gets fixed and built next. No GitHub account, or prefer to answer privately? Use the [anonymous survey](https://forms.gle/XuMGZUzScNYPyP319) instead.
 
 Found a bug? Use Help → Report a Problem in NODE, or open a [bug report](https://github.com/westernCasa/node_browser/issues/new?template=bug-report.yml).
 
