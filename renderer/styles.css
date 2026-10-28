@@ -1228,3 +1228,43 @@ body.side.sb-mosaic-on .sidebar .tab.in-mosaic { display: none; }
 .sb-resize:focus-visible { background: linear-gradient(to right, transparent 2px, var(--signal) 2px, var(--signal) 4px, transparent 4px); }
 body.sb-resizing { cursor: col-resize; user-select: none; }
 body.sb-rail .sb-resize, body.sb-rail .sb-mosaic { display: none; }
+
+/* Threads and notes in the Trail section (B82). */
+.thread-new { display: flex; gap: 6px; margin: 4px 0 6px; }
+.thread-new input { flex: 1; min-width: 0; }
+.name-ask { border: 1px solid var(--accent); padding: 8px; margin: 4px 0 8px; }
+.thread-suggest { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; margin-bottom: 6px; }
+.link-btn { background: none; border: 0; padding: 0; color: var(--mute); font: inherit; font-size: 11px; cursor: pointer; text-align: left; }
+.link-btn:hover { color: var(--accent); }
+.link-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.thread { border-top: 1px solid var(--line); padding: 8px 0; }
+.thread-head { display: flex; flex-direction: column; gap: 2px; width: 100%; background: none; border: 0; padding: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.thread-title { font-weight: 600; overflow-wrap: anywhere; }
+.thread.resolved .thread-title { color: var(--mute); }
+.thread-meta { color: var(--mute); font-size: 11px; }
+.thread-tags { margin-top: 4px; }
+.thread-conclusion { margin: 6px 0; padding-left: 8px; border-left: 2px solid var(--accent); }
+.thread-pages { display: flex; flex-wrap: wrap; gap: 4px 10px; margin: 4px 0; }
+.replies { list-style: none; margin: 4px 0 0; padding: 0; }
+.replies .replies { padding-left: 12px; border-left: 1px solid var(--line); }
+.reply { padding: 4px 0; }
+.reply-head, .note { font-size: 12px; }
+.reply-head .when, .note .when { color: var(--mute); }
+.reply-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.thread-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.inline-form { display: flex; flex-wrap: wrap; gap: 6px; width: 100%; margin-top: 4px; }
+.inline-form textarea, .inline-form input { flex: 1 1 100%; min-width: 0; font: inherit; }
+.chip.ghost { background: none; }
+.notes { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; margin-top: 4px; }
+.note .link-btn { margin-left: 6px; }
+.thread-new input, .name-ask input, .inline-form textarea, .inline-form input {
+  min-height: 28px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--text);
+  border-radius: var(--radius-md);
+  padding: 4px 8px;
+}
+.inline-form textarea { resize: vertical; }
+.thread-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.thread-tags span { font-size: 11px; border: 1px solid var(--line); border-radius: var(--radius-md); padding: 1px 6px; color: var(--mute); }

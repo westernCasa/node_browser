@@ -311,6 +311,17 @@
             <button class="chip" id="session-export" title="Save the session as Markdown notes in the Library">Export</button>
           </div>
           <p class="help" id="session-meta"></p>
+          <p class="kicker sub">Threads</p>
+          <div class="name-ask" id="name-ask" hidden>
+            <label class="field"><span>Your name on threads and notes. No account; people you share the trail with see it. You can change it in Settings → Sharing.</span><input id="name-ask-input" type="text" maxlength="60" spellcheck="false" /></label>
+            <button class="chip" id="name-ask-save">Save name</button>
+          </div>
+          <form class="thread-new" id="thread-new">
+            <input id="thread-title" type="text" maxlength="200" placeholder="Start a thread: a question or a line of inquiry" />
+            <button class="chip" type="submit">Start</button>
+          </form>
+          <div class="thread-suggest" id="thread-suggest"></div>
+          <div id="thread-list"></div>
           <p class="kicker sub">Recurring keywords</p>
           <div class="keys" id="threads"></div>
           <p class="kicker sub">Pages read</p>
@@ -384,6 +395,16 @@
             <ul class="pw-list" id="passwords-never"></ul>
             <p class="help">When you sign in, NODE asks whether to save the password. Next time, click the username or password field and pick the login. On a sign-up form, click the password field and choose Use Strong Password. Passwords are encrypted with your computer's own secure storage (Keychain on a Mac) and never leave this computer. Showing or copying one asks for Touch ID (or a confirmation on computers without it).</p>
             <p class="help">To import, first export your passwords as a file. Chrome, Brave and Edge: Settings → Passwords (Password Manager) → Settings → Export passwords. Safari: File → Export → Passwords. Firefox: Passwords → ••• → Export Passwords. 1Password and Bitwarden: export as CSV. Then click Import Passwords… and choose the file. NODE offers to move the file to the Trash afterwards, since it holds every password in plain text.</p>
+          </div>
+          <div class="rail-head rules-head">
+            <div>
+              <p class="kicker">Trails</p>
+              <h1>Sharing</h1>
+            </div>
+          </div>
+          <div class="source" id="sharing-box">
+            <label class="field"><span>Your name on threads, replies and notes</span><input type="text" id="display-name" maxlength="60" spellcheck="false" placeholder="For example Sven" /></label>
+            <p class="help">No account. The name goes with what you write in a trail, so the people you share it with can see who wrote what.</p>
           </div>
           <div class="rail-head rules-head">
             <div>

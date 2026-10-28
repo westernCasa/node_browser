@@ -1518,6 +1518,7 @@ async function renderSources() {
   fillAgents(settings.agents);
   document.getElementById("restore-tabs").checked = settings.restoreTabs !== false;
   document.getElementById("start-page").value = settings.startPage || "";
+  document.getElementById("display-name").value = settings.displayName || "";
   document.getElementById("mosaic-max").value = String(settings.mosaicMax ?? 4);
   document.getElementById("tab-sleep").value = String(settings.tabSleep ?? 30);
   document.getElementById("chrome-layout").value = settings.chromeLayout === "side" ? "side" : "top";
@@ -1958,6 +1959,7 @@ async function saveSources(rerender = true) {
     google: { mode: document.getElementById("google-mode").value, browser: document.getElementById("google-browser").value },
     restoreTabs: document.getElementById("restore-tabs").checked,
     startPage: document.getElementById("start-page").value,
+    displayName: document.getElementById("display-name").value,
     mosaicMax: Number(document.getElementById("mosaic-max").value),
     tabSleep: Number(document.getElementById("tab-sleep").value),
     passwordsOffer: document.getElementById("passwords-offer").checked,
@@ -2407,6 +2409,8 @@ async function renderTrail() {
     threadsEl.appendChild(chip);
   }
 
+  await renderThreads();
+
   trailList.innerHTML = session.trail.length ? "" : `<p class="help">Pages you read appear here, newest first.</p>`;
   for (const r of [...session.trail].reverse()) {
     const row = document.createElement("div");
@@ -2429,6 +2433,7 @@ async function renderTrail() {
       ks.appendChild(span);
     }
     row.append(t, m, ks);
+    row.appendChild(notesBlock(r));
     // Screenshots and saves taken on this page (files are in the Library).
     const caps = (session.captures || []).filter((c) => c.url === r.url);
     if (caps.length) {
@@ -2452,6 +2457,236 @@ async function renderTrail() {
     }
     trailList.appendChild(row);
   }
+}
+
+// ---- Threads and notes (B82) ----
+// A thread is a question in the trail with replies that can be answered, like
+// a Reddit thread. Everything written carries the display name (Settings →
+// Sharing); the first time, the Trail section asks for it.
+let nameWaiting = null;
+async function withName(fn) {
+  const s = await api.getSettings();
+  if (s.displayName) return fn();
+  nameWaiting = fn;
+  const box = document.getElementById("name-ask");
+  box.hidden = false;
+  document.getElementById("name-ask-input").focus();
+}
+async function saveAskedName() {
+  const name = document.getElementById("name-ask-input").value.trim();
+  if (!name) return document.getElementById("name-ask-input").focus();
+  await api.setSettings({ displayName: name });
+  document.getElementById("display-name").value = name;
+  document.getElementById("name-ask").hidden = true;
+  const fn = nameWaiting;
+  nameWaiting = null;
+  if (fn) await fn();
+}
+document.getElementById("name-ask-save").addEventListener("click", saveAskedName);
+document.getElementById("name-ask-input").addEventListener("keydown", (e) => e.key === "Enter" && (e.preventDefault(), saveAskedName()));
+
+// Re-render after a change, keeping the threads that were folded open.
+async function threadsChanged(snapshot) {
+  if (snapshot) adoptSession(snapshot);
+  await renderTrail();
+}
+
+document.getElementById("thread-new").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const input = document.getElementById("thread-title");
+  const title = input.value.trim();
+  if (!title) return input.focus();
+  withName(async () => {
+    const snap = await api.threadAdd({ title });
+    input.value = "";
+    if (snap) {
+      const t = snap.threadList[snap.threadList.length - 1];
+      threadOpen.add(t.id);
+    }
+    await threadsChanged(snap);
+  });
+});
+
+const threadOpen = new Set();
+const whenShort = (ms) => new Date(ms).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+
+function el(tag, cls, text) {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text !== undefined) n.textContent = text;
+  return n;
+}
+
+// A small inline form (Electron has no window.prompt): one text field and a button.
+function inlineForm({ placeholder, button, multiline = true, value = "", onSubmit }) {
+  const f = el("form", "inline-form");
+  const field = multiline ? el("textarea") : el("input");
+  if (!multiline) field.type = "text";
+  field.placeholder = placeholder;
+  field.value = value;
+  if (multiline) field.rows = 2;
+  const go = el("button", "chip", button);
+  go.type = "submit";
+  const cancel = el("button", "chip ghost", "Cancel");
+  cancel.type = "button";
+  cancel.addEventListener("click", () => f.remove());
+  f.append(field, go, cancel);
+  f.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    await onSubmit(field.value.trim(), f);
+  });
+  field.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") (e.stopPropagation(), f.remove());
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey || !multiline)) (e.preventDefault(), f.requestSubmit());
+  });
+  setTimeout(() => field.focus(), 0);
+  return f;
+}
+
+function replyNode(thread, r, depth) {
+  const li = el("li", "reply");
+  li.dataset.id = r.id;
+  const head = el("div", "reply-head");
+  head.append(el("b", "", r.by || "Someone"), el("span", "when", ` · ${whenShort(r.at)}`));
+  const body = el("div", "reply-text", r.text);
+  const actions = el("div", "reply-actions");
+  if (depth < 8) {
+    const answer = el("button", "link-btn", "Reply");
+    answer.addEventListener("click", () => {
+      if (li.querySelector(":scope > .inline-form")) return;
+      li.insertBefore(
+        inlineForm({ placeholder: `Answer ${r.by || "this reply"}`, button: "Reply", onSubmit: (text) => text && withName(async () => threadsChanged(await api.threadReply(thread.id, r.id, text))) }),
+        li.querySelector(":scope > ul"),
+      );
+    });
+    actions.appendChild(answer);
+  }
+  li.append(head, body, actions);
+  if (r.replies?.length) {
+    const ul = el("ul", "replies");
+    for (const c of r.replies) ul.appendChild(replyNode(thread, c, depth + 1));
+    li.appendChild(ul);
+  }
+  return li;
+}
+
+const countReplies = (list) => (list || []).reduce((n, r) => n + 1 + countReplies(r.replies), 0);
+
+function threadNode(t) {
+  const box = el("div", `thread ${t.status}`);
+  box.dataset.id = t.id;
+  const open = threadOpen.has(t.id);
+  const head = el("button", "thread-head");
+  head.setAttribute("aria-expanded", String(open));
+  const n = countReplies(t.replies);
+  head.append(el("span", "thread-title", t.title), el("span", "thread-meta", `${t.status === "resolved" ? "Resolved" : "Open"} · ${n} ${n === 1 ? "reply" : "replies"}${t.by ? ` · ${t.by}` : ""}`));
+  head.addEventListener("click", () => {
+    if (threadOpen.has(t.id)) threadOpen.delete(t.id);
+    else threadOpen.add(t.id);
+    renderThreads();
+  });
+  box.appendChild(head);
+  if (t.tags?.length) {
+    const tags = el("div", "ks thread-tags");
+    for (const tag of t.tags) tags.appendChild(el("span", "", tag));
+    box.appendChild(tags);
+  }
+  if (!open) return box;
+  if (t.conclusion) box.appendChild(el("p", "thread-conclusion", `Conclusion: ${t.conclusion}`));
+  if (t.pages?.length) {
+    const pages = el("div", "thread-pages");
+    for (const url of t.pages) {
+      const row = session.trail.find((r) => r.url === url);
+      const a = el("button", "link-btn", row?.title || hostOf(url));
+      a.title = url;
+      a.addEventListener("click", () => openUrl(url, false));
+      pages.appendChild(a);
+    }
+    box.appendChild(pages);
+  }
+  const ul = el("ul", "replies top");
+  for (const r of t.replies || []) ul.appendChild(replyNode(t, r, 1));
+  box.appendChild(ul);
+
+  const actions = el("div", "thread-actions");
+  const add = (label, fn, title) => {
+    const b = el("button", "chip", label);
+    if (title) b.title = title;
+    b.addEventListener("click", fn);
+    actions.appendChild(b);
+    return b;
+  };
+  const formHere = (form) => {
+    actions.querySelector(".inline-form")?.remove();
+    actions.appendChild(form);
+  };
+  add("Reply", () => formHere(inlineForm({ placeholder: "Write a reply", button: "Post", onSubmit: (text) => text && withName(async () => threadsChanged(await api.threadReply(t.id, "", text))) })));
+  const here = currentTabUrl();
+  if (here && /^https?:/i.test(here) && !(t.pages || []).includes(here)) add("Add This Page", async () => threadsChanged(await api.threadEdit(t.id, { pages: [...(t.pages || []), here] })), "Link the page in the current tab to this thread");
+  if (t.status === "open")
+    add("Resolve…", () => formHere(inlineForm({ placeholder: "Conclusion (optional)", button: "Mark Resolved", multiline: false, value: t.conclusion || "", onSubmit: async (text) => threadsChanged(await api.threadResolve(t.id, text)) })));
+  else add("Reopen", async () => threadsChanged(await api.threadReopen(t.id)));
+  add("Tags…", () => formHere(inlineForm({ placeholder: "Tags, separated by commas", button: "Save Tags", multiline: false, value: (t.tags || []).join(", "), onSubmit: async (text) => threadsChanged(await api.threadEdit(t.id, { tags: text.split(",").map((x) => x.trim()).filter(Boolean) })) })));
+  const del = add("Remove", async () => {
+    if (del.dataset.armed !== "1") {
+      del.dataset.armed = "1";
+      del.textContent = "Remove thread and replies?";
+      return;
+    }
+    threadOpen.delete(t.id);
+    await threadsChanged(await api.threadRemove(t.id));
+  });
+  box.appendChild(actions);
+  return box;
+}
+
+function currentTabUrl() {
+  return tabs.find((t) => t.id === activeId)?.url || "";
+}
+
+async function renderThreads() {
+  const list = document.getElementById("thread-list");
+  const threads = session?.threadList || [];
+  list.innerHTML = "";
+  if (!threads.length) list.appendChild(el("p", "help", "A thread is a question or a line of inquiry in this trail. You and the people you share the trail with can reply, answer replies, and mark it resolved."));
+  // Open threads first, then resolved; newest first within each.
+  const sorted = [...threads].sort((a, b) => (a.status === b.status ? b.at - a.at : a.status === "open" ? -1 : 1));
+  for (const t of sorted) list.appendChild(threadNode(t));
+  const sug = document.getElementById("thread-suggest");
+  sug.innerHTML = "";
+  const ideas = (await api.threadSuggestions?.()) || [];
+  for (const k of ideas) {
+    const b = el("button", "link-btn", `${k.pages} pages share “${k.term}”. Make it a thread?`);
+    b.addEventListener("click", () =>
+      withName(async () => {
+        const pages = session.trail.filter((r) => r.keywords.some((x) => x.toLowerCase() === k.term.toLowerCase())).map((r) => r.url);
+        const snap = await api.threadAdd({ title: k.term, tags: [k.term], pages });
+        if (snap) threadOpen.add(snap.threadList[snap.threadList.length - 1].id);
+        await threadsChanged(snap);
+      }),
+    );
+    sug.appendChild(b);
+  }
+}
+
+// Notes on a page in the trail, each with its author.
+function notesBlock(r) {
+  const wrap = el("div", "notes");
+  for (const n of r.notes || []) {
+    const line = el("div", "note");
+    line.append(el("b", "", n.by || "Someone"), el("span", "when", ` · ${whenShort(n.at)}: `), el("span", "", n.text));
+    const x = el("button", "link-btn", "Remove");
+    x.addEventListener("click", async () => threadsChanged(await api.noteRemove(r.url, n.id)));
+    line.appendChild(x);
+    wrap.appendChild(line);
+  }
+  const add = el("button", "link-btn", "Add note");
+  add.addEventListener("click", () => {
+    if (wrap.querySelector(".inline-form")) return;
+    wrap.appendChild(inlineForm({ placeholder: "A note on this page", button: "Save Note", onSubmit: (text) => text && withName(async () => threadsChanged(await api.noteAdd(r.url, text))) }));
+  });
+  wrap.appendChild(add);
+  return wrap;
 }
 
 let renameTimer = null;
@@ -3792,7 +4027,8 @@ function paintSide(fetch = true) {
   if (s && cur && !same && api?.researchGet) api.researchGet().then((fresh) => fresh?.id === cur.id && adoptSession(fresh)); // switched elsewhere
   document.getElementById("sb-trail-name").textContent = cur?.name || s?.name || "Trail";
   const pages = cur ? cur.pages : (s?.trail || []).length;
-  document.getElementById("sb-trail-meta").textContent = `${pages} ${pages === 1 ? "PAGE" : "PAGES"}${same ? ` · ${(s.threads || []).length} KW` : ""}`;
+  const threadCount = same ? (s.threadList || []).length : cur?.threadCount || 0;
+  document.getElementById("sb-trail-meta").textContent = `${pages} ${pages === 1 ? "PAGE" : "PAGES"}${threadCount ? ` · ${threadCount} ${threadCount === 1 ? "THREAD" : "THREADS"}` : ""}${same ? ` · ${(s.threads || []).length} KW` : ""}`;
   // Active trails
   const open = store.get("node.sideTrailsOpen", true);
   const head = document.getElementById("sb-trails-toggle");
