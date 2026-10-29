@@ -49,7 +49,7 @@ const { normalizeUrl, hostOf, SEARCH_URL, isSensitiveUrl } = require("./core/url
 const { routesToGoogleWindow, MODES: GOOGLE_MODES } = require("./core/google");
 const { createCompanion } = require("./companion");
 const { createAgentServer } = require("./agent-server");
-const { createAgents } = require("./agents");
+const { createAgents, isPrivateHost } = require("./agents");
 const { createLog } = require("./log");
 const { createUpdater, RELEASES } = require("./updater");
 const { runResearch } = require("./core/agent");
@@ -2155,7 +2155,7 @@ function installPermissionHandlers(ses) {
   ses.setPermissionCheckHandler((_wc, permission, requestingOrigin) => {
     if (ALWAYS_ALLOW.has(permission)) return true;
     if (ASK[permission]) return permissions()[`${requestingOrigin}|${permission}`] === "allow";
-    return true;
+    return false;
   });
 }
 
@@ -2381,6 +2381,14 @@ function createWindow() {
   });
 
   win.loadFile(path.join(__dirname, "renderer", "index.html"));
+  // The chrome window holds the privileged `scout` bridge (passwords, settings,
+  // file access, the agent token). It must never navigate off the bundled UI:
+  // a URL dropped on the window, or any stray navigation, would load a remote
+  // page with that bridge.
+  win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  win.webContents.on("will-navigate", (e) => {
+    if (!e.url.startsWith("file:")) e.preventDefault();
+  });
   // macOS three-finger swipe (when "Swipe between pages" uses three fingers).
   // Closing the window while media plays left Electron waiting forever (the
   // same problem as closing a playing tab, B36). Blank every tab first, then close.
@@ -3897,7 +3905,17 @@ ipcMain.handle("library:grab", async (_e, id, explicitUrl) => {
   if (/\.(m3u8|mpd)(\?|$)/i.test(found.url)) {
     throw new Error("This is a streaming playlist (HLS/DASH), not a single file, so it can't be saved.");
   }
-  const res = await fetch(found.url, { headers: { "User-Agent": USER_AGENT, Referer: tab.view.webContents.getURL() } });
+  // A page chooses this address, so only public http(s) media may be fetched:
+  // a page must not make NODE read this computer or the local network.
+  let target;
+  try {
+    target = new URL(found.url);
+  } catch (_) {
+    throw new Error("This media has no address to download.");
+  }
+  if (!/^https?:$/.test(target.protocol)) throw new Error("Only http and https media can be saved.");
+  if (isPrivateHost(target.hostname)) throw new Error("Media on this computer or the local network cannot be saved.");
+  const res = await fetch(target.href, { headers: { "User-Agent": USER_AGENT, Referer: tab.view.webContents.getURL() } });
   if (!res.ok) throw new Error(`Download failed (HTTP ${res.status})`);
   const buf = Buffer.from(await res.arrayBuffer());
   const ext = extensionFor(res.headers.get("content-type") || "", found.url, found.kind);
