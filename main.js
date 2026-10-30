@@ -855,7 +855,7 @@ function attachListeners(tab) {
       }
     }
     // The × on a start-page tile: forget that page and show the start page again.
-    // The survey card's buttons (B75) come here too.
+    // The survey card's buttons (B98) come here too.
     if (isStartPage(e.url)) {
       let gone = "";
       let act = "";
@@ -1495,7 +1495,7 @@ function startPageUrl() {
   return `file://${file.split(path.sep).join("/")}?top=${encodeURIComponent(JSON.stringify(top))}${days ? `&survey=${days}` : ""}`;
 }
 
-// ---- Beta survey on the new tab page (B75) ----
+// ---- Beta survey on the new tab page (B98) ----
 // The same survey prompt as the one in the suggestions widget (B65), shown as
 // a larger card on the new tab page once NODE has been used on 3 different
 // days. The answer is shared with the window, which keeps it as node.survey:
@@ -3572,7 +3572,7 @@ ipcMain.on("usage:count", (_e, name, n) => usage().count(String(name), n));
 ipcMain.handle("usage:days", () => usage().daysUsed());
 // The beta survey opens in a tab (B65).
 ipcMain.handle("survey:open", () => createTab(require("./core/urls").SURVEY_URL));
-// The window's saved survey answer (node.survey), sent when it loads and on every change (B75).
+// The window's saved survey answer (node.survey), sent when it loads and on every change (B98).
 ipcMain.handle("survey:state", (_e, next) => setSurveyState(next, { fromWindow: true }));
 ipcMain.handle("usage:copy", () => {
   const text = usageSummary();

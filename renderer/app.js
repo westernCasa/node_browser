@@ -1743,7 +1743,7 @@ if (api?.copyDiagnostics) {
   document.getElementById("diag-folder").addEventListener("click", () => api.openLogFolder());
 }
 
-// ---- Beta survey (B64, B65, B75) ----
+// ---- Beta survey (B64, B65, B98) ----
 // The answer to the survey prompt is kept here as node.survey and shared with
 // the main process, which shows the same prompt as a card on new tab pages.
 function setSurvey(value) {
@@ -3089,7 +3089,7 @@ if (api) {
     } else if (msg.cmd === "error") {
       showNotice(msg.message);
     } else if (msg.cmd === "survey-state") {
-      // Answered on the new tab page's survey card (B75): keep it, and drop
+      // Answered on the new tab page's survey card (B98): keep it, and drop
       // the widget's prompt if it is showing.
       store.set("node.survey", msg.state);
       if (!noticeEl.hidden && /survey/i.test(noticeEl.textContent)) noticeEl.hidden = true;

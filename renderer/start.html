@@ -31,7 +31,7 @@
       .tiles span { display: block; margin-top: 6px; font: 11px/14px "JetBrains Mono", monospace; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .empty { width: min(640px, 100%); color: var(--muted); font-size: 14px; }
       @media (max-width: 560px) { .tiles { grid-template-columns: repeat(2, 1fr); } h1 { font-size: 28px; line-height: 32px; } }
-      /* Beta survey card (B75): over the page, once NODE has been used on 3 days. */
+      /* Beta survey card (B98): over the page, once NODE has been used on 3 days. */
       .survey-back { position: fixed; inset: 0; background: rgba(0, 0, 0, .72); display: flex; align-items: center; justify-content: center; padding: 24px; animation: fade 200ms ease-out; }
       .survey { width: min(520px, 100%); background: var(--raised); border: 1px solid var(--signal); border-radius: 4px; padding: 28px; }
       .survey .eyebrow { margin: 0 0 8px; color: var(--signal); }
@@ -101,7 +101,7 @@
       });
       document.getElementById("q").focus();
 
-      // Beta survey card (B75). NODE adds ?survey=<days used> when it is time to
+      // Beta survey card (B98). NODE adds ?survey=<days used> when it is time to
       // ask. Each button goes to ?survey-act=…, which NODE handles: Take survey
       // opens the survey in this tab; Later and Don't ask again come back here
       // without the card. Esc is the same as Later.

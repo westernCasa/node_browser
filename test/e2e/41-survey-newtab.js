@@ -1,4 +1,4 @@
-// Beta survey card on the new tab page (B75): shown once NODE has been used on
+// Beta survey card on the new tab page (B98): shown once NODE has been used on
 // 3 different days, shares its answer with the widget's prompt (B65), Later
 // waits for another day of use, Take survey opens the survey in the same tab
 // and ends both prompts, Esc counts as Later, and a custom new tab page is left
