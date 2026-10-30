@@ -1,8 +1,9 @@
-// Beta survey card on the new tab page (B98): shown once NODE has been used on
-// 3 different days, shares its answer with the widget's prompt (B65), Later
-// waits for another day of use, Take survey opens the survey in the same tab
-// and ends both prompts, Esc counts as Later, and a custom new tab page is left
-// alone.
+// Beta survey on the new tab page (B98): part of the start page under the
+// search box (not a pop-up: nothing covers the page and the search box keeps
+// the focus), shown once NODE has been used on 3 different days. It shares its
+// answer with the widget's prompt (B65); Later waits for another day of use;
+// Take survey opens the survey in the same tab and ends both prompts; a custom
+// new tab page is left alone.
 const { _electron: electron } = require(process.env.PLAYWRIGHT_PATH || "playwright");
 const path = require("path"), fs = require("fs"), os = require("os");
 const OUT = process.argv[2] || fs.mkdtempSync(path.join(os.tmpdir(), "node-e2e-"));
@@ -44,7 +45,7 @@ async function newTab(app, ui) {
 const inTab = (app, id, js) => app.evaluate(({ webContents }, [id, js]) => webContents.fromId(id).executeJavaScript(js), [id, js]);
 const urlOf = (app, id) => app.evaluate(({ webContents }, id) => webContents.fromId(id).getURL(), id);
 const card = (app, id) =>
-  inTab(app, id, `(() => { const c = document.querySelector('.survey'); return c ? { text: c.textContent, buttons: [...c.querySelectorAll('button')].map((b) => b.textContent), focused: document.activeElement?.textContent || '' } : null; })()`);
+  inTab(app, id, `(() => { const c = document.querySelector('.survey:not([hidden])'); return c ? { text: c.textContent, buttons: [...c.querySelectorAll('button')].map((b) => b.textContent), focused: document.activeElement?.id || '', overlay: [...document.querySelectorAll('body *')].some((e) => getComputedStyle(e).position === 'fixed'), above: c.getBoundingClientRect().top > document.getElementById('f').getBoundingClientRect().bottom && c.getBoundingClientRect().bottom < document.getElementById('top-label').getBoundingClientRect().top } : null; })()`);
 const windowSurvey = (ui) => ui.evaluate(() => JSON.parse(localStorage.getItem("node.survey") || "null"));
 
 (async () => {
@@ -61,9 +62,10 @@ const windowSurvey = (ui) => ui.evaluate(() => JSON.parse(localStorage.getItem("
   ({ app, ui } = await launch());
   id = await newTab(app, ui);
   let c = await card(app, id);
-  check("survey card on the new tab page after 3 days", Boolean(c) && /used it on [34] days/.test(c.text) && /4 minutes/.test(c.text), c ? c.text.slice(0, 90) : "none");
+  check("survey card on the new tab page after 3 days", Boolean(c) && /used NODE on [34] days/.test(c.text) && /4 minutes/.test(c.text), c ? c.text.slice(0, 90) : "none");
   check("card choices: Take survey, Later, Don't ask again", c && c.buttons.join("|") === "Take survey|Later|Don't ask again", c && c.buttons.join("|"));
-  check("Take survey has the focus", c && c.focused === "Take survey", c && c.focused);
+  check("not a pop-up: no overlay, and the search box keeps the focus", c && !c.overlay && c.focused === "q", c && JSON.stringify({ overlay: c.overlay, focused: c.focused }));
+  check("it sits in the page, between the search box and Most visited", c && c.above);
   // Later: the page comes back without the card, and the window keeps the answer.
   await inTab(app, id, `document.querySelector('[data-act="later"]').click()`);
   await sleep(1500);
@@ -83,14 +85,14 @@ const windowSurvey = (ui) => ui.evaluate(() => JSON.parse(localStorage.getItem("
   await app.evaluate(({ app }) => app.quit());
   await sleep(1500);
 
-  // Another day of use: the card is back. Esc counts as Later.
+  // Another day of use: the prompt is back; Later again.
   setDays(["2026-10-19"]);
   ({ app, ui } = await launch());
   id = await newTab(app, ui);
   check("asked again on the next day of use", (await card(app, id)) !== null);
-  await inTab(app, id, `document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
+  await inTab(app, id, `document.querySelector('[data-act="later"]').click()`);
   await sleep(1500);
-  check("Esc closes the card like Later", (await card(app, id)) === null && (await windowSurvey(ui))?.state === "ask");
+  check("Later again hides it until the next day", (await card(app, id)) === null && (await windowSurvey(ui))?.state === "ask");
   await app.evaluate(({ app }) => app.quit());
   await sleep(1500);
 
