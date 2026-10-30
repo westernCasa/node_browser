@@ -8,7 +8,7 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # ubuntu-latest is moving to 26.04, where Playwright 1.56 cannot install its browser dependencies
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
