@@ -855,11 +855,22 @@ function attachListeners(tab) {
       }
     }
     // The × on a start-page tile: forget that page and show the start page again.
+    // The survey card's buttons (B75) come here too.
     if (isStartPage(e.url)) {
       let gone = "";
+      let act = "";
       try {
-        gone = new URL(e.url).searchParams.get("remove") || "";
+        const sp = new URL(e.url).searchParams;
+        gone = sp.get("remove") || "";
+        act = sp.get("survey-act") || "";
       } catch (_) {}
+      if (act) {
+        e.preventDefault();
+        surveyCardAnswer(act);
+        const SURVEY_URL = require("./core/urls").SURVEY_URL;
+        wc.loadURL(act === "take" ? loadTarget(SURVEY_URL, tab.id) : startPageUrl());
+        return;
+      }
       if (gone) {
         e.preventDefault();
         historyStore?.remove?.(gone);
@@ -1480,7 +1491,61 @@ function isStartPage(url) {
 function startPageUrl() {
   const file = path.join(__dirname, "renderer", "start.html");
   const top = (historyStore?.top?.(8) || []).map((r) => ({ url: r.url, title: String(r.title || "").slice(0, 80) }));
-  return `file://${file.split(path.sep).join("/")}?top=${encodeURIComponent(JSON.stringify(top))}`;
+  const days = surveyCardDays();
+  return `file://${file.split(path.sep).join("/")}?top=${encodeURIComponent(JSON.stringify(top))}${days ? `&survey=${days}` : ""}`;
+}
+
+// ---- Beta survey on the new tab page (B75) ----
+// The same survey prompt as the one in the suggestions widget (B65), shown as
+// a larger card on the new tab page once NODE has been used on 3 different
+// days. The answer is shared with the window, which keeps it as node.survey:
+// Take survey and Don't ask again end both prompts; Later waits for another
+// day of use. The state is kept in survey.json so a new tab opened before the
+// window has loaded still knows it; until either has it, no card is shown.
+const SURVEY_AFTER_DAYS = 3;
+let surveyState = null;
+function surveyFile() {
+  return path.join(app.getPath("userData"), "survey.json");
+}
+function loadSurveyState() {
+  if (surveyState) return surveyState;
+  try {
+    surveyState = JSON.parse(fs.readFileSync(surveyFile(), "utf8"));
+  } catch (_) {}
+  return surveyState;
+}
+function setSurveyState(next, { fromWindow = false } = {}) {
+  if (!next || typeof next.state !== "string") return;
+  surveyState = { state: next.state, ...(Number(next.laterDays) ? { laterDays: Number(next.laterDays) } : {}) };
+  try {
+    fs.writeFileSync(surveyFile(), JSON.stringify(surveyState));
+  } catch (_) {}
+  if (!fromWindow) sendUi("survey-state", { state: surveyState });
+}
+function surveyCardDays() {
+  const s = loadSurveyState();
+  if (!s || s.state !== "ask") return 0;
+  let days = 0;
+  try {
+    days = usage().daysUsed();
+  } catch (_) {
+    return 0;
+  }
+  if (days < SURVEY_AFTER_DAYS || (s.laterDays && days <= s.laterDays)) return 0;
+  return days;
+}
+// A choice made on the card: the start page navigates to ?survey-act=…
+function surveyCardAnswer(act) {
+  const days = (() => {
+    try {
+      return usage().daysUsed();
+    } catch (_) {
+      return 0;
+    }
+  })();
+  if (act === "take") setSurveyState({ state: "done" });
+  else if (act === "never") setSurveyState({ state: "never" });
+  else setSurveyState({ state: "ask", laterDays: days });
 }
 
 // What a new tab opens: NODE's start page, or the address set in Settings.
@@ -3507,6 +3572,8 @@ ipcMain.on("usage:count", (_e, name, n) => usage().count(String(name), n));
 ipcMain.handle("usage:days", () => usage().daysUsed());
 // The beta survey opens in a tab (B65).
 ipcMain.handle("survey:open", () => createTab(require("./core/urls").SURVEY_URL));
+// The window's saved survey answer (node.survey), sent when it loads and on every change (B75).
+ipcMain.handle("survey:state", (_e, next) => setSurveyState(next, { fromWindow: true }));
 ipcMain.handle("usage:copy", () => {
   const text = usageSummary();
   clipboard.writeText(text);

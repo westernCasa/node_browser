@@ -1743,7 +1743,14 @@ if (api?.copyDiagnostics) {
   document.getElementById("diag-folder").addEventListener("click", () => api.openLogFolder());
 }
 
-// ---- Beta survey (B64, B65) ----
+// ---- Beta survey (B64, B65, B75) ----
+// The answer to the survey prompt is kept here as node.survey and shared with
+// the main process, which shows the same prompt as a card on new tab pages.
+function setSurvey(value) {
+  store.set("node.survey", value);
+  api?.setSurveyState?.(value);
+}
+api?.setSurveyState?.(store.get("node.survey", { state: "ask" }));
 // Settings → Help: the survey link and the usage summary to paste into it.
 if (api?.copyUsage) {
   document.getElementById("usage-copy").addEventListener("click", async () => {
@@ -1751,7 +1758,7 @@ if (api?.copyUsage) {
     document.getElementById("usage-state").textContent = `Copied ${text.split("\n").length} lines to the clipboard. Paste them into the survey's usage question.`;
   });
   document.getElementById("survey-open").addEventListener("click", () => {
-    store.set("node.survey", { state: "done" });
+    setSurvey({ state: "done" });
     closeMenu?.();
     api.openSurvey();
   });
@@ -1770,9 +1777,9 @@ async function maybeSurveyPrompt() {
   showNotice(
     `Thanks for trying NODE. You've used it on ${days} days. Would you answer a short survey? About 4 minutes, anonymous. It decides what gets fixed next.`,
     [
-      { label: "Take survey", run: () => (store.set("node.survey", { state: "done" }), api.openSurvey()) },
-      { label: "Later", run: () => store.set("node.survey", { state: "ask", laterDays: days }) },
-      { label: "Don't ask again", run: () => store.set("node.survey", { state: "never" }) },
+      { label: "Take survey", run: () => (setSurvey({ state: "done" }), api.openSurvey()) },
+      { label: "Later", run: () => setSurvey({ state: "ask", laterDays: days }) },
+      { label: "Don't ask again", run: () => setSurvey({ state: "never" }) },
     ],
     { dismiss: false }
   );
@@ -3081,6 +3088,11 @@ if (api) {
       if (m) m.textContent = text;
     } else if (msg.cmd === "error") {
       showNotice(msg.message);
+    } else if (msg.cmd === "survey-state") {
+      // Answered on the new tab page's survey card (B75): keep it, and drop
+      // the widget's prompt if it is showing.
+      store.set("node.survey", msg.state);
+      if (!noticeEl.hidden && /survey/i.test(noticeEl.textContent)) noticeEl.hidden = true;
     } else if (msg.cmd === "notice") {
       showNotice(msg.message, msg.file ? [{ label: "Show in folder", run: () => api.revealFile(msg.file) }] : []);
     } else if (msg.cmd === "update-ready") {

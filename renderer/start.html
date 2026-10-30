@@ -31,6 +31,20 @@
       .tiles span { display: block; margin-top: 6px; font: 11px/14px "JetBrains Mono", monospace; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .empty { width: min(640px, 100%); color: var(--muted); font-size: 14px; }
       @media (max-width: 560px) { .tiles { grid-template-columns: repeat(2, 1fr); } h1 { font-size: 28px; line-height: 32px; } }
+      /* Beta survey card (B75): over the page, once NODE has been used on 3 days. */
+      .survey-back { position: fixed; inset: 0; background: rgba(0, 0, 0, .72); display: flex; align-items: center; justify-content: center; padding: 24px; animation: fade 200ms ease-out; }
+      .survey { width: min(520px, 100%); background: var(--raised); border: 1px solid var(--signal); border-radius: 4px; padding: 28px; }
+      .survey .eyebrow { margin: 0 0 8px; color: var(--signal); }
+      .survey h2 { margin: 0 0 12px; font-size: 26px; line-height: 30px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+      .survey p { margin: 0 0 24px; color: var(--muted); font-size: 16px; line-height: 24px; }
+      .survey .row { display: flex; gap: 8px; flex-wrap: wrap; }
+      .survey .row button { height: 40px; border-radius: 2px; }
+      .survey .row .quiet { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+      .survey .row .quiet:hover { border-color: var(--ink); }
+      .survey .row .quiet.last { margin-left: auto; color: var(--muted); }
+      .survey button:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+      @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+      @media (prefers-reduced-motion: reduce) { .survey-back { animation: none; } }
     </style>
   </head>
   <body>
@@ -86,6 +100,44 @@
         location.href = looksLikeAddress ? (/^https?:/i.test(v) ? v : "https://" + v) : "https://search.brave.com/search?q=" + encodeURIComponent(v);
       });
       document.getElementById("q").focus();
+
+      // Beta survey card (B75). NODE adds ?survey=<days used> when it is time to
+      // ask. Each button goes to ?survey-act=…, which NODE handles: Take survey
+      // opens the survey in this tab; Later and Don't ask again come back here
+      // without the card. Esc is the same as Later.
+      const surveyDays = Number(new URLSearchParams(location.search).get("survey") || 0);
+      if (surveyDays >= 3) {
+        const answer = (act) => { location.href = location.pathname + "?survey-act=" + act; };
+        const back = document.createElement("div");
+        back.className = "survey-back";
+        back.innerHTML =
+          '<div class="survey" role="dialog" aria-modal="true" aria-labelledby="sv-title" aria-describedby="sv-text">' +
+          '<p class="eyebrow">Beta survey</p>' +
+          '<h2 id="sv-title">Help decide what NODE fixes next</h2>' +
+          '<p id="sv-text"></p>' +
+          '<div class="row">' +
+          '<button type="button" data-act="take">Take survey</button>' +
+          '<button type="button" class="quiet" data-act="later">Later</button>' +
+          '<button type="button" class="quiet last" data-act="never">Don\'t ask again</button>' +
+          '</div></div>';
+        back.querySelector("#sv-text").textContent =
+          "Thanks for trying NODE. You've used it on " + surveyDays + " days. Would you answer a short survey? It takes about 4 minutes and is anonymous.";
+        back.querySelectorAll("button[data-act]").forEach((b) => b.addEventListener("click", () => answer(b.dataset.act)));
+        document.body.appendChild(back);
+        const buttons = [...back.querySelectorAll("button")];
+        buttons[0].focus();
+        document.addEventListener("keydown", (e) => {
+          if (!back.isConnected) return;
+          if (e.key === "Escape") { e.preventDefault(); answer("later"); }
+          // Keep Tab inside the card while it is open.
+          if (e.key === "Tab") {
+            const i = buttons.indexOf(document.activeElement);
+            const next = e.shiftKey ? (i <= 0 ? buttons.length - 1 : i - 1) : (i + 1) % buttons.length;
+            e.preventDefault();
+            buttons[next].focus();
+          }
+        });
+      }
     </script>
   </body>
 </html>

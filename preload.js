@@ -103,6 +103,7 @@ contextBridge.exposeInMainWorld("scout", {
   copyUsage: () => ipcRenderer.invoke("usage:copy"),
   usageDays: () => ipcRenderer.invoke("usage:days"),
   openSurvey: () => ipcRenderer.invoke("survey:open"),
+  setSurveyState: (s) => ipcRenderer.invoke("survey:state", s),
   checkUpdates: () => ipcRenderer.invoke("update:check"),
   installUpdate: () => ipcRenderer.invoke("update:install"),
   openReleases: () => ipcRenderer.invoke("update:releases"),
