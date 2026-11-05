@@ -194,9 +194,44 @@
       );
       corner.append(this.mini, zoom);
 
-      this.empty = h("p", "cv-empty", "No cards on this trail yet.");
-      this.empty.hidden = true;
-      el.append(this.vp, key, corner, this.empty);
+      // Top centre: the search bar (⌘T puts the cursor here), then the beta
+      // survey when it is due (B98). Both are part of the canvas, not pop-ups.
+      // On an empty trail they sit in the middle under "What are you looking
+      // into?", with "Pick up where you left off" below.
+      this.top = h("div", "cv-top");
+      this.heading = h("h1", "cv-heading", "What are you looking into?");
+      this.form = h("form", "cv-search");
+      this.form.setAttribute("role", "search");
+      this.input = h("input");
+      this.input.type = "text";
+      this.input.spellcheck = false;
+      this.input.autocomplete = "off";
+      this.input.placeholder = "Search or enter an address";
+      this.input.setAttribute("aria-label", "Search or enter an address");
+      this.form.append(this.input);
+      this.form.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const v = this.input.value.trim();
+        if (!v) return;
+        this.input.value = "";
+        this.hooks.search?.(v);
+      });
+      this.input.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") {
+          this.input.value = "";
+          this.vp.focus({ preventScroll: true });
+        }
+      });
+      this.survey = this.surveyEl();
+      this.resume = h("section", "cv-resume");
+      this.resume.setAttribute("aria-labelledby", "cv-resume-title");
+      this.resume.hidden = true;
+      const rt = h("h2", "cv-label", "Pick up where you left off");
+      rt.id = "cv-resume-title";
+      this.resumeList = h("div", "cv-resume-list");
+      this.resume.append(rt, this.resumeList);
+      this.top.append(this.heading, this.form, this.survey, this.resume);
+      el.append(this.vp, key, corner, this.top);
       this.bind();
     }
 
@@ -306,7 +341,7 @@
     render() {
       const d = this.data || { cards: [], groups: [], lines: [] };
       const byId = new Map(d.cards.map((c) => [c.id, c]));
-      this.empty.hidden = d.cards.length > 0 || d.groups.length > 0;
+      this.paintEmpty();
 
       // Groups.
       const gFrag = document.createDocumentFragment();
@@ -405,6 +440,70 @@
       if (foot) el.append(h("div", "cv-card-foot", foot));
       el.setAttribute("aria-label", `${KIND_LABEL[c.kind] || "Card"}: ${title || ""}${pv ? ", open in a tab" : ""}`);
       return el;
+    }
+
+    surveyEl() {
+      const box = h("section", "cv-survey");
+      box.hidden = true;
+      box.setAttribute("aria-labelledby", "cv-survey-title");
+      const text = h("div", "cv-survey-text");
+      const t = h("h2", "", "Help decide what NODE fixes next");
+      t.id = "cv-survey-title";
+      this.surveyText = h("p", "");
+      text.append(h("p", "cv-survey-eyebrow", "Beta survey"), t, this.surveyText);
+      const row = h("div", "cv-survey-row");
+      for (const [act, label, cls] of [
+        ["take", "Take survey", "primary"],
+        ["later", "Later", "quiet"],
+        ["never", "Don't ask again", "link"],
+      ]) {
+        const b = h("button", cls, label);
+        b.type = "button";
+        b.dataset.act = act;
+        b.addEventListener("click", () => {
+          box.hidden = true;
+          this.api?.surveyCardAnswer?.(act);
+        });
+        row.append(b);
+      }
+      box.append(text, row);
+      return box;
+    }
+
+    // Days of use when the survey is due (0: not shown).
+    setSurvey(days) {
+      this.survey.hidden = !(days >= 3);
+      if (days >= 3) this.surveyText.textContent = `You've used NODE on ${days} days. Would you answer a short survey? About 4 minutes, anonymous.`;
+    }
+
+    // Other trails, for an empty trail: [{ id, name, mono, cards, lastAt }].
+    setResume(trails) {
+      this.resumeList.replaceChildren(
+        ...trails.slice(0, 6).map((t) => {
+          const b = h("button", "cv-resume-item");
+          b.type = "button";
+          b.append(h("span", "cv-mono", t.mono || ""), h("span", "cv-resume-name", t.name || "Trail"), h("span", "cv-resume-meta", `${t.cards} ${t.cards === 1 ? "card" : "cards"}`));
+          b.addEventListener("click", () => this.hooks.pickTrail?.(t.id));
+          return b;
+        }),
+      );
+      this.paintEmpty();
+    }
+
+    paintEmpty() {
+      const d = this.data;
+      const empty = !d || (!d.cards.length && !d.groups.length);
+      this.el.classList.toggle("is-empty", empty);
+      this.resume.hidden = !empty || !this.resumeList.children.length;
+    }
+
+    focusSearch() {
+      this.input.focus({ preventScroll: true });
+    }
+
+    selectUrl(url) {
+      const c = url && this.data?.cards.find((k) => k.url === url);
+      if (c) this.select(c.id, { reveal: true });
     }
 
     cardSub(c) {

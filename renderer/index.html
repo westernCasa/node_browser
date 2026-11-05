@@ -92,6 +92,7 @@
     </nav>
     <div class="sb-show" id="sb-show-wrap" hidden><button class="tb" id="sb-show" data-tip="Show sidebar" data-keys="mod+S" aria-label="Show sidebar" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="#i-sidebar"/></svg></button></div>
     <div class="page-frame" id="page-frame" hidden aria-hidden="true"></div>
+    <section id="canvas" hidden aria-label="Trail canvas"></section>
     <!-- CommandBar (sidebar layout): go, search, switch tabs and trails, ask.
          Drawn over a dimmed picture of the window, like the Menu. -->
     <div class="cmdbar" id="cmdbar" hidden>
@@ -110,6 +111,7 @@
     <header class="chrome">
       <div class="tabrow">
         <svg class="brand" viewBox="0 0 24 24" aria-label="NODE" role="img"><defs><linearGradient id="brand-g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#c4b5fd"/><stop offset="0.55" stop-color="#8b5cf6"/><stop offset="1" stop-color="#6d28d9"/></linearGradient></defs><g transform="matrix(1.20193,0,0,1.20193,-1.2237,-2.42319)"><path fill="url(#brand-g)" d="M10.004,12.998L1.067,12.998C1.035,12.67 1.018,12.337 1.018,12C1.018,11.663 1.035,11.33 1.067,11.002L8.593,11.002L3.273,5.682C3.696,5.166 4.169,4.693 4.684,4.271L10.004,9.591L10.004,2.065C10.332,2.033 10.665,2.016 11.002,2.016C11.339,2.016 11.672,2.033 12,2.065L12,11.002L20.937,11.002C20.969,11.33 20.986,11.663 20.986,12C20.986,12.337 20.969,12.67 20.937,12.998L13.411,12.998L18.731,18.318C18.309,18.834 17.836,19.307 17.32,19.729L12,14.409L12,21.935C11.672,21.967 11.339,21.984 11.002,21.984C10.665,21.984 10.332,21.967 10.004,21.935L10.004,12.998Z"/></g></svg>
+        <button type="button" class="tab canvas-tab" id="canvas-tab" title="The trail's canvas (⌘1)" hidden><svg class="ic" aria-hidden="true"><use href="#i-trail"/></svg><span>Canvas</span></button>
         <div class="tabs" id="tabs"></div>
         <button class="tb" id="new-tab" data-tip="New tab" data-keys="mod+T" aria-label="New tab"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg></button>
         <span class="chrome-hint" id="chrome-hint" role="status" hidden></span>
@@ -463,7 +465,6 @@
           </div>
           <div class="source" id="startup-box">
             <div class="top"><label class="toggle"><input type="checkbox" id="restore-tabs" /> Reopen the tabs from last time</label></div>
-            <label class="field"><span>New tab page (leave empty for NODE's start page)</span><input type="text" id="start-page" placeholder="https://…" spellcheck="false" /></label>
             <label class="field"><span>Layout</span>
               <select id="chrome-layout">
                 <option value="top">Top bar: tabs and toolbar across the top</option>
@@ -627,7 +628,6 @@
       <div class="fr-actions"><button type="button" class="chip" id="fr-done">Start browsing</button></div>
     </div>
   </div>
-  <section id="canvas" hidden aria-label="Trail canvas"></section>
   <script src="canvas.js"></script>
   <script src="app.js"></script>
 </body>

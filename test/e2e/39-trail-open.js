@@ -79,7 +79,7 @@ fs.writeFileSync(file1, T.toMarkdown(alex, { by: "Alex", at: at("2026-10-28T10:0
   const t1 = s.threadList.find((t) => t.id === "t1");
   check("merge: their status (as asked) and conclusion", t1.status === "resolved" && t1.conclusion === "Keep it above 24 °C.");
   check("merge: everyone's replies kept in place", t1.replies[0].replies[0]?.text === "Mine too, at 19 °C." && t1.replies.some((r) => r.id === "r9"));
-  check("merge: the new page is added, without its tracking code", s.trail.length === 2 && s.trail.some((r) => r.url === "https://example.com/oven"));
+  check("merge: the new page is added, without its tracking code", s.trail.length === 2 && s.trail.some((r) => r.url === "https://example.com/oven"), JSON.stringify(s.trail.map((r) => r.url)));
   check("merge: pins from both", s.pins.join() === "hydration,oven");
   check("merge: the report is not added twice", (s.reports || []).length === 1);
   check("merge: the trail notes where it came from", (s.shareLog || []).map((x) => x.kind).join() === "opened,merged" && s.shareLog[1].from === "Alex");

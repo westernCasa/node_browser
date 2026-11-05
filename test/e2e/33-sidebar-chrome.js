@@ -64,11 +64,12 @@ const inSidebar = (ui, sel) => ui.evaluate((s) => Boolean(document.querySelector
   await ui.click("#sidebar .tab:nth-child(2)");
   await sleep(600);
   check("clicking a tab row opens it", await ui.$eval("#sidebar .tab:nth-child(2)", (t) => t.classList.contains("active")));
+  // New tab shows the trail's canvas with its search bar ready (B102); no row is added.
   await ui.click("#sidebar #new-tab");
   await sleep(800);
-  await ui.press("#cmd-input", "Enter"); // New tab opens the CommandBar; Enter with nothing typed: a blank tab
-  await sleep(900);
-  check("New tab adds a row", (await ui.$$eval("#sidebar .tab", (t) => t.length)) === rows + 1);
+  check("New tab shows the canvas, search bar ready, and the Canvas row is current", (await ui.evaluate(() => !document.getElementById("canvas").hidden && Boolean(document.activeElement?.closest(".cv-search")) && document.getElementById("canvas-tab").classList.contains("active"))) && (await ui.$$eval("#sidebar .tab", (t) => t.length)) === rows);
+  await ui.click("#sidebar #tabs .tab:nth-child(2)");
+  await sleep(600);
   check("a tab shows its monogram", /^[A-Z·]{1,2}$/.test(await ui.$eval("#sidebar .tab .mono", (m) => m.textContent)));
 
   // Hidden and rail.
@@ -150,6 +151,9 @@ const inSidebar = (ui, sel) => ui.evaluate((s) => Boolean(document.querySelector
   await app.close();
   ({ app, ui } = await launch());
   await sleep(800);
+  // NODE opens on the canvas (B102); ⌘2 shows the first page tab.
+  await app.evaluate(({ Menu }) => Menu.getApplicationMenu().items.flatMap((i) => i.submenu?.items || []).find((i) => i.label === "Tab 2").click());
+  await sleep(600);
   check("the sidebar layout is kept after a restart", (await ui.evaluate(() => document.body.classList.contains("side"))) && (await view(app))?.x === 273);
 
   // Back to the top bar from the View menu.

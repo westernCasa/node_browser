@@ -77,28 +77,22 @@ fs.writeFileSync(path.join(userData, "settings.json"), JSON.stringify({ firstRun
   await sleep(1500);
   check("Shift+Enter opens it in a new tab", (await tabsNow()).length === before + 1 && (await active()).endsWith("other.html?n=8"));
 
-  // ⌘T: new-tab mode.
+  // ⌘T and New tab show the trail's canvas with its search bar ready (B102),
+  // not the CommandBar; an address typed there opens in a new tab.
   await menuItem("New Tab");
   await sleep(800);
-  check("⌘T opens the CommandBar in new-tab mode, empty", (await ui.evaluate(() => cmdOpen && cmdNewTab)) && (await ui.inputValue("#cmd-input")) === "" && !(await ui.$eval("#cmd-mode", (m) => m.hidden)));
-  await ui.keyboard.press("Escape");
+  const onCanvas = () => ui.evaluate(() => !document.getElementById("canvas").hidden && Boolean(document.activeElement?.closest(".cv-search")) && !cmdOpen);
+  check("⌘T shows the canvas with its search bar ready", await onCanvas());
+  check("⌘T opens no tab", (await tabsNow()).length === before + 1);
+  await ui.click(`#tabs .tab:nth-child(1)`);
   await sleep(500);
-  check("Esc in new-tab mode opens nothing", (await tabsNow()).length === before + 1);
   await ui.click("#sidebar #new-tab");
   await sleep(800);
-  check("the sidebar's New tab opens it too", await ui.evaluate(() => cmdOpen && cmdNewTab));
-  const was = await active();
-  await ui.press("#cmd-input", "Enter");
-  await sleep(1000);
-  check("Enter with nothing typed opens a blank tab", (await tabsNow()).length === before + 2 && (await active()) !== was, await active());
-  await ui.evaluate((i) => window.scout.closeTab(i), (await ui.evaluate(() => activeId)));
-  await sleep(800);
-  await ui.click("#sidebar #new-tab");
-  await sleep(800);
-  await type(`127.0.0.1:8765/other.html?n=9`);
-  await ui.press("#cmd-input", "Enter");
+  check("the sidebar's New tab shows it too", await onCanvas());
+  await ui.keyboard.type("127.0.0.1:8765/other.html?n=9");
+  await ui.keyboard.press("Enter");
   await sleep(1500);
-  check("Enter in new-tab mode opens a new tab", (await tabsNow()).length === before + 2 && (await active()).endsWith("other.html?n=9"));
+  check("an address typed there opens in a new tab", (await tabsNow()).length === before + 2 && (await active()).endsWith("other.html?n=9"));
 
   // History: a page visited before, closed now.
   const n9 = (await tabsNow()).find((t) => t.url.endsWith("n=9")).id;

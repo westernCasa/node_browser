@@ -6,6 +6,11 @@
 // saved position; pan, zoom 20%-250%, Fit; the position is saved; an open
 // tab's card shows its picture and the Tab mark; 200 cards pan and zoom
 // (frame times are printed; the 60 fps check is on an M1 Mac).
+// B102: NODE opens on the canvas; ⌘T and + show it with the search bar ready;
+// a search there opens a page tab; it is first in the tab list (⌘1); ⌘E goes
+// from a page to its card; closing the last page tab comes back to it; an
+// empty trail asks "What are you looking into?" and offers the other trails;
+// no custom new tab address and no Most visited.
 const { _electron: electron } = require(process.env.PLAYWRIGHT_PATH || "playwright");
 const path = require("path"), fs = require("fs"), os = require("os"), http = require("http");
 const OUT = process.argv[2] || fs.mkdtempSync(path.join(os.tmpdir(), "node-e2e-"));
@@ -55,21 +60,22 @@ async function launch(dir = userData) {
   return { app, ui };
 }
 
-// View > Trail Canvas, as a person would choose it.
-async function openCanvas(app, ui) {
-  await app.evaluate(({ Menu, BrowserWindow }) => {
+// A menu item, chosen as a person would (its keys do the same).
+function menu(app, label) {
+  return app.evaluate(({ Menu, BrowserWindow }, label) => {
     const find = (items) => {
       for (const it of items) {
-        if (it.label === "Trail Canvas") return it;
+        if (it.label === label) return it;
         const sub = it.submenu && find(it.submenu.items);
         if (sub) return sub;
       }
     };
     find(Menu.getApplicationMenu().items).click(undefined, BrowserWindow.getAllWindows()[0]);
-  });
-  await ui.waitForSelector("#canvas:not([hidden]) .cv-card", { timeout: 5000 });
-  await sleep(300);
+  }, label);
 }
+const canvasShown = (ui) => ui.evaluate(() => !document.getElementById("canvas").hidden);
+const pageViews = (app) => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].contentView.children.length);
+const tabCount = (ui) => ui.evaluate(() => tabs.length);
 
 (async () => {
   let { app, ui } = await launch();
@@ -103,8 +109,9 @@ async function openCanvas(app, ui) {
   const evCount = fs.readFileSync(path.join(trails, "s-sour", "events.jsonl"), "utf8").trim().split("\n").length;
   check("the migration does not run twice", (await ui.evaluate(() => window.scout.trailList())).length === 2 && evCount < 12, String(evCount));
 
-  // ---- B101: the canvas ----
-  await openCanvas(app, ui);
+  // ---- B101, B102: the canvas ----
+  await ui.waitForSelector("#canvas:not([hidden]) .cv-card", { timeout: 5000 });
+  await sleep(300);
   const cv = await ui.evaluate(() => {
     const el = document.getElementById("canvas");
     return {
@@ -122,7 +129,7 @@ async function openCanvas(app, ui) {
     };
   });
   const cardsNow = (await ui.evaluate(() => window.scout.trailGet())).cards.length;
-  check("View > Trail Canvas shows the trail's cards", cv.shown && cv.cards === cardsNow && cv.kinds === "page,question", JSON.stringify(cv));
+  check("NODE opens on the trail's canvas, showing its cards", cv.shown && cv.cards === cardsNow && cv.kinds === "page,question", JSON.stringify(cv));
   check("a thread's page is joined to its question by a drawn line with end dots", cv.you === 1 && cv.ends === 2);
   check("the canvas opens at the trail's saved position, zoom and selection", cv.layer === "translate(-120px, 60px) scale(0.6)" && cv.zoom === "60" && cv.selected === "q1", cv.layer);
   check("line key with four line types, minimap with every card, dot grid in the canvas-dot token", cv.key === 4 && cv.mini === cv.cards && /rgb\(35, 35, 38\)/.test(cv.dot), cv.dot);
@@ -157,9 +164,46 @@ async function openCanvas(app, ui) {
   await sleep(900);
   const saved = (await ui.evaluate(() => window.scout.trailGet())).view;
   check("the new position and zoom are saved to the trail", Math.round(saved.z * 100) === Math.min(250, Math.round(fitted.zoom * 1.25)), JSON.stringify(saved));
-  await ui.keyboard.press("Escape");
-  await sleep(200);
-  check("Esc closes the canvas", await ui.evaluate(() => document.getElementById("canvas").hidden));
+  const firstRow = await ui.evaluate(() => {
+    const cv = document.getElementById("canvas-tab");
+    return { shown: !cv.hidden, before: Boolean(cv.compareDocumentPosition(document.getElementById("tabs")) & Node.DOCUMENT_POSITION_FOLLOWING), active: cv.classList.contains("active"), pageActive: document.querySelectorAll("#tabs .tab.active").length };
+  });
+  check("the canvas is first in the tab list and marked as the open one", firstRow.shown && firstRow.before && firstRow.active && firstRow.pageActive === 0, JSON.stringify(firstRow));
+  check("no custom new tab address in Settings", (await ui.evaluate(() => !document.getElementById("start-page") && !("startPage" in window.scout))) && !("startPage" in (await ui.evaluate(() => window.scout.getSettings()))));
+
+  // ⌘T: the canvas with its search bar ready; no page tab opens.
+  const before = await tabCount(ui);
+  await menu(app, "New Tab");
+  await sleep(400);
+  const focused = await ui.evaluate(() => document.activeElement?.closest(".cv-search") !== null);
+  check("⌘T shows the canvas with the cursor in its search bar, and opens no page tab", (await canvasShown(ui)) && focused && (await tabCount(ui)) === before);
+  await ui.keyboard.type("http://127.0.0.1:1/x");
+  await ui.keyboard.press("Enter");
+  await sleep(800);
+  const typed = { shown: await canvasShown(ui), tabs: await tabCount(ui), views: await pageViews(app) };
+  check("an address typed there opens in a new page tab and leaves the canvas", !typed.shown && typed.tabs === before + 1, JSON.stringify({ before, ...typed }));
+  await menu(app, "Tab 1");
+  await sleep(300);
+  check("⌘1 goes back to the canvas", await canvasShown(ui));
+  await menu(app, "Tab 2");
+  await sleep(300);
+  check("⌘2 is the first page tab", !(await canvasShown(ui)));
+  await ui.evaluate(() => window.scout.closeTab(activeId));
+  await sleep(500);
+  check("closing the last page tab comes back to the canvas", (await canvasShown(ui)) && (await tabCount(ui)) === 0);
+
+  // An empty trail.
+  await ui.evaluate(() => window.scout.trailNew("Proofing"));
+  await ui.waitForFunction(() => document.getElementById("canvas").classList.contains("is-empty"), null, { timeout: 4000 }).catch(() => {});
+  const empty = await ui.evaluate(() => ({
+    heading: getComputedStyle(document.querySelector("#canvas .cv-heading")).display !== "none" ? document.querySelector("#canvas .cv-heading").textContent : "",
+    resume: [...document.querySelectorAll("#canvas .cv-resume-item .cv-resume-name")].map((e) => e.textContent),
+    resumeShown: !document.querySelector("#canvas .cv-resume").hidden,
+  }));
+  check("a new trail opens empty: \"What are you looking into?\" and \"Pick up where you left off\"", empty.heading === "What are you looking into?" && empty.resumeShown && empty.resume.includes("Sourdough starters"), JSON.stringify(empty));
+  await ui.click("#canvas .cv-resume-item");
+  await ui.waitForFunction(() => document.querySelectorAll("#canvas .cv-card").length > 0, null, { timeout: 4000 }).catch(() => {});
+  check("picking a trail there opens its canvas", (await ui.evaluate(() => window.scout.trailGet())).trail.id === "s-sour" && (await ui.evaluate(() => document.querySelectorAll("#canvas .cv-card").length)) > 0);
   await app.close();
 
   // An open tab's card: its picture and the Tab mark.
@@ -175,7 +219,11 @@ async function openCanvas(app, ui) {
   ({ app, ui } = await launch(ud2));
   await ui.evaluate((u) => window.scout.createTab(u), pageUrl);
   await sleep(2000);
-  await openCanvas(app, ui);
+  await menu(app, "Trail Canvas");
+  await ui.waitForSelector("#canvas:not([hidden]) .cv-card", { timeout: 5000 });
+  await sleep(500);
+  const sel = await ui.evaluate(() => document.querySelector("#canvas .cv-card.selected .cv-card-title")?.textContent);
+  check("⌘E from a page shows the canvas with that page's card selected", sel === "Proofing box temperatures", sel);
   const tabCard = await ui.evaluate((u) => {
     const cards = [...document.querySelectorAll("#canvas .cv-card")];
     const open = cards.filter((c) => c.classList.contains("open"));
@@ -183,6 +231,12 @@ async function openCanvas(app, ui) {
   }, pageUrl);
   check("200 page cards and 20 questions are drawn", tabCard.total === 220, String(tabCard.total));
   check("the card of a page open in a tab shows its picture and the Tab mark", tabCard.open === 1 && tabCard.mark === "Tab" && tabCard.shot === "data:image/jpeg;base64", JSON.stringify(tabCard));
+  await menu(app, "Trail Canvas");
+  await sleep(400);
+  check("⌘E on the canvas goes back to the page", !(await canvasShown(ui)) && (await ui.evaluate(() => tabs.find((t) => t.id === activeId)?.url)) === pageUrl);
+  await menu(app, "Trail Canvas");
+  await ui.waitForSelector("#canvas:not([hidden]) .cv-card", { timeout: 5000 });
+  await sleep(300);
 
   // Frame times while panning and zooming 220 cards, one wheel event a frame.
   const perf = await ui.evaluate(

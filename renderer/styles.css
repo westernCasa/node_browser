@@ -1300,7 +1300,10 @@ body.sb-rail .sb-resize, body.sb-rail .sb-mosaic { display: none; }
 /* ---- Trail canvas (B101): renderer/canvas.js ----
    One transformed layer holds groups, lines and cards; the dot grid is its own
    layer, moved by transform. Pan and zoom change transforms only. */
-#canvas { position: fixed; inset: 0; z-index: 24; background: var(--surface); color: var(--ink); overflow: hidden; font-family: var(--sans); }
+/* The canvas fills the page area (B102): under the top bar, or right of the
+   sidebar inside the same 1 px frame as a page (contentRect in main.js). */
+#canvas { position: relative; grid-column: 1; grid-row: 2; min-width: 0; min-height: 0; background: var(--surface); color: var(--ink); overflow: hidden; font-family: var(--sans); }
+body.side #canvas { grid-column: 2; grid-row: 1; border: 1px solid var(--line); margin: 8px max(0px, calc(8px - var(--panel-space, 0px))) calc(8px + var(--coach-h, 0px)) 0; }
 #canvas .cv-vp { position: absolute; inset: 0; overflow: hidden; cursor: default; touch-action: none; outline: none; }
 #canvas .cv-vp.panning { cursor: grabbing; }
 #canvas .cv-grid { position: absolute; left: 0; top: 0; pointer-events: none;
@@ -1360,4 +1363,38 @@ body.sb-rail .sb-resize, body.sb-rail .sb-mosaic { display: none; }
 #canvas .cv-zbtn:hover { background: var(--surface-raised); }
 #canvas .cv-zpct { min-width: 52px; font: 12px var(--mono); color: var(--ink-muted); }
 #canvas .cv-fit { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
-#canvas .cv-empty { position: absolute; left: 50%; top: 45%; transform: translate(-50%, -50%); color: var(--ink-muted); font-size: 14px; }
+
+/* Canvas search bar, survey and empty trail (B102). Part of the canvas, not pop-ups. */
+#canvas .cv-top { position: absolute; left: 50%; top: 16px; transform: translateX(-50%); width: min(560px, calc(100% - 32px)); display: flex; flex-direction: column; align-items: stretch; gap: 8px; pointer-events: none; }
+#canvas .cv-top > * { pointer-events: auto; }
+#canvas .cv-heading { display: none; margin: 0 0 12px; text-align: center; font-size: 32px; line-height: 36px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+#canvas.is-empty .cv-top { top: 22%; }
+#canvas.is-empty .cv-heading { display: block; }
+#canvas .cv-search { display: flex; background: var(--surface-raised); border: 1px solid var(--line); border-radius: var(--radius-sm); }
+#canvas .cv-search:focus-within { border-color: var(--signal); }
+#canvas .cv-search input { flex: 1; min-width: 0; height: 40px; padding: 0 14px; background: transparent; color: var(--ink); border: 0; outline: none; font: 15px var(--sans); }
+#canvas .cv-survey { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--line); border-left: 2px solid var(--signal); border-radius: var(--radius-sm); }
+#canvas .cv-survey[hidden], #canvas .cv-resume[hidden] { display: none; }
+#canvas .cv-survey-text { flex: 1 1 260px; min-width: 0; }
+#canvas .cv-survey-eyebrow { font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--signal); }
+#canvas .cv-survey h2 { font-size: 15px; line-height: 20px; font-weight: 600; }
+#canvas .cv-survey p { font-size: 13px; line-height: 18px; color: var(--ink-muted); }
+#canvas .cv-survey-row { display: flex; gap: 8px; align-items: center; }
+#canvas .cv-survey-row button { height: 32px; padding: 0 12px; border-radius: var(--radius-sm); font: 600 11px var(--sans); letter-spacing: 0.1em; text-transform: uppercase; cursor: pointer; }
+#canvas .cv-survey-row .primary { background: var(--ink); color: var(--surface); border: 0; }
+#canvas .cv-survey-row .quiet { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+#canvas .cv-survey-row .quiet:hover { border-color: var(--ink); }
+#canvas .cv-survey-row .link { background: transparent; color: var(--ink-muted); border: 0; padding: 0 4px; }
+#canvas .cv-survey-row .link:hover { color: var(--ink); }
+#canvas .cv-resume { margin-top: 24px; }
+#canvas .cv-label { margin-bottom: 8px; font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-muted); }
+#canvas .cv-resume-list { display: flex; flex-direction: column; gap: 2px; }
+#canvas .cv-resume-item { display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 10px; background: transparent; color: var(--ink); border: 1px solid transparent; border-radius: var(--radius-sm); font: 14px var(--sans); text-align: left; cursor: pointer; }
+#canvas .cv-resume-item:hover { border-color: var(--line); background: var(--surface-raised); }
+#canvas .cv-mono { width: 28px; height: 28px; flex: none; display: grid; place-items: center; border: 1px solid var(--line); border-radius: var(--radius-sm); font: 11px var(--mono); color: var(--ink-muted); }
+#canvas .cv-resume-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#canvas .cv-resume-meta { font: 11px var(--mono); color: var(--ink-muted); }
+#canvas.is-empty .cv-key, #canvas.is-empty .cv-corner { display: none; }
+#canvas-tab { flex: none; min-width: 0; max-width: none; }
+#canvas-tab .ic { width: 14px; height: 14px; }
+.sidebar #canvas-tab { width: 100%; margin-bottom: 2px; }

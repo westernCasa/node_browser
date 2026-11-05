@@ -184,9 +184,14 @@ function renderTabs() {
     runFind(true, false);
   }
   tabsEl.innerHTML = "";
+  // The trail's canvas sits before the page tabs (⌘1) and cannot close.
+  const cvTab = document.getElementById("canvas-tab");
+  cvTab.hidden = !api?.canvasShow;
+  cvTab.classList.toggle("active", Boolean(canvasShown));
+  cvTab.setAttribute("aria-current", canvasShown ? "page" : "false");
   for (const t of tabs) {
     const el = document.createElement("div");
-    el.className = "tab" + (t.id === activeId ? " active" : "") + (t.sleeping ? " asleep" : "") + (t.audible && !t.muted ? " playing" : "") + (typeof mosaicShown !== "undefined" && mosaicShown.includes(t.id) ? " in-mosaic" : "");
+    el.className = "tab" + (t.id === activeId && !canvasShown ? " active" : "") + (t.sleeping ? " asleep" : "") + (t.audible && !t.muted ? " playing" : "") + (typeof mosaicShown !== "undefined" && mosaicShown.includes(t.id) ? " in-mosaic" : "");
     if (t.sleeping) el.title = "Asleep to save memory. Opens again when you click it.";
     // The monogram shows only in the sidebar layout (the rail shows nothing else).
     el.innerHTML = `<span class="mono" aria-hidden="true">${escapeHtml(monogram(t.title, t.url))}</span><span title="${escapeHtml(t.url || "")}">${escapeHtml(t.title || "New tab")}</span>`;
@@ -304,8 +309,10 @@ function renderTabs() {
     omniTabId = activeId; // switching tabs drops what was typed for the old tab
     omniTyping = false;
   }
-  if (current && (!omniTyping || document.activeElement !== omni)) {
-    if (omni.value !== (current.url || "")) omni.value = current.url || "";
+  // On the canvas (B102) there is no page: the address bar is empty.
+  const shownUrl = canvasShown ? "" : current?.url || "";
+  if ((current || canvasShown) && (!omniTyping || document.activeElement !== omni)) {
+    if (omni.value !== shownUrl) omni.value = shownUrl;
     omniTyping = false;
   }
 }
@@ -803,6 +810,8 @@ async function crawl() {
 async function crawlViewport(reason) {
   const tab = tabs.find((t) => t.id === activeId);
   if (!tab) return;
+  // On the canvas no page is being read (B102): nothing to record or suggest from.
+  if (canvasShown && reason !== "manual") return;
   if (!api) {
     auto = deriveKeywords({ names: [tab.title] }).map((term) => ({ term }));
     renderKeys();
@@ -948,7 +957,8 @@ omniForm.addEventListener("submit", (e) => {
   e.preventDefault();
   omniTyping = false;
   omni.blur();
-  if (api && activeId) api.navigate(activeId, omni.value);
+  if (api && canvasShown) api.createTab(omni.value); // on the canvas: a new tab
+  else if (api && activeId) api.navigate(activeId, omni.value);
   else demoNavigate(omni.value);
 });
 
@@ -1517,7 +1527,6 @@ async function renderSources() {
   fillGoogleState(settings.googleWindow);
   fillAgents(settings.agents);
   document.getElementById("restore-tabs").checked = settings.restoreTabs !== false;
-  document.getElementById("start-page").value = settings.startPage || "";
   document.getElementById("display-name").value = settings.displayName || "";
   document.getElementById("mosaic-max").value = String(settings.mosaicMax ?? 4);
   document.getElementById("tab-sleep").value = String(settings.tabSleep ?? 30);
@@ -1965,7 +1974,6 @@ async function saveSources(rerender = true) {
   await api.setSettings({ ...sourcesDraft, ai: aiDraft(), adblock: document.getElementById("adblock-enabled").checked, adblockCookies: document.getElementById("adblock-cookies").checked,
     google: { mode: document.getElementById("google-mode").value, browser: document.getElementById("google-browser").value },
     restoreTabs: document.getElementById("restore-tabs").checked,
-    startPage: document.getElementById("start-page").value,
     displayName: document.getElementById("display-name").value,
     mosaicMax: Number(document.getElementById("mosaic-max").value),
     tabSleep: Number(document.getElementById("tab-sleep").value),
@@ -3780,43 +3788,54 @@ api?.onCommand?.((msg) => {
   else if (msg.cmd === "sidebar-rail") chromeLayout === "side" && setSideState(sideState === "rail" ? "full" : "rail");
   else if (msg.cmd === "chrome-layout") applyChromeLayout(msg.mode);
   else if (msg.cmd === "tour") startTour();
-  else if (msg.cmd === "canvas") (canvasEl.hidden ? openCanvas() : closeCanvas());
+  else if (msg.cmd === "canvas") (msg.open ? openCanvas(msg) : closeCanvas());
 });
 
-// ---- Trail canvas (B101) ----
-// The current trail's cards, groups and lines (renderer/canvas.js). Until the
-// canvas becomes the start page (B102) it opens from View > Trail Canvas (⌘E)
-// and covers the window like the tab overview; Esc or ⌘E goes back to the page.
+// ---- Trail canvas (B101, B102) ----
+// The current trail's cards, groups and lines (renderer/canvas.js), in the
+// page area. It is the start page and every new tab: NODE opens on it, ⌘T and
+// the + button show it with the search bar ready, closing the last page tab
+// comes back to it, and it is first in the tab list (⌘1). ⌘E goes from a page
+// to its card and back. main.js decides when it shows (showCanvas).
 const canvasEl = document.getElementById("canvas");
 let trailCanvas = null;
-async function openCanvas() {
+var canvasShown = false; // var: renderTabs reads it before this line runs
+let canvasSeq = 0;
+async function openCanvas({ focus = false, select = "" } = {}) {
   if (!api?.trailGet) return;
+  const seq = ++canvasSeq;
   trailCanvas ||= new TrailCanvas(canvasEl, api, {
-    open: (card, tab) => {
-      closeCanvas();
-      if (tab?.tabId) api.activateTab(tab.tabId);
-      else api.createTab(card.url);
-    },
+    open: (card, tab) => (tab?.tabId ? api.activateTab(tab.tabId) : api.createTab(card.url)),
+    search: (text) => api.createTab(text),
+    pickTrail: (id) => api.trailSwitch(id),
   });
-  const previews = (await api.trailPreviews?.().catch(() => ({}))) || {};
-  const snap = await api.trailGet();
-  await api.setLibraryOpen(true);
-  holdChrome("canvas", true);
+  canvasShown = true;
   canvasEl.hidden = false;
-  trailCanvas.show(snap, previews);
-  trailCanvas.vp.focus({ preventScroll: true });
+  renderTabs();
+  if (focus) trailCanvas.focusSearch();
+  const [previews, snap, list, days] = await Promise.all([
+    api.trailPreviews?.().catch(() => ({})),
+    api.trailGet(),
+    api.trailList?.().catch(() => []),
+    api.surveyCard?.().catch(() => 0),
+  ]);
+  if (seq !== canvasSeq || !canvasShown) return;
+  trailCanvas.show(snap, previews || {});
+  trailCanvas.setSurvey(days || 0);
+  trailCanvas.setResume((list || []).filter((t) => t.id !== snap?.trail.id && t.cards > 0));
+  if (select) trailCanvas.selectUrl(select);
+  if (focus) trailCanvas.focusSearch();
+  else if (!canvasEl.contains(document.activeElement)) trailCanvas.vp.focus({ preventScroll: true });
 }
 function closeCanvas() {
-  if (canvasEl.hidden) return;
+  canvasSeq++;
+  canvasShown = false;
   canvasEl.hidden = true;
-  holdChrome("canvas", false);
-  api.setLibraryOpen(false);
+  renderTabs();
 }
+document.getElementById("canvas-tab").addEventListener("click", () => api?.canvasShow?.());
 canvasEl.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") {
-    e.preventDefault();
-    closeCanvas();
-  }
+  if (e.key === "Escape" && e.target === trailCanvas?.vp) trailCanvas.select(null);
 });
 
 // ---- Tab overview (B71) ----
@@ -4219,7 +4238,7 @@ var SIDE_SLOTS = {
   find: ["findbar"],
   tools: ["layout-btn", "capture-btn", "suggest-toggle", "sound-btn", "star-btn", "sb-history-btn", "sb-downloads-btn", "menu-btn"],
   newtab: ["new-tab"],
-  tabs: ["tabs"],
+  tabs: ["canvas-tab", "tabs"],
 };
 var chromeLayout = "top";
 var sideState = ["full", "rail", "hidden"].includes(store.get("node.sideState", "full")) ? store.get("node.sideState", "full") : "full";
@@ -4677,22 +4696,14 @@ cmdInput.addEventListener("keydown", (e) => {
 document.getElementById("cmd-scrim").addEventListener("click", closeCommandBar);
 
 // Ways in, in the sidebar layout: the address field, the rail's search
-// button, ⌘L (focus-omni), ⌘T and New tab.
+// button and ⌘L (focus-omni). ⌘T and New tab show the trail's canvas with its
+// search bar ready instead (B102).
 omni.addEventListener("focus", () => {
   if (chromeLayout === "side" && !cmdOpen) {
     omni.blur();
     openCommandBar();
   }
 });
-document.getElementById("new-tab").addEventListener(
-  "click",
-  (e) => {
-    if (chromeLayout !== "side") return;
-    e.stopImmediatePropagation();
-    openCommandBar({ newTab: true });
-  },
-  true
-);
 
 // Sidebar width (full): drag the right edge, 220–340px; ←/→ on the handle;
 // double-click resets to 272. Not animated: the page follows the drag.

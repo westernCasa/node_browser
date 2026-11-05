@@ -54,12 +54,16 @@ const log = (...a) => console.log("•", ...a);
   await menu("File", "Reopen Closed Tab");
   await sleep(1500);
   log("after Reopen Closed Tab:", (await tabTitles()).join(" | "));
+  // ⌘1 is the trail's canvas since B102; ⌘2 is the first page tab.
   await menu("View", "Tab 1");
+  await sleep(500);
+  log("Tab 1 shows the canvas:", await ui.evaluate(() => !document.getElementById("canvas").hidden));
+  await menu("View", "Tab 2");
   await sleep(500);
   const active1 = await ui.$eval("#tabs .tab.active", (e) => e.textContent);
   await menu("View", "Next Tab");
   await sleep(500);
-  log("Tab 1 →", active1.replace("×", "").trim(), "| Next Tab →", (await ui.$eval("#tabs .tab.active", (e) => e.textContent)).replace("×", "").trim());
+  log("Tab 2 →", active1.replace("×", "").trim(), "| Next Tab →", (await ui.$eval("#tabs .tab.active", (e) => e.textContent)).replace("×", "").trim());
 
   // Right-click menu items.
   const id = await ui.$eval("#tabs .tab.active", (e) => e.dataset.id);

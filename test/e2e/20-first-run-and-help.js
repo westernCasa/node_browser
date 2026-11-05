@@ -31,43 +31,23 @@ const log = (...a) => console.log("•", ...a);
   log("after Start browsing: screen hidden:", !(await ui.isVisible("#firstrun")), "| saved:", JSON.stringify({ firstRunDone: saved.firstRunDone, adblock: saved.adblock, restoreTabs: saved.restoreTabs, ai: saved.ai.provider, braveOn: saved.providers.brave.enabled, braveKeyStored: Boolean(saved.providers.brave.key || saved.providers.brave.keyEnc), grokKeyStored: Boolean(saved.ai.grok.key?.enc || saved.ai.grok.key?.plain) }));
   log("page views back:", await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].contentView.children.length));
 
-  // New tab page.
-  const tabUrl = () => app.evaluate(({ webContents }) => webContents.getAllWebContents().map((w) => w.getURL()).filter((u) => !u.includes("index.html")).at(-1));
-  log("first tab:", (await tabUrl()).replace(/^.*\/renderer\//, "renderer/").slice(0, 30), "| address bar:", JSON.stringify(await ui.$eval("#omni", (e) => e.value)));
+  // NODE opens on the trail canvas (B102); no page tab yet.
+  log("opens on the canvas:", await ui.evaluate(() => !document.getElementById("canvas").hidden), "| page tabs:", await ui.evaluate(() => tabs.length), "| address bar:", JSON.stringify(await ui.$eval("#omni", (e) => e.value)));
   for (const p of ["/article.html", "/article.html", "/other.html"]) {
     await ui.fill("#omni", BASE + p);
     await ui.press("#omni", "Enter");
     await sleep(1300);
   }
-  await ui.click("#new-tab");
-  await sleep(1500);
-  const startUrl = await app.evaluate(({ webContents }) => webContents.getAllWebContents().map((w) => w.getURL()).find((u) => u.includes("start.html")));
-  const top = decodeURIComponent(startUrl.split("top=")[1] || "[]");
-  log("new tab page most visited:", JSON.parse(top).map((t) => t.title).join(" | "), "| address bar focused:", await ui.evaluate(() => document.activeElement.id));
-  await sleep(1500);
-  log("suggestions on the start page:", (await ui.textContent("#suggest-status")).slice(0, 60) || "(none)");
-  const tiles = await app.evaluate(({ webContents }) => webContents.getAllWebContents().find((w) => w.getURL().includes("start.html")).executeJavaScript(`[...document.querySelectorAll(".tiles a")].map((a) => a.querySelector("b").textContent)`));
-  log("start page tiles:", tiles.join(" | "));
-  // The × on the first tile removes that page from history and from the tiles.
-  await app.evaluate(({ webContents }) => webContents.getAllWebContents().find((w) => w.getURL().includes("start.html")).executeJavaScript(`document.querySelector(".tile .x").click()`));
-  await sleep(1500);
-  const after = await app.evaluate(({ webContents }) => webContents.getAllWebContents().find((w) => w.getURL().includes("start.html")).executeJavaScript(`[...document.querySelectorAll(".tiles a")].map((a) => a.querySelector("b").textContent)`));
-  const inHistory = (await ui.evaluate(() => window.scout.historySearch("", 50))).map((r) => r.title);
-  log("after × on", JSON.stringify(tiles[0]), "tiles:", after.join(" | "), "| still in history:", inHistory.includes(tiles[0]));
-  const startWc = await app.evaluate(({ webContents }) => webContents.getAllWebContents().find((w) => w.getURL().includes("start.html")).id);
-  // Typing a search on the start page.
-  await app.evaluate(({ webContents }) => {
-    const wc = webContents.getAllWebContents().find((w) => w.getURL().includes("start.html"));
-    wc.executeJavaScript(`document.getElementById("q").value = "http://127.0.0.1:8765/other.html"; document.getElementById("f").requestSubmit();`);
-  });
-  await sleep(1500);
-  log("start page address box opened:", await ui.$eval("#omni", (e) => e.value));
-
-  // Custom new tab page.
-  await ui.evaluate(() => window.scout.setSettings({ startPage: "http://127.0.0.1:8765/media.html" }));
+  // New tab (B102): the trail canvas with its search bar ready, no page tab.
+  const tabsBefore = await ui.evaluate(() => tabs.length);
   await ui.click("#new-tab");
   await sleep(1200);
-  log("custom new tab page:", (await app.evaluate(({ webContents }) => webContents.getAllWebContents().map((w) => w.getURL()))).filter((u) => u.includes("media.html")).length, "tab(s) on media.html");
+  log("new tab shows the canvas:", await ui.evaluate(() => !document.getElementById("canvas").hidden), "| search bar focused:", await ui.evaluate(() => Boolean(document.activeElement?.closest(".cv-search"))), "| page tabs:", tabsBefore, "→", await ui.evaluate(() => tabs.length));
+  await ui.keyboard.type("http://127.0.0.1:8765/other.html");
+  await ui.keyboard.press("Enter");
+  await sleep(1500);
+  log("canvas search opened:", await ui.$eval("#omni", (e) => e.value), "| page tabs:", await ui.evaluate(() => tabs.length));
+  log("no custom new tab address in Settings:", !(await ui.$("#start-page")));
 
   // Diagnostics.
   const diag = await ui.evaluate(() => window.scout.copyDiagnostics());

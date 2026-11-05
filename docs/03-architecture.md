@@ -15,7 +15,7 @@ Last updated: 2026-10-14 (0.9.0). Earlier sections describe the 2026-10-10 share
 | `core/agent.js` | Research agent: searches, reads, gap round, follow-ups, report |
 | `core/talk.js` | Talk: Hacker News and Bluesky discussions of a page |
 | `core/google.js` | Which addresses open in the Google window |
-| `renderer/start.html`, `error.html`, `google-tab.html` | New tab page, failed-load and crashed-tab page, Google window placeholder |
+| `renderer/error.html`, `google-tab.html` | Failed-load and crashed-tab page, Google window placeholder |
 | `renderer/fonts/` | Barlow and JetBrains Mono (OFL) |
 | `.github/workflows/` | Tests on push; installers on version tags |
 
@@ -206,7 +206,8 @@ Each tab stores its resolved rule (`tab.rule`), recomputed on every navigation:
 - **Minimap:** 180 × 116, bottom right, with groups, cards and the visible area; click or drag to move there.
 - **Previews:** `trail:previews` gives `{ url: { thumb, tabId } }` for the current trail's open tabs, using the same pictures as the tab overview (`thumbOf`). Kept in memory only. Those cards show the picture and a Tab mark.
 - **Saving:** the position, zoom and selection go to `trail:view` 400 ms after the last change.
-- **Opening:** for now View > Trail Canvas (⌘E) opens the canvas over the window, using `layout:library` to hide the page views; Esc or ⌘E goes back. B102 makes it the start page and every new tab; B103 puts it beside the sidebar.
+- **Start page and new tabs (B102):** the canvas sits in the page area (under the top bar, or right of the sidebar in the page frame). `showCanvas()` in `main.js` sets `canvasOn`, takes pictures of the pages on screen, hides every page view and tells the window (`canvas` command). NODE opens on it (after restoring tabs in the background); ⌘T, the + button and `tab:create` without an address show it with its search bar focused; closing the last page tab comes back to it; switching trails from it shows the other trail's canvas. It is first in the tab list (⌘1; ⌘2 to ⌘8 are the page tabs, ⌘9 the last). ⌘E goes from a page to the canvas with that page's card selected, and from the canvas back to the page. `activateTab` and opening a tab in front leave it. `activeId` keeps the last page tab while the canvas shows. `tab:navigate` to a tab that does not exist opens a new tab. While the canvas shows, the renderer does not read the hidden page (`crawlViewport`), so a tab opened behind the canvas is not recorded in the trail until it is shown.
+- **Search bar, survey, empty trail:** an address or search typed in the canvas's search bar (or the address bar while the canvas shows) opens in a new page tab; B106 adds find in trail, search cards and Ask. The beta survey (B98) is a section under the search bar (`survey:card`, `survey:card-answer`). A trail with no cards shows "What are you looking into?" and "Pick up where you left off" with the other trails. There is no custom new tab address and no Most visited; `renderer/start.html` is gone.
 - **Tokens:** `--canvas-group`, `--canvas-group-line`, `--canvas-dot` in `renderer/styles.css`, with light values under `:root[data-theme="light"]` for when NODE has a light theme. No other colour values.
 - **Tests:** `test/canvas-demo.js` (`npm run test:canvas`) checks the view maths; `test/e2e/42-trail-canvas.js` checks the drawing, pan, zoom, Fit, saving and frame times with 220 cards.
 

@@ -42,11 +42,11 @@ const menuItem = (app, label) => app.evaluate(({ Menu }, l) => Menu.getApplicati
   await sleep(1200);
   check("first trail: three tabs", (await shown(ui)).join() === "old,a1,a2", (await shown(ui)).join());
 
-  // A new trail starts with its own new tab; the first trail's tabs stay open.
+  // A new trail starts on its own canvas with no page tabs (B102); the first trail's tabs stay open.
   await ui.evaluate(() => window.scout.researchNew("Second"));
   await sleep(1500);
   let s = await shown(ui);
-  check("a new trail shows only its own new tab", s.length === 1 && !s[0].startsWith("a"), s.join());
+  check("a new trail shows its canvas and none of the first trail's tabs", s.length === 0 && (await ui.evaluate(() => !document.getElementById("canvas").hidden)), s.join());
   check("the first trail's pages stay open out of view", (await views(app)) >= 2);
   await ui.evaluate((u) => window.scout.createTab(u), `${BASE}/other.html?n=b1`);
   await sleep(1200);
@@ -82,7 +82,7 @@ const menuItem = (app, label) => app.evaluate(({ Menu }, l) => Menu.getApplicati
   check("switching back shows the first trail's tabs", (await shown(ui)).join() === "old,a1,a2", (await shown(ui)).join());
   check("and the tab that was active there", (await active(ui)) === "a2", await active(ui));
 
-  // Closing the last tab of a trail opens a new one there, not another trail's.
+  // Closing the last tab of a trail shows its canvas, not another trail's tabs.
   const second = (await ui.evaluate(() => window.scout.researchList())).find((t) => t.name === "Second");
   await ui.evaluate((id) => window.scout.researchSwitch(id), second.id);
   await sleep(1000);
@@ -92,7 +92,7 @@ const menuItem = (app, label) => app.evaluate(({ Menu }, l) => Menu.getApplicati
   }
   await sleep(800);
   s = await shown(ui);
-  check("closing every tab of a trail leaves one new tab in it", s.length === 1 && !/^(a|b|old)/.test(s[0]), s.join());
+  check("closing every tab of a trail shows that trail's canvas, not another trail's tabs", s.length === 0 && (await ui.evaluate(() => !document.getElementById("canvas").hidden)), s.join());
   await ui.evaluate((u) => window.scout.createTab(u), `${BASE}/other.html?n=b3`);
   await sleep(1500);
 

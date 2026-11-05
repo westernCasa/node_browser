@@ -99,9 +99,10 @@ const zoomOf = (app, match) => app.evaluate(({ webContents }, m) => webContents.
   await sleep(1000);
   const l4 = await layoutOf(ui);
   check("⌘3 in Mosaic focuses the third tile", l4.layout === "focus" && /n=3/.test(await ui.evaluate(() => tabs.find((t) => t.id === activeId)?.url)));
-  await menuClick(app, "Tab 1");
+  // Outside Mosaic, ⌘1 is the trail's canvas and ⌘2 the first page tab (B102).
+  await menuClick(app, "Tab 2");
   await sleep(600);
-  check("⌘1 outside Mosaic still picks tab 1", (await layoutOf(ui)).layout === "focus" && /n=1/.test(await ui.evaluate(() => tabs.find((t) => t.id === activeId)?.url)));
+  check("⌘2 outside Mosaic picks page tab 1", (await layoutOf(ui)).layout === "focus" && /n=1/.test(await ui.evaluate(() => tabs.find((t) => t.id === activeId)?.url)));
 
   // The tutorial.
   const before = await ui.evaluate(() => ({ n: tabs.length, active: activeId }));

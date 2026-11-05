@@ -57,7 +57,7 @@ async function launch(name, srv, userData = fs.mkdtempSync(path.join(OUT, "ud-")
 
   // Alex opens it by pasting it in the address bar.
   ({ app, ui } = await launch("Alex", srv));
-  await ui.evaluate((l) => window.scout.navigate(tabs.find((t) => t.id === activeId).id, l), link);
+  await ui.evaluate((l) => window.scout.navigate(activeId || "", l), link);
   await sleep(1500);
   check("a pasted link shows the shared-trail preview", (await ui.isVisible("#shared-sheet")) && /Sourdough secrets.*from Sven/.test(await ui.textContent("#shared-title")), await ui.textContent("#shared-title"));
   check("the preview counts what is in it", /1 page, 1 thread with 1 reply/.test(await ui.textContent("#shared-summary")));
