@@ -1,5 +1,7 @@
 # Sidebar chrome
 
+> Since B103 (2026-11-05) the sidebar is the only layout: the top bar, the layout setting, the rail and hidden widths and the width handle are gone, and pages fill the window with the sidebar sliding over them at the left edge. The current design is in the trail canvas handoff (spec 2) and `03-architecture.md` (Sidebar-only chrome). The text below describes the October 2026 version.
+
 A second layout for NODE's browser chrome, from the "NODE Sidebar Chrome" mockups (October 2026). The tab bar and toolbar move into one column on the left. The horizontal layout (TabBar, AddressBar) stays in the system and in the build; this is another view of the same features, not a replacement.
 
 ## Why a sidebar

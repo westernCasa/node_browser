@@ -3,6 +3,8 @@ const { contextBridge, ipcRenderer, webUtils } = require("electron");
 contextBridge.exposeInMainWorld("scout", {
   createTab: (url) => ipcRenderer.invoke("tab:create", url),
   closeTab: (id) => ipcRenderer.invoke("tab:close", id),
+  privateTab: () => ipcRenderer.invoke("tab:private"),
+  setSideOver: (on) => ipcRenderer.invoke("layout:side-over", on),
   activateTab: (id) => ipcRenderer.invoke("tab:activate", id),
   setTabTile: (id, on) => ipcRenderer.invoke("tab:tile", id, on),
   openOverview: () => ipcRenderer.invoke("overview:open"),

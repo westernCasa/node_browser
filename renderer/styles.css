@@ -1398,3 +1398,72 @@ body.side #canvas { grid-column: 2; grid-row: 1; border: 1px solid var(--line); 
 #canvas-tab { flex: none; min-width: 0; max-width: none; }
 #canvas-tab .ic { width: 14px; height: 14px; }
 .sidebar #canvas-tab { width: 100%; margin-bottom: 2px; }
+
+/* ---- The sidebar (B103, handoff spec 2): the only chrome ----
+   Switcher, address bar, tabs, timeline, tool grid. 300 px wide. */
+body.side .shell { grid-template-columns: var(--side-w, 300px) minmax(0, 1fr) var(--panel-space, 356px); }
+.sidebar { gap: 10px; padding: 8px 8px 8px 12px; border-right: 1px solid var(--line); }
+.sb-switcher { position: relative; flex: none; display: flex; flex-direction: column; gap: 8px; padding-top: 4px; }
+.sb-switch-name { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 8px; border: 1px solid transparent; border-radius: var(--radius-sm); cursor: pointer; color: var(--ink); }
+.sb-switch-name:hover, .sb-switch-name[aria-expanded="true"] { background: var(--surface-raised); border-color: var(--line); }
+.sb-switch-name:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+.sb-switch-mono { width: 28px; height: 28px; flex: none; display: grid; place-items: center; border: 1px solid var(--line); border-radius: var(--radius-sm); font: 11px/1 var(--mono); }
+.sb-switch-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.sb-switch-title { font: 600 16px/20px var(--sans); letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sb-switch-name .ic { width: 16px; height: 16px; color: var(--ink-muted); }
+.sb-dots { display: flex; align-items: center; gap: 6px; padding: 0 8px; min-height: 8px; }
+.sb-dot { all: unset; width: 6px; height: 6px; border-radius: 999px; background: var(--ink-muted); cursor: pointer; transition: width var(--motion-base) var(--ease-enter); }
+.sb-dot[aria-selected="true"] { width: 16px; background: var(--ink); }
+.sb-dot.live { background: var(--live); }
+.sb-dot:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+.sb-switch-menu { position: absolute; z-index: 5; left: 0; right: 0; top: 50px; display: flex; flex-direction: column; gap: 2px; padding: 4px; background: var(--surface-raised); border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.sb-switch-menu[hidden] { display: none; }
+.sb-menu-item { all: unset; box-sizing: border-box; height: 40px; display: flex; align-items: center; gap: 10px; padding: 0 8px; border: 1px solid transparent; border-radius: var(--radius-sm); cursor: pointer; color: var(--ink); font-size: 14px; }
+.sb-menu-item:hover, .sb-menu-item:focus-visible { background: var(--surface); }
+.sb-menu-item:focus-visible { outline: 2px solid var(--signal); outline-offset: -2px; }
+.sb-menu-item.current { border-color: var(--ink); background: var(--surface); }
+.sb-menu-item[disabled] { color: var(--ink-muted); cursor: default; }
+.sb-menu-item .mono { width: 24px; height: 24px; flex: none; display: grid; place-items: center; border: 1px solid var(--line); border-radius: var(--radius-sm); font: 10px/1 var(--mono); color: var(--ink-muted); }
+.sb-menu-item .nm { flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.sb-menu-item .n { font: 11px var(--mono); color: var(--ink-muted); }
+.sb-menu-line { height: 1px; margin: 2px 0; background: var(--line); }
+.sb-addr-row { flex: none; display: flex; align-items: center; gap: 2px; }
+.sb-nav { display: flex; gap: 0; }
+.sb-addr-row { height: 32px; margin-bottom: -6px; }
+.sb-nav .tb { width: 32px; height: 32px; }
+.sb-tabs-head { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 4px 0 8px; }
+.sidebar .sb-tabs-head #new-tab { width: 28px; height: 28px; padding: 0; justify-content: center; }
+.sidebar .sb-tabs-head #new-tab::after { content: none; }
+.sb-timeline { flex: 1 1 auto; min-height: 80px; display: flex; flex-direction: column; gap: 2px; overflow: hidden; }
+.sb-timeline[hidden] { display: none; }
+.sb-timeline-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 1px; }
+.sb-tl-session { padding: 6px 8px 2px; font: 11px/16px var(--mono); text-transform: uppercase; color: var(--ink-muted); }
+.sb-tl-row { all: unset; box-sizing: border-box; min-height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 8px; border-radius: var(--radius-sm); cursor: pointer; color: var(--ink); font-size: 13px; }
+.sb-tl-row:hover { background: var(--surface-raised); }
+.sb-tl-row:focus-visible { outline: 2px solid var(--signal); outline-offset: -2px; }
+.sb-tl-row .t { flex: none; font: 11px var(--mono); color: var(--ink-muted); }
+.sb-tl-row .nm { flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.sb-tl-row .k { flex: none; font: 10px var(--mono); text-transform: uppercase; color: var(--ink-muted); }
+.sb-tl-row.only .nm { color: var(--ink-muted); }
+/* Tool grid, 4 × 2: 52 px tiles with a label. Mosaic and Sound on: violet. */
+.sb-tools { gap: 6px; }
+.sb-tools .tb { height: 52px; flex-direction: column; gap: 4px; padding: 4px 0 6px; }
+.sb-tools .tb::after { content: attr(data-label); font: 600 10px/12px var(--sans); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-muted); }
+.sb-tools #layout-btn.active, .sb-tools #sound-btn.active { border-color: var(--signal); color: var(--signal); }
+.sb-tools #layout-btn.active::after, .sb-tools #sound-btn.active::after { color: var(--signal); }
+.sb-tools .tb .count, .sb-tools .tb .new { top: 2px; bottom: auto; }
+/* Agent, downloads and full screen sit in the Menu's header. */
+.menu-tools { display: flex; align-items: center; gap: 2px; margin-left: auto; }
+.menu-tools .tb[hidden] { display: none; }
+/* Private tabs: a violet lock in the tab row. */
+.tab.private .mono { border-color: var(--signal); color: var(--signal); }
+.tab .pv { flex: none; font: 10px var(--mono); text-transform: uppercase; color: var(--signal); }
+
+/* The sidebar over a page (chrome-overlay.html in side mode): slides in from
+   the left in --motion-base with --ease-enter, out in --motion-fast with
+   --ease-exit. Reduced motion: no slide. */
+body.chrome-overlay.side #bar { position: fixed; left: 0; top: 0; bottom: 0; width: 300px; transform: translateX(-100%); transition: transform var(--motion-fast) var(--ease-exit); }
+body.chrome-overlay.side.shown #bar { transform: none; transition: transform var(--motion-base) var(--ease-enter); }
+@media (prefers-reduced-motion: reduce) {
+  body.chrome-overlay.side #bar, body.chrome-overlay.side.shown #bar { transition: none; }
+}

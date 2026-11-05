@@ -2,16 +2,16 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>NODE toolbar</title>
+  <title>NODE sidebar</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
-<!-- Full screen only (motion 09): the toolbar in its own layer above the page,
-     so it can slide down over the page the way Safari's does, without moving
-     the page. The content is a copy of the window's toolbar (renderer/app.js
-     sends it); clicks and typing go back to the real toolbar. -->
-<body class="chrome-overlay">
+<!-- The sidebar over a page (B103): a copy of the window's sidebar in its own
+     layer above the page, so it can slide in from the left edge without
+     moving the page. renderer/app.js sends the copy; clicks and typing go back
+     to the real sidebar. -->
+<body class="chrome-overlay side">
   <div id="sprite" hidden></div>
-  <header class="chrome" id="bar"></header>
+  <nav class="sidebar" id="bar"></nav>
   <script src="chrome-overlay.js"></script>
 </body>
 </html>

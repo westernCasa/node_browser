@@ -144,15 +144,13 @@ fs.writeFileSync(path.join(userData, "settings.json"), JSON.stringify({ firstRun
   await sleep(1200);
   check("⌘↵ runs the research agent on it", (await ui.evaluate(() => !document.getElementById("agent-pane").hidden)) && (await ui.inputValue("#agent-input")) === "history of rye bread");
 
-  // The top bar keeps its own address bar.
-  await ui.evaluate(async () => {
-    await window.scout.setSettings({ chromeLayout: "top" });
-    applyChromeLayout("top");
-  });
-  await sleep(600);
-  await menuItem("Open Location");
-  await sleep(500);
-  check("top bar: ⌘L focuses the address bar, no CommandBar", !(await ui.evaluate(() => cmdOpen)) && (await ui.evaluate(() => document.activeElement.id)) === "omni");
+  // The sidebar's address bar is a plain field since B103: clicking it does
+  // not open the CommandBar; ⌘L still does.
+  await ui.keyboard.press("Escape");
+  await sleep(400);
+  await ui.click("#sidebar #omni");
+  await sleep(400);
+  check("clicking the sidebar's address bar types there, no CommandBar", !(await ui.evaluate(() => cmdOpen)) && (await ui.evaluate(() => document.activeElement.id)) === "omni");
 
   await app.close();
   if (failed) console.log(`::error::34-command-bar: ${failed} check(s) failed`);

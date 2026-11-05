@@ -1,8 +1,8 @@
-// The full-screen toolbar layer (chrome-overlay.html). Shows a copy of the
-// window's toolbar and slides it in and out; every click, key and edit is
-// passed back to the real toolbar in the window (renderer/app.js), so the
-// toolbar has one set of behaviour. Elements are found by their position
-// under the toolbar ("path"), which is the same in the copy and the original.
+// The sidebar layer over pages (chrome-overlay.html, B103). Shows a copy of
+// the window's sidebar and slides it in and out; every click, key and edit is
+// passed back to the real sidebar in the window (renderer/app.js), so the
+// sidebar has one set of behaviour. Elements are found by their position
+// under the sidebar ("path"), which is the same in the copy and the original.
 const bar = document.getElementById("bar");
 const api = window.nodeOverlay;
 

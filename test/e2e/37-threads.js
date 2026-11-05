@@ -120,7 +120,11 @@ const threadsNow = (ui) => ui.evaluate(async () => (await window.scout.researchG
 
   await ui.evaluate(() => closeMenu());
   await sleep(4500);
-  check("the sidebar's trail line counts threads", /1 THREAD\b/.test(await ui.textContent("#sb-trail-meta")), await ui.textContent("#sb-trail-meta"));
+  // Since B103 the sidebar has no trail line; the canvas shows each thread as a question card.
+  await ui.evaluate(() => window.scout.canvasShow());
+  await sleep(1200);
+  const qCards = await ui.$$eval("#canvas .cv-card.k-question", (c) => c.length);
+  check("the canvas shows the thread as a question card", qCards === 1, String(qCards));
 
   // Kept across a restart.
   await app.close();

@@ -54,43 +54,40 @@
     <symbol id="i-talk" viewBox="0 0 20 20"><path d="M2.5 3.5h10v7h-6l-3 2.5v-2.5h-1z"/><path d="M15 7h2.5v7h-1v2.5l-3-2.5h-5v-1.5"/></symbol>
   </svg>
   <div class="shell">
-    <!-- Sidebar layout (docs/18-sidebar-chrome.md): another view of the same
-         toolbar. In Sidebar mode app.js moves the real toolbar buttons, the
-         address bar and the tab list into the slots below, so every control
-         keeps its behaviour; the top bar gets them back in Top bar mode. -->
-    <nav class="sidebar" id="sidebar" aria-label="Tabs, tools and trails" hidden>
-      <div class="sb-window" id="sb-window">
-        <button class="tb" id="sb-hide" data-tip="Hide sidebar" data-keys="mod+S" aria-label="Hide sidebar" aria-expanded="true"><svg class="ic" aria-hidden="true"><use href="#i-sidebar"/></svg></button>
-        <span class="sb-grow"></span>
-        <span class="sb-slot" data-slot="window"></span>
+    <!-- The sidebar (B103, handoff spec 2): NODE's only chrome. Top to bottom:
+         trail switcher, address bar, tabs (the canvas first), timeline, tool
+         grid. app.js moves the real toolbar controls into the slots below, so
+         every control keeps its behaviour. On the canvas it always shows; over
+         a page main.js shows a copy of it in its own layer (chrome-overlay.html)
+         when the pointer reaches the left edge. -->
+    <nav class="sidebar" id="sidebar" aria-label="Trail, tabs and tools" hidden>
+      <div class="sb-switcher" id="sb-switcher">
+        <button type="button" class="sb-switch-name" id="sb-switch-name" aria-haspopup="menu" aria-expanded="false" aria-controls="sb-switch-menu"><span class="sb-switch-mono" id="sb-switch-mono" aria-hidden="true"></span><span class="sb-switch-text"><span class="sb-label">Trail</span><span class="sb-switch-title" id="sb-switch-title"></span></span><svg class="ic" aria-hidden="true"><use href="#i-down"/></svg></button>
+        <div class="sb-dots" id="sb-dots" role="tablist" aria-label="Trails"></div>
+        <div class="sb-switch-menu" id="sb-switch-menu" role="menu" aria-label="Trails" hidden></div>
       </div>
-      <button class="tb sb-find" id="sb-search" data-tip="Address and search" data-keys="mod+L" aria-label="Address and search"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg></button>
+      <div class="sb-addr-row">
+        <span class="sb-slot sb-nav" data-slot="nav"></span>
+        <span class="sb-grow"></span>
+        <span class="sb-slot sb-nav" data-slot="pagetools"></span>
+      </div>
       <div class="sb-address sb-slot" data-slot="address"></div>
       <div class="sb-slot sb-findslot" data-slot="find"></div>
-      <div class="sb-trail" id="sb-trail">
-        <div class="sb-trail-top"><span class="sb-label">Trail</span><span class="sb-meta" id="sb-trail-meta"></span></div>
-        <button class="sb-trail-name" id="sb-trail-name" title="Open the trail"></button>
-      </div>
-      <div class="sb-tools sb-slot" data-slot="tools" role="toolbar" aria-label="Tools"></div>
-      <div class="sb-line" aria-hidden="true"></div>
       <section class="sb-mosaic" id="sb-mosaic" aria-label="Tabs in Mosaic" hidden>
         <div class="sb-mosaic-head"><svg class="ic" aria-hidden="true"><use href="#i-mosaic"/></svg><span class="sb-label">Mosaic</span><span class="sb-meta" id="sb-mosaic-count"></span></div>
         <div class="sb-mosaic-list" id="sb-mosaic-list"></div>
       </section>
       <div class="sb-tabs">
-        <span class="sb-slot" data-slot="newtab"></span>
-        <div class="sb-tabs-head" id="sb-tabs-head" hidden><span class="sb-label">Tabs</span><span class="sb-meta" id="sb-tabs-count"></span></div>
+        <div class="sb-tabs-head" id="sb-tabs-head"><span class="sb-label">Tabs</span><span class="sb-meta" id="sb-tabs-count"></span><span class="sb-grow"></span><span class="sb-slot" data-slot="newtab"></span></div>
         <span class="sb-slot sb-tablist" data-slot="tabs"></span>
       </div>
-      <span class="sb-grow"></span>
-      <section class="sb-trails" id="sb-trails" aria-label="Active trails">
-        <button class="sb-trails-head" id="sb-trails-toggle" aria-expanded="true" aria-controls="sb-trail-list"><svg class="ic chev" aria-hidden="true"><use href="#i-forward"/></svg><span class="sb-label" id="sb-trails-label">Active trails</span><span class="sb-meta" id="sb-trail-count"></span></button>
-        <div class="sb-trail-list" id="sb-trail-list"></div>
+      <section class="sb-timeline" id="sb-timeline" aria-labelledby="sb-timeline-title">
+        <div class="sb-tabs-head"><span class="sb-label" id="sb-timeline-title">Timeline</span><span class="sb-meta" id="sb-timeline-count"></span></div>
+        <div class="sb-timeline-list" id="sb-timeline-list"></div>
       </section>
-      <div class="sb-resize" id="sb-resize" role="separator" aria-orientation="vertical" aria-label="Sidebar width" tabindex="0" title="Drag to change the width. Double-click: back to 272."></div>
+      <div class="sb-tools sb-slot" data-slot="tools" role="toolbar" aria-label="Tools"></div>
       <div class="sb-media" id="sb-media" role="status"><span class="dot" aria-hidden="true"></span><span id="sb-playing"></span><span class="sb-grow"></span><span id="sb-sound"></span></div>
     </nav>
-    <div class="sb-show" id="sb-show-wrap" hidden><button class="tb" id="sb-show" data-tip="Show sidebar" data-keys="mod+S" aria-label="Show sidebar" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="#i-sidebar"/></svg></button></div>
     <div class="page-frame" id="page-frame" hidden aria-hidden="true"></div>
     <section id="canvas" hidden aria-label="Trail canvas"></section>
     <!-- CommandBar (sidebar layout): go, search, switch tabs and trails, ask.
@@ -145,7 +142,8 @@
         <button class="tb" id="suggest-toggle" data-tip="Hide suggestions" data-keys="mod+shift+." aria-label="Hide suggestions" aria-controls="rail" aria-pressed="true"><svg class="ic" aria-hidden="true"><use href="#i-suggest"/></svg><span class="count" id="suggest-count" hidden></span><span class="new" id="suggest-new" hidden></span></button>
         <button class="tb" id="fullscreen-btn" data-tip="Full screen" data-keys="ctrl+mod+F" aria-label="Full screen"><svg class="ic" aria-hidden="true"><use href="#i-fullscreen"/></svg></button>
         <button class="tb sb-only" id="sb-history-btn" data-tip="History" data-keys="mod+Y" aria-label="History" hidden><svg class="ic" aria-hidden="true"><use href="#i-history"/></svg></button>
-        <button class="tb sb-only" id="sb-downloads-btn" data-tip="Downloads" aria-label="Downloads" hidden><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg></button>
+        <button class="tb sb-only" id="private-btn" data-tip="Private tab: not in any trail, no history" data-keys="mod+shift+N" aria-label="Private tab" hidden><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg></button>
+        <button class="tb sb-only" id="open-file-btn" data-tip="Open trail file" data-keys="mod+O" aria-label="Open trail file" hidden><svg class="ic" aria-hidden="true"><use href="#i-trail"/></svg></button>
         <button class="tb" id="menu-btn" data-tip="Menu: library, history, settings" data-keys="mod+," aria-label="Menu: library, history, settings" aria-haspopup="dialog" aria-controls="menu-overlay"><svg class="ic" aria-hidden="true"><use href="#i-menu"/></svg></button>
       </div>
       <div id="capture-actions" hidden>
@@ -266,6 +264,7 @@
     <div class="menu-panel" id="menu-panel" role="dialog" aria-modal="true" aria-labelledby="menu-title">
       <div class="menu-head">
         <h1 id="menu-title">Menu</h1>
+        <span class="sb-slot menu-tools" data-slot="menutools"></span>
         <span class="menu-esc">Esc</span>
         <button class="tb" id="menu-close" data-tip="Close menu" data-keys="Esc" aria-label="Close menu"><svg class="ic" aria-hidden="true"><use href="#i-close"/></svg></button>
       </div>
@@ -465,12 +464,7 @@
           </div>
           <div class="source" id="startup-box">
             <div class="top"><label class="toggle"><input type="checkbox" id="restore-tabs" /> Reopen the tabs from last time</label></div>
-            <label class="field"><span>Layout</span>
-              <select id="chrome-layout">
-                <option value="top">Top bar: tabs and toolbar across the top</option>
-                <option value="side">Sidebar: tabs, tools and trails in a column on the left</option>
-              </select></label>
-            <p class="help">In the sidebar, ⌘S hides and shows it (Ctrl+S on Windows), and right-clicking its empty space switches between full and compact. View → Use Sidebar Layout switches too.</p>
+            <p class="help">Over a page the sidebar slides away. Move the pointer to the left edge of the window, or press ⌘L, to bring it back.</p>
             <label class="field"><span>Tiles in Mosaic</span>
               <select id="mosaic-max">
                 <option value="4">Up to 4</option>

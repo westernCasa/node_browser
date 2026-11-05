@@ -77,7 +77,8 @@ const PORT = 47699;
   log("shared tabs before sharing:", (await call("list_shared_tabs")).text.slice(0, 40));
   const tabId = await app.evaluate(({ webContents }) => null);
   const ids = await ui.evaluate(() => [...document.querySelectorAll("#tabs .tab")].map((e) => e.dataset.id));
-  await ui.click("#agent-share-btn");
+  // Since B103 these buttons sit in the Menu's header.
+  await ui.evaluate(() => document.getElementById("agent-share-btn").click());
   await sleep(500);
   log("share button after click:", await ui.$eval("#agent-share-btn", (e) => e.getAttribute("aria-label")), "| tab mark:", await ui.$$eval("#tabs .agent-mark", (e) => e.length));
   const list = await call("list_shared_tabs");
@@ -148,7 +149,7 @@ const PORT = 47699;
   // 9. Stop switch.
   await ui.keyboard.press("Escape"); // close the menu (Settings) so the toolbar is reachable
   await sleep(300);
-  await ui.click("#agent-btn");
+  await ui.evaluate(() => document.getElementById("agent-btn").click());
   await sleep(500);
   await fetch(`http://127.0.0.1:${PORT}/mcp`).then(() => log("server after Stop: still answering"), () => log("server after Stop: closed"));
   const saved = JSON.parse(fs.readFileSync(path.join(userData, "settings.json"), "utf8")).agents;

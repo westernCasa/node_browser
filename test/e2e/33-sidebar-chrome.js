@@ -1,7 +1,9 @@
-// Sidebar layout (docs/18-sidebar-chrome.md): another view of the same
-// chrome. The real controls move into a left column; the page sits in a frame
-// right of it; full, rail and hidden widths; trails and media in the sidebar;
-// the top bar comes back unchanged.
+// The sidebar (B103, handoff spec 2), NODE's only chrome since the trail
+// canvas. No top bar and no layout switch. Top to bottom: trail switcher,
+// address bar, tabs (the canvas first), timeline, tool grid (4 × 2). On the
+// canvas it always shows; pages, Mosaic and private tabs fill the window and
+// the sidebar comes over them in its own layer. Private tabs: no trail, no
+// history.
 const { _electron: electron } = require(process.env.PLAYWRIGHT_PATH || "playwright");
 const path = require("path"), fs = require("fs"), os = require("os");
 const OUT = process.argv[2] || fs.mkdtempSync(path.join(os.tmpdir(), "node-e2e-"));
@@ -13,7 +15,7 @@ const check = (name, ok, detail = "") => {
   console.log(ok ? "✓" : "✗", name, detail ? `(${detail})` : "");
 };
 const userData = fs.mkdtempSync(path.join(OUT, "ud-"));
-fs.writeFileSync(path.join(userData, "settings.json"), JSON.stringify({ firstRunDone: true }));
+fs.writeFileSync(path.join(userData, "settings.json"), JSON.stringify({ firstRunDone: true, chromeLayout: "top" }));
 
 async function launch() {
   const app = await electron.launch({ executablePath: require("electron"), args: ["--no-sandbox", `--user-data-dir=${userData}`, path.join(__dirname, "..", "..")] });
@@ -27,143 +29,153 @@ async function launch() {
   await sleep(400);
   return { app, ui };
 }
-const view = (app) =>
-  app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].contentView.children.filter((v) => v.webContents && !/chrome-overlay\.html/.test(v.webContents.getURL())).map((v) => v.getBounds()).find((b) => b.width > 0));
-const menuClick = (app, id) => app.evaluate(({ Menu }, i) => Menu.getApplicationMenu().getMenuItemById(i).click(), id);
+// Page views on screen (not the sidebar layer).
+const views = (app) =>
+  app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].contentView.children.filter((v) => v.webContents && !/chrome-overlay\.html/.test(v.webContents.getURL())).map((v) => v.getBounds()).filter((b) => b.width > 0));
+const layer = (app) =>
+  app.evaluate(({ BrowserWindow }) => {
+    const v = BrowserWindow.getAllWindows()[0].contentView.children.find((x) => x.webContents && /chrome-overlay\.html/.test(x.webContents.getURL()));
+    return v ? v.getBounds() : null;
+  });
+const layerShown = (app) =>
+  app.evaluate(async ({ BrowserWindow }) => {
+    const v = BrowserWindow.getAllWindows()[0].contentView.children.find((x) => x.webContents && /chrome-overlay\.html/.test(x.webContents.getURL()));
+    return v ? v.webContents.executeJavaScript(`({ shown: document.body.classList.contains("shown"), tabs: document.querySelectorAll("#bar .tab").length, address: Boolean(document.querySelector("#bar #omni")) })`) : null;
+  });
+const menuLabel = (app, label) => app.evaluate(({ Menu }, l) => Menu.getApplicationMenu().items.flatMap((m) => m.submenu?.items || []).find((i) => i.label === l).click(), label);
 const inSidebar = (ui, sel) => ui.evaluate((s) => Boolean(document.querySelector(`#sidebar ${s}`)), sel);
 
 (async () => {
   let { app, ui } = await launch();
+
+  // Sidebar only.
+  check("the sidebar is the only layout (an old top-bar setting is ignored)", (await ui.evaluate(() => document.body.classList.contains("side") && !document.getElementById("sidebar").hidden)) && (await ui.evaluate(() => window.scout.getSettings())).chromeLayout === "side");
+  check("no top bar", await ui.$eval("header.chrome", (h) => getComputedStyle(h).display === "none"));
+  check("no layout switch in Settings or the View menu", !(await ui.$("#chrome-layout")) && !(await app.evaluate(({ Menu }) => Boolean(Menu.getApplicationMenu().getMenuItemById("sidebar-layout")))));
+  // In document order (the timeline is hidden until the trail has pages).
+  const order = await ui.evaluate(() => {
+    const els = ["#sb-switcher", "#sidebar #omni", "#canvas-tab", "#sb-timeline", ".sb-tools"].map((q) => document.querySelector(q));
+    return els.every((el, i) => i === 0 || els[i - 1].compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+  check("order: switcher, address bar, tabs, timeline, tool grid", order);
+  check("Back, Forward and Reload sit on the address bar's row", (await inSidebar(ui, ".sb-addr-row #back")) && (await inSidebar(ui, ".sb-addr-row #reload")));
+  const tiles = await ui.$$eval(".sb-tools .tb", (b) => b.filter((x) => x.offsetParent).map((x) => x.dataset.label));
+  check("tool grid 4 × 2: Mosaic, Capture, Suggest, Sound, Private, Open, History, Menu", tiles.join() === "Mosaic,Capture,Suggest,Sound,Private,Open,History,Menu", tiles.join());
+  const tile = await ui.$eval("#layout-btn", (b) => b.getBoundingClientRect().height);
+  const side = await ui.$eval("#sidebar", (s) => s.getBoundingClientRect().width);
+  check("sidebar 300 px, tool tiles 52 px", side === 300 && tile === 52, `${side} ${tile}`);
+  check("agent, downloads and full screen moved to the Menu", await ui.evaluate(() => ["agent-btn", "agent-share-btn", "dl-btn", "fullscreen-btn"].every((id) => document.querySelector(`#menu-overlay #${id}`))));
+  check("on the canvas the sidebar shows and no layer is needed", (await ui.evaluate(() => !document.getElementById("canvas").hidden)) && !(await layer(app)));
+
+  // A page fills the window; the sidebar comes over it.
   for (const u of ["article.html", "other.html?n=1", "other.html?n=2"]) await ui.evaluate((x) => window.scout.createTab(x), `${BASE}/${u}`);
   await sleep(2000);
-
-  check("Top bar is the default", (await ui.evaluate(() => window.scout.getSettings())).chromeLayout === "top" && !(await ui.evaluate(() => document.body.classList.contains("side"))));
-  const topView = await view(app);
-  check("top bar: page under the toolbar", topView.x === 0 && topView.y === 96, JSON.stringify(topView));
-
-  // Switch in Settings.
-  await ui.evaluate(() => openMenu("settings"));
+  let v = await views(app);
+  check("a page fills the window (left of the suggestions widget)", v.length === 1 && v[0].x === 0 && v[0].y === 0 && v[0].height === 900, JSON.stringify(v));
+  check("the sidebar is out of the way over a page", !(await layer(app)));
+  await menuLabel(app, "Show Sidebar");
   await sleep(600);
-  await ui.selectOption("#chrome-layout", "side");
-  await sleep(300);
-  await ui.keyboard.press("Escape");
-  await sleep(900);
-  check("Settings switches to the sidebar", await ui.evaluate(() => document.body.classList.contains("side")));
-  check("the setting is saved", (await ui.evaluate(() => window.scout.getSettings())).chromeLayout === "side");
-  check("the address bar, tabs and tools move into the sidebar", (await inSidebar(ui, "#omni")) && (await inSidebar(ui, "#tabs")) && (await inSidebar(ui, ".sb-tools #layout-btn")) && (await inSidebar(ui, "#back")));
-  check("8 tool tiles", (await ui.$$eval(".sb-tools .tb", (b) => b.filter((x) => x.offsetParent).length)) === 8);
-  check("the top bar is hidden", await ui.$eval("header.chrome", (h) => getComputedStyle(h).display === "none"));
-  let v = await view(app);
-  const frame = await ui.$eval("#page-frame", (f) => f.getBoundingClientRect().toJSON());
-  check("the page sits inside the frame right of the sidebar", v.x === Math.round(frame.x) + 1 && v.y === Math.round(frame.y) + 1 && v.x === 273 && v.width === Math.round(frame.width) - 2, `${JSON.stringify(v)} frame ${JSON.stringify(frame)}`);
-  check("View → Use Sidebar Layout is ticked", await app.evaluate(({ Menu }) => Menu.getApplicationMenu().getMenuItemById("sidebar-layout").checked));
-
-  // Tabs in the sidebar work.
-  const rows = await ui.$$eval("#sidebar .tab", (t) => t.length);
-  check("tabs listed in the sidebar", rows >= 3, String(rows));
-  await ui.click("#sidebar .tab:nth-child(2)");
+  const l = await layer(app);
+  const shown = await layerShown(app);
+  check("⌘S brings the sidebar over the page in its own layer, 300 px wide", l && l.x === 0 && l.width === 300 && l.height === 900 && shown?.shown, JSON.stringify({ l, shown }));
+  check("the layer is a copy of the sidebar: tabs and address bar", shown?.tabs >= 3 && shown?.address);
+  check("the page does not move", JSON.stringify(await views(app)) === JSON.stringify(v));
+  // A click in the layer reaches the real sidebar: pick the first tab row.
+  await app.evaluate(async ({ BrowserWindow }) => {
+    const ov = BrowserWindow.getAllWindows()[0].contentView.children.find((x) => x.webContents && /chrome-overlay\.html/.test(x.webContents.getURL()));
+    await ov.webContents.executeJavaScript(`document.querySelector("#bar #tabs .tab").click()`);
+  });
+  await sleep(700);
+  check("a click in the layer works like a click in the sidebar", /article\.html/.test(await ui.evaluate(() => tabs.find((t) => t.id === activeId)?.url)));
+  await menuLabel(app, "Show Sidebar");
+  await sleep(500);
+  check("⌘S again sends it away", !(await layer(app)) || !(await layerShown(app))?.shown);
+  await menuLabel(app, "Tab 1");
   await sleep(600);
-  check("clicking a tab row opens it", await ui.$eval("#sidebar .tab:nth-child(2)", (t) => t.classList.contains("active")));
-  // New tab shows the trail's canvas with its search bar ready (B102); no row is added.
-  await ui.click("#sidebar #new-tab");
-  await sleep(800);
-  check("New tab shows the canvas, search bar ready, and the Canvas row is current", (await ui.evaluate(() => !document.getElementById("canvas").hidden && Boolean(document.activeElement?.closest(".cv-search")) && document.getElementById("canvas-tab").classList.contains("active"))) && (await ui.$$eval("#sidebar .tab", (t) => t.length)) === rows);
+  check("on the canvas: the sidebar is part of the window again, the page views are hidden", (await views(app)).length === 0 && !(await layerShown(app))?.shown);
+
+  // Tabs.
   await ui.click("#sidebar #tabs .tab:nth-child(2)");
   await sleep(600);
-  check("a tab shows its monogram", /^[A-Z·]{1,2}$/.test(await ui.$eval("#sidebar .tab .mono", (m) => m.textContent)));
+  check("clicking a tab row opens it", await ui.$eval("#sidebar #tabs .tab:nth-child(2)", (t) => t.classList.contains("active")));
+  check("a tab shows its monogram", /^[A-Z·]{1,2}$/.test(await ui.$eval("#sidebar #tabs .tab .mono", (m) => m.textContent)));
 
-  // Hidden and rail.
-  await menuClick(app, "sidebar-toggle");
-  await sleep(600);
-  v = await view(app);
-  check("⌘S hides the sidebar: a 52px column stays", (await ui.evaluate(() => document.getElementById("sidebar").hidden)) && v.x === 53, JSON.stringify(v));
-  check("the show button is there", await ui.$eval("#sb-show", (b) => b.offsetParent !== null));
-  await menuClick(app, "sidebar-toggle");
-  await sleep(600);
-  check("⌘S again: back to full", (await view(app)).x === 273);
-  await menuClick(app, "sidebar-rail");
-  await sleep(600);
-  v = await view(app);
-  check("compact rail: 68px", v.x === 69, JSON.stringify(v));
-  check("the rail shows 5 tools", (await ui.$$eval(".sb-tools .tb", (b) => b.filter((x) => x.offsetParent).length)) === 5);
-  check("the rail hides tab titles", await ui.$eval("#sidebar .tab > span:not(.mono)", (s) => getComputedStyle(s).display === "none"));
-  await app.evaluate(({ Menu }) => Menu.getApplicationMenu().items.flatMap((m) => m.submenu?.items || []).find((i) => i.label === "Open Location").click());
-  await sleep(700);
-  check("⌘L in the rail opens the CommandBar", (await ui.evaluate(() => cmdOpen)) && (await ui.evaluate(() => document.activeElement?.id)) === "cmd-input");
-  await ui.keyboard.press("Escape");
-  await sleep(500);
-  await menuClick(app, "sidebar-rail");
-  await sleep(600);
-
-  // Trails and media.
-  await ui.evaluate(() => window.scout.researchNew("Second trail"));
-  await ui.evaluate(() => refreshSideTrails(true));
-  await sleep(500);
-  const trailRows = await ui.$$eval("#sb-trail-list .sb-trail-row:not(.add)", (r) => r.map((x) => x.textContent));
-  check("active trails list the sessions", trailRows.length === 2 && trailRows.some((t) => t.includes("Second trail")), trailRows.join(" | "));
-  await ui.click('#sb-trail-list .sb-trail-row[aria-current="false"]');
-  await sleep(700);
-  check("clicking a trail switches to it", (await ui.evaluate(() => window.scout.researchGet())).name !== "Second trail");
-  check("the trail header shows the current trail", (await ui.$eval("#sb-trail-name", (n) => n.textContent)) === (await ui.evaluate(() => window.scout.researchGet())).name);
-  await ui.click("#sb-trails-toggle");
+  // Switcher: the menu, New trail, dots, swipe.
+  await menuLabel(app, "Tab 1");
+  await sleep(400);
+  await ui.click("#sb-switch-name");
   await sleep(300);
-  check("the trails section folds", (await ui.$eval("#sb-trails-toggle", (b) => b.getAttribute("aria-expanded"))) === "false" && (await ui.$eval("#sb-trail-list", (l) => l.hidden)));
-  check("media strip shows the sound mode", (await ui.$eval("#sb-sound", (s) => s.textContent)) === "SOUND: ONE");
+  const items = await ui.$$eval("#sb-switch-menu .sb-menu-item .nm", (r) => r.map((x) => x.textContent));
+  check("the switcher menu: trails, New trail, Continue from phone, Open trail file…, Private tab", ["New trail", "Continue from phone", "Open trail file…", "Private tab"].every((x) => items.includes(x)), items.join(" | "));
+  check("Continue from phone waits for sync", await ui.$eval("#sb-switch-menu .sb-menu-item:nth-last-child(3)", (b) => b.disabled));
+  const first = await ui.evaluate(() => window.scout.researchGet());
+  const firstName = first.name;
+  await ui.locator("#sb-switch-menu .sb-menu-item", { hasText: "New trail" }).click();
+  await sleep(1200);
+  const second = await ui.evaluate(() => window.scout.researchGet());
+  check("New trail makes a trail and shows its canvas", second.id !== first.id && (await ui.evaluate(() => !document.getElementById("canvas").hidden)), `${firstName} → ${second.name}`);
+  await ui.evaluate(() => refreshSideTrails(true));
+  await sleep(400);
+  check("a dot per trail, the current one wide", (await ui.$$eval("#sb-dots .sb-dot", (d) => d.length)) === 2 && (await ui.$eval('#sb-dots .sb-dot[aria-selected="true"]', (d) => d.getBoundingClientRect().width)) === 16);
+  check("its tabs: none yet", (await ui.evaluate(() => tabs.length)) === 0);
+  // Two-finger swipe on the sidebar: the other trail.
+  await ui.evaluate(() => {
+    const sb = document.getElementById("sidebar");
+    for (let i = 0; i < 6; i++) sb.dispatchEvent(new WheelEvent("wheel", { deltaX: 30, deltaY: 0, bubbles: true, cancelable: true }));
+  });
+  await sleep(1200);
+  check("a two-finger swipe on the sidebar goes to the next trail", (await ui.evaluate(() => window.scout.researchGet())).id === first.id && (await ui.evaluate(() => tabs.length)) === 3);
+  check("the switcher shows the current trail", (await ui.$eval("#sb-switch-title", (n) => n.textContent)) === firstName);
+  await ui.click('#sb-dots .sb-dot[aria-selected="false"]');
+  await sleep(1000);
+  check("a dot goes to its trail", (await ui.evaluate(() => window.scout.researchGet())).id !== first.id);
+  await ui.click('#sb-dots .sb-dot[aria-selected="false"]');
+  await sleep(1000);
+
+  // Timeline.
+  await ui.evaluate(() => refreshTimeline(true));
+  await sleep(400);
+  const rows = await ui.$$eval("#sb-timeline-list .sb-tl-row .nm", (r) => r.map((x) => x.textContent));
+  check("the timeline lists the trail's pages", rows.length >= 1, rows.join(" | "));
+
+  // Tool grid: Mosaic and Sound on in violet.
   await ui.click("#sidebar #sound-btn");
   await sleep(500);
-  check("Sound: all turns the tile and the strip violet", (await ui.$eval("#sb-sound", (s) => s.textContent)) === "SOUND: ALL" && (await ui.$eval("#sidebar #sound-btn", (b) => getComputedStyle(b).borderColor)) === "rgb(177, 140, 255)");
+  check("Sound: all turns the tile violet", (await ui.$eval("#sidebar #sound-btn", (b) => getComputedStyle(b).borderColor)) === "rgb(177, 140, 255)" && (await ui.$eval("#sb-sound", (s) => s.textContent)) === "SOUND: ALL");
   await ui.click("#sidebar #sound-btn");
-
-  // Mosaic group: the tiles above the tabs, the rest under Tabs.
   await ui.click("#sidebar #layout-btn");
   await sleep(1200);
-  const groupRows = await ui.$$eval("#sb-mosaic .sb-mosaic-row", (r) => r.length);
-  check("Mosaic on: the Mosaic group lists the tiles", !(await ui.$eval("#sb-mosaic", (g) => g.hidden)) && groupRows >= 2, String(groupRows));
-  check("tiles leave the tab list; the rest sit under Tabs", (await ui.$$eval("#sidebar .tab", (t) => t.filter((x) => x.offsetParent).length)) === (await ui.$$eval("#sidebar .tab", (t) => t.length)) - groupRows && !(await ui.$eval("#sb-tabs-head", (h) => h.hidden)));
-  await ui.click("#sb-mosaic .sb-mosaic-row:nth-child(2)");
-  await sleep(600);
-  check("clicking a row focuses that tile", await ui.$eval("#sb-mosaic .sb-mosaic-row:nth-child(2)", (r) => r.getAttribute("aria-current") === "true"));
+  const mv = await views(app);
+  check("Mosaic on: the tile is violet and the tiles fill the window", (await ui.$eval("#sidebar #layout-btn", (b) => getComputedStyle(b).borderColor)) === "rgb(177, 140, 255)" && mv.length >= 2 && Math.min(...mv.map((b) => b.x)) < 20, JSON.stringify(mv));
+  check("the Mosaic group lists the tiles", !(await ui.$eval("#sb-mosaic", (g) => g.hidden)) && (await ui.$$eval("#sb-mosaic .sb-mosaic-row", (r) => r.length)) >= 2);
   await ui.click("#sidebar #layout-btn");
   await sleep(1000);
-  check("Mosaic off: the group goes away", await ui.$eval("#sb-mosaic", (g) => g.hidden));
 
-  // Width: the handle on the right edge, by keyboard; double-click resets.
-  await ui.focus("#sb-resize");
-  await ui.keyboard.press("ArrowRight");
-  await ui.keyboard.press("ArrowRight");
-  await sleep(500);
-  check("the width handle widens the sidebar and the page follows", (await view(app)).x === 273 + 16, JSON.stringify(await view(app)));
-  await ui.keyboard.press("End");
-  await sleep(400);
-  check("no wider than 340", (await view(app)).x === 341);
-  await ui.dblclick("#sb-resize");
-  await sleep(400);
-  check("double-click: back to 272", (await view(app)).x === 273);
-
-  // Full screen keeps the sidebar; no sliding toolbar.
-  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].emit("enter-full-screen"));
+  // Private tab.
+  await menuLabel(app, "New Private Tab");
+  await sleep(1500);
+  const pv = await ui.evaluate(() => ({ t: tabs.find((x) => x.id === activeId), mark: document.querySelector("#tabs .tab.private .pv")?.textContent }));
+  check("⌘⇧N opens a private tab with its mark", pv.t?.private && pv.mark === "Private", JSON.stringify(pv));
+  await ui.evaluate((u) => window.scout.navigate(activeId, u), `${BASE}/other.html?n=secret`);
+  await sleep(1800);
+  const hist = await ui.evaluate(() => window.scout.historySearch("secret", 20));
+  const trailNow = await ui.evaluate(() => window.scout.researchGet());
+  check("nothing from a private tab goes into history or the trail", hist.length === 0 && !trailNow.trail.some((r) => /secret/.test(r.url)), JSON.stringify(hist.map((h) => h.url)));
+  await ui.evaluate(() => refreshSideTrails(true));
+  await ui.click('#sb-dots .sb-dot[aria-selected="false"]');
+  await sleep(1000);
+  check("a private tab is in no trail: it shows in every trail", await ui.evaluate(() => tabs.some((t) => t.private)));
+  await ui.evaluate(() => window.scout.closeTab(tabs.find((t) => t.private).id));
   await sleep(600);
-  check("full screen keeps the sidebar and the page in place", (await view(app)).x === 273 && !(await ui.evaluate(() => document.body.classList.contains("immersive"))));
-  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].emit("leave-full-screen"));
-  await sleep(300);
+  await menuLabel(app, "Reopen Closed Tab");
+  await sleep(800);
+  check("closing it records nothing: Reopen Closed Tab does not bring it back", !(await ui.evaluate(() => tabs.some((t) => /secret/.test(t.url)))));
 
-  // Kept across a restart.
+  // Kept across a restart; the private tab is not.
   await app.close();
   ({ app, ui } = await launch());
   await sleep(800);
-  // NODE opens on the canvas (B102); ⌘2 shows the first page tab.
-  await app.evaluate(({ Menu }) => Menu.getApplicationMenu().items.flatMap((i) => i.submenu?.items || []).find((i) => i.label === "Tab 2").click());
-  await sleep(600);
-  check("the sidebar layout is kept after a restart", (await ui.evaluate(() => document.body.classList.contains("side"))) && (await view(app))?.x === 273);
-
-  // Back to the top bar from the View menu.
-  await menuClick(app, "sidebar-layout");
-  await sleep(900);
-  v = await view(app);
-  check("View → Use Sidebar Layout off: the top bar comes back", !(await ui.evaluate(() => document.body.classList.contains("side"))) && v.x === 0 && v.y === 96, JSON.stringify(v));
-  check("every control is back in the top bar", await ui.evaluate(() => ["omni", "tabs", "back", "layout-btn", "menu-btn", "new-tab"].every((id) => document.querySelector(`header.chrome #${id}`))));
-  check("the sidebar-only tiles are hidden in the top bar", await ui.evaluate(() => document.getElementById("sb-history-btn").hidden && document.getElementById("sb-downloads-btn").hidden));
-  check("the setting is saved as top", (await ui.evaluate(() => window.scout.getSettings())).chromeLayout === "top");
+  check("after a restart: the sidebar, the canvas, and no private tab", (await ui.evaluate(() => document.body.classList.contains("side") && !document.getElementById("canvas").hidden)) && !(await ui.evaluate(() => tabs.some((t) => t.private))));
 
   await app.close();
   if (failed) console.log(`::error::33-sidebar-chrome: ${failed} check(s) failed`);

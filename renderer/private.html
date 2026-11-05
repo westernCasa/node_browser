@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; font-src file:; form-action https://search.brave.com" />
+    <title>Private tab</title>
+    <!-- A private tab's first page (B103, handoff spec 9). The tab has its own
+         in-memory session and is in no trail; nothing it opens goes into
+         history or a trail. -->
+    <style>
+      @font-face { font-family: "Barlow"; font-weight: 400; src: url("fonts/barlow-latin-400-normal.woff2") format("woff2"); }
+      @font-face { font-family: "Barlow"; font-weight: 700; src: url("fonts/barlow-latin-700-normal.woff2") format("woff2"); }
+      :root { --surface: #000; --raised: #0e0e0f; --line: #2a2a2d; --ink: #fff; --muted: #a1a1a6; --signal: #b18cff; }
+      * { box-sizing: border-box; }
+      body { margin: 0; min-height: 100vh; background: var(--surface); color: var(--ink); font: 16px/24px "Barlow", "Helvetica Neue", Arial, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; }
+      svg { width: 32px; height: 32px; stroke: var(--signal); fill: none; stroke-width: 1.5; }
+      h1 { margin: 16px 0 4px; font-size: 28px; line-height: 32px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+      p { margin: 0 0 24px; color: var(--muted); }
+      form { width: min(560px, 100%); display: flex; border: 1px solid var(--line); border-radius: 2px; }
+      form:focus-within { border-color: var(--signal); }
+      input { flex: 1; min-width: 0; background: var(--raised); color: var(--ink); border: 0; padding: 12px 14px; font: 15px "Barlow", sans-serif; outline: none; }
+    </style>
+  </head>
+  <body>
+    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="1"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+    <h1>Private tab</h1>
+    <p>Not in any trail · no history</p>
+    <form action="https://search.brave.com/search" method="get" role="search">
+      <input name="q" autocomplete="off" autofocus placeholder="Search Brave" aria-label="Search Brave" />
+    </form>
+  </body>
+</html>
