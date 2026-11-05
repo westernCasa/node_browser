@@ -1467,3 +1467,21 @@ body.chrome-overlay.side.shown #bar { transform: none; transition: transform var
 @media (prefers-reduced-motion: reduce) {
   body.chrome-overlay.side #bar, body.chrome-overlay.side.shown #bar { transition: none; }
 }
+
+/* B104: the selected card's actions, timeline Put on canvas, new cards. */
+#canvas .cv-selbar { position: absolute; left: 0; top: 0; display: flex; align-items: center; gap: 6px; padding: 4px 4px 4px 10px; background: var(--surface-raised); border: 1px solid var(--line); border-radius: var(--radius-sm); }
+#canvas .cv-selbar[hidden] { display: none; }
+#canvas .cv-selbar-meta { font: 11px var(--mono); text-transform: uppercase; color: var(--ink-muted); margin-right: 4px; }
+#canvas .cv-selbar-btn { height: 26px; padding: 0 10px; background: var(--ink); color: var(--surface); border: 0; border-radius: var(--radius-sm); font: 600 11px var(--sans); letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; }
+#canvas .cv-selbar-btn.quiet { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+#canvas .cv-selbar-btn.quiet:hover { border-color: var(--ink); }
+#canvas .cv-selbar-btn[hidden] { display: none; }
+#canvas .cv-card.new { border-color: var(--signal); }
+#canvas .cv-card.new .cv-card-kind { color: var(--signal); }
+.sb-tl-wrap { display: flex; align-items: center; }
+.sb-tl-wrap .sb-tl-row { flex: 1 1 auto; min-width: 0; }
+.sb-tl-put { all: unset; flex: none; width: 26px; height: 26px; display: grid; place-items: center; border-radius: var(--radius-sm); color: var(--ink-muted); cursor: pointer; }
+.sb-tl-put:hover { color: var(--ink); background: var(--surface-raised); }
+.sb-tl-put:focus-visible { outline: 2px solid var(--signal); outline-offset: -2px; }
+.sb-tl-put .ic { width: 14px; height: 14px; }
+.sb-tl-row[draggable="true"] { cursor: grab; }

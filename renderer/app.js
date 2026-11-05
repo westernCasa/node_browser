@@ -3795,6 +3795,7 @@ api?.onCommand?.((msg) => {
   else if (msg.cmd === "tour") startTour();
   else if (msg.cmd === "canvas") (msg.open ? openCanvas(msg) : closeCanvas());
   else if (msg.cmd === "side-over") mirrorWhileImmersive(msg.shown);
+  else if (msg.cmd === "trail-changed") refreshCanvasData();
 });
 
 // ---- Trail canvas (B101, B102) ----
@@ -3814,7 +3815,11 @@ async function openCanvas({ focus = false, select = "" } = {}) {
     open: (card, tab) => (tab?.tabId ? api.activateTab(tab.tabId) : api.createTab(card.url)),
     search: (text) => api.createTab(text),
     pickTrail: (id) => api.trailSwitch(id),
+    // B104: Put on canvas (a timeline row dropped on it) and Remove from canvas.
+    put: async (o) => (await api.trailPlace(o)) && refreshCanvasData(),
+    remove: async (id) => (await api.trailRemove(id)) && refreshCanvasData(),
   });
+  const wasShown = canvasShown;
   canvasShown = true;
   canvasEl.hidden = false;
   renderTabs();
@@ -3826,12 +3831,32 @@ async function openCanvas({ focus = false, select = "" } = {}) {
     api.surveyCard?.().catch(() => 0),
   ]);
   if (seq !== canvasSeq || !canvasShown) return;
-  trailCanvas.show(snap, previews || {});
+  // Cards placed since the canvas was last seen show as new (B104).
+  const seenKey = `node.canvasSeen.${snap?.trail.id}`;
+  if (!wasShown || canvasSeenTrail !== snap?.trail.id) {
+    canvasSeenAt = Number(store.get(seenKey, 0)) || 0;
+    canvasSeenTrail = snap?.trail.id;
+  }
+  store.set(seenKey, Date.now());
+  trailCanvas.show(snap, previews || {}, { seenAt: canvasSeenAt });
   trailCanvas.setSurvey(days || 0);
   trailCanvas.setResume((list || []).filter((t) => t.id !== snap?.trail.id && t.cards > 0));
   if (select) trailCanvas.selectUrl(select);
   if (focus) trailCanvas.focusSearch();
   else if (!canvasEl.contains(document.activeElement)) trailCanvas.vp.focus({ preventScroll: true });
+}
+var canvasSeenAt = 0;
+var canvasSeenTrail = "";
+// The trail changed in main (a page became a card): draw it again if shown,
+// and update the timeline.
+async function refreshCanvasData() {
+  if (typeof refreshTimeline === "function") refreshTimeline(true);
+  if (!canvasShown || !trailCanvas) return;
+  const [previews, snap] = await Promise.all([api.trailPreviews?.().catch(() => ({})), api.trailGet()]);
+  if (!canvasShown) return;
+  const keep = { ...trailCanvas.v };
+  trailCanvas.show(snap, previews || {}, { seenAt: canvasSeenAt });
+  trailCanvas.setView(keep, { save: false });
 }
 function closeCanvas() {
   canvasSeq++;
@@ -4445,16 +4470,40 @@ function paintTimeline() {
       row.className = "sb-tl-row" + (it.timelineOnly ? " only" : "");
       const time = new Date(it.at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
       row.innerHTML = `<span class="t"></span><span class="nm"></span><span class="k"></span>`;
+      // Timeline-only pages: drag onto the canvas, or the + button, puts them on it (B104).
+      if (it.timelineOnly && it.url) {
+        row.draggable = true;
+        row.addEventListener("dragstart", (e) => {
+          e.dataTransfer.setData("text/node-url", it.url);
+          e.dataTransfer.effectAllowed = "copy";
+        });
+      }
       row.querySelector(".t").textContent = time;
       row.querySelector(".nm").textContent = it.title || it.url || "Page";
-      row.querySelector(".k").textContent = it.timelineOnly ? "Timeline only" : it.removedFromCanvas ? "Removed" : "";
+      const secs = typeof it.dwell === "number" ? Math.round(it.dwell / 1000) : null;
+      row.querySelector(".k").textContent = it.timelineOnly ? (secs !== null ? `${secs} s` : it.removedFromCanvas ? "Removed" : "Timeline only") : "";
       row.title = `${it.title || ""}\n${it.url || ""}${it.timelineOnly ? "\nTimeline only: not on the canvas" : ""}`;
       row.addEventListener("click", () => {
         const open = tabs.find((t) => t.url === it.url);
         if (open) api.activateTab(open.id);
         else if (it.url) api.createTab(it.url);
       });
-      list.appendChild(row);
+      if (it.timelineOnly && it.url) {
+        const wrap = document.createElement("div");
+        wrap.className = "sb-tl-wrap";
+        const put = document.createElement("button");
+        put.type = "button";
+        put.className = "sb-tl-put";
+        put.innerHTML = icon("plus");
+        put.title = "Put on canvas";
+        put.setAttribute("aria-label", `Put on canvas: ${it.title || it.url}`);
+        put.addEventListener("click", async () => {
+          await api.trailPlace({ url: it.url });
+          refreshCanvasData();
+        });
+        wrap.append(row, put);
+        list.appendChild(wrap);
+      } else list.appendChild(row);
     }
   }
   document.getElementById("sb-timeline-count").textContent = n ? String(n) : "";

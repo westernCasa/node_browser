@@ -15,6 +15,7 @@
     "tauri:android": "tauri android dev",
     "test:trail": "node test/trail-demo.js",
     "test:canvas": "node test/canvas-demo.js",
+    "test:placement": "node test/placement-demo.js",
     "try:canvas": "node test/try-canvas.js",
     "test:keywords": "node test/keywords-demo.js",
     "test:providers": "node test/providers-demo.js",
@@ -31,7 +32,7 @@
     "dist:mac": "electron-builder --mac",
     "dist:win": "electron-builder --win",
     "test:redteam": "node test/e2e/18-redteam.js",
-    "test:unit": "node test/trail-demo.js && node test/canvas-demo.js && node test/share-link-demo.js && node test/share-worker-demo.js && node test/trail-file-demo.js && node test/threads-demo.js && node test/trail-open-demo.js && node test/passwords-demo.js && node test/chat-demo.js && node test/usage-demo.js && node test/research-demo.js && node test/keywords-demo.js && node test/keywords-eval.js && node test/providers-demo.js && node test/rules-demo.js && node test/ai-demo.js && node test/controller-demo.js && node test/playback-demo.js && node test/bookmarks-demo.js && node test/google-demo.js && node test/agents-demo.js && node test/agent-demo.js && node test/talk-demo.js",
+    "test:unit": "node test/trail-demo.js && node test/canvas-demo.js && node test/placement-demo.js && node test/share-link-demo.js && node test/share-worker-demo.js && node test/trail-file-demo.js && node test/threads-demo.js && node test/trail-open-demo.js && node test/passwords-demo.js && node test/chat-demo.js && node test/usage-demo.js && node test/research-demo.js && node test/keywords-demo.js && node test/keywords-eval.js && node test/providers-demo.js && node test/rules-demo.js && node test/ai-demo.js && node test/controller-demo.js && node test/playback-demo.js && node test/bookmarks-demo.js && node test/google-demo.js && node test/agents-demo.js && node test/agent-demo.js && node test/talk-demo.js",
     "release": "electron-builder --publish always"
   },
   "devDependencies": {

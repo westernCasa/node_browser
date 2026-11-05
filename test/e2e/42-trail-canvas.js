@@ -6,6 +6,10 @@
 // saved position; pan, zoom 20%-250%, Fit; the position is saved; an open
 // tab's card shows its picture and the Tab mark; 200 cards pan and zoom
 // (frame times are printed; the 60 fps check is on an M1 Mac).
+// B104: a page becomes a card after 20 s on screen or a scroll by hand, near
+// the page it was opened from, with an "opened from" line; a short visit stays
+// timeline-only with its time on page; tabs still open when leaving a trail
+// become cards; Put on canvas and Remove from canvas, lines kept.
 // B102: NODE opens on the canvas; ⌘T and + show it with the search bar ready;
 // a search there opens a page tab; it is first in the tab list (⌘1); ⌘E goes
 // from a page to its card; closing the last page tab comes back to it; an
@@ -20,8 +24,15 @@ const check = (name, ok, detail = "") => {
   if (!ok) failed++;
   console.log(ok ? "✓" : "✗", name, detail ? `(${detail})` : "");
 };
+// /proofing: one short page. /long?n=…: a long page with a link to the next one.
 const server = http.createServer((req, res) => {
   res.setHeader("content-type", "text/html");
+  const u = new URL(req.url, "http://x");
+  if (u.pathname === "/long") {
+    const n = u.searchParams.get("n");
+    const para = "<p>" + "Levain and starter notes. ".repeat(40) + "</p>";
+    return res.end(`<title>Long page ${n}</title><body style='background:#fff'><h1>Long page ${n}</h1><a id="next" href="/long?n=${n}x">Next</a>${para.repeat(30)}</body>`);
+  }
   res.end("<title>Proofing box temperatures</title><body style='background:#fff'><h1>Proofing box temperatures</h1><p>Most bakers keep a proofing box between 24 and 27 C.</p></body>");
 });
 const userData = fs.mkdtempSync(path.join(OUT, "ud-"));
@@ -262,6 +273,86 @@ const tabCount = (ui) => ui.evaluate(() => tabs.length);
   );
   console.log(`  frame times with 220 cards: average ${perf.avg.toFixed(1)} ms, 95th percentile ${perf.p95.toFixed(1)} ms over ${perf.frames} frames`);
   check("panning and zooming 220 cards keeps frames under 50 ms here (60 fps is checked on an M1 Mac)", perf.p95 < 50, `${perf.p95.toFixed(1)} ms`);
+  await app.close();
+
+  // ---- B104: pages becoming cards ----
+  const ud3 = fs.mkdtempSync(path.join(OUT, "ud-"));
+  fs.writeFileSync(path.join(ud3, "settings.json"), JSON.stringify({ firstRunDone: true }));
+  ({ app, ui } = await launch(ud3));
+  const BASE2 = `http://127.0.0.1:${server.address().port}`;
+  const cardsNow2 = async () => (await ui.evaluate(() => window.scout.trailGet())).cards;
+  const focus = () => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].focus());
+  const pageView = () => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].contentView.children.find((v) => v.webContents && /\/long|\/proofing/.test(v.webContents.getURL())));
+  await ui.evaluate((u) => window.scout.createTab(u), `${BASE2}/long?n=a`);
+  await sleep(2000);
+  await focus();
+  // A scroll by hand: wheel events on the page.
+  await app.evaluate(async ({ BrowserWindow }) => {
+    const v = BrowserWindow.getAllWindows()[0].contentView.children.find((x) => x.webContents && /\/long/.test(x.webContents.getURL()));
+    for (let i = 0; i < 12; i++) {
+      v.webContents.sendInputEvent({ type: "mouseWheel", x: 300, y: 300, deltaX: 0, deltaY: -120 });
+      await new Promise((r) => setTimeout(r, 60));
+    }
+  });
+  await sleep(1500);
+  let cs = await cardsNow2();
+  const a = cs.find((c) => /n=a$/.test(c.url || ""));
+  check("a page scrolled by hand becomes a card", Boolean(a), JSON.stringify(cs.map((c) => c.url)));
+  // A link from it: the next page, kept on screen 20 s.
+  await app.evaluate(async ({ BrowserWindow }) => {
+    const v = BrowserWindow.getAllWindows()[0].contentView.children.find((x) => x.webContents && /\/long/.test(x.webContents.getURL()));
+    await v.webContents.executeJavaScript(`window.scrollTo(0,0); document.getElementById("next").click()`);
+  });
+  await sleep(4000);
+  check("before 20 s it is not a card yet", !(await cardsNow2()).some((c) => /n=ax$/.test(c.url || "")));
+  for (let i = 0; i < 20; i++) {
+    await focus();
+    await sleep(1000);
+  }
+  await sleep(1500);
+  const t3 = await ui.evaluate(() => window.scout.trailGet());
+  const b = t3.cards.find((c) => /n=ax$/.test(c.url || ""));
+  check("after 20 s on screen the page becomes a card", Boolean(b), JSON.stringify(t3.cards.map((c) => c.url)));
+  check("with an \"opened from\" line from the page it was opened from", b && t3.lines.some((l) => l.kind === "nav" && l.from === a?.id && l.to === b.id), JSON.stringify(t3.lines));
+  check("placed next to it without overlapping", b && a && Math.hypot(b.x - a.x, b.y - a.y) < 700 && !(b.x < a.x + a.w && a.x < b.x + b.w && b.y < a.y + a.h && a.y < b.y + b.h), JSON.stringify({ a: [a?.x, a?.y], b: [b?.x, b?.y] }));
+  // A short visit.
+  await ui.evaluate((u) => window.scout.navigate(activeId, u), `${BASE2}/proofing`);
+  await sleep(3500);
+  await ui.evaluate((u) => window.scout.navigate(activeId, u), `${BASE2}/long?n=c`);
+  await sleep(1500);
+  const items = (await ui.evaluate(() => window.scout.trailTimeline())).flatMap((x) => x.items);
+  const short = items.find((i) => /proofing/.test(i.url || ""));
+  check("a short visit stays timeline-only, with its time on page", short?.timelineOnly && short.dwell >= 1000 && short.dwell < 20000, JSON.stringify(short));
+  // Put on canvas and Remove from canvas.
+  await ui.evaluate((u) => window.scout.trailPlace({ url: u }), `${BASE2}/proofing`);
+  cs = await cardsNow2();
+  const p = cs.find((c) => /proofing/.test(c.url || ""));
+  check("Put on canvas makes a timeline-only page a card", Boolean(p));
+  await ui.evaluate((id) => window.scout.trailRemove(id), b.id);
+  let t4 = await ui.evaluate(() => window.scout.trailGet());
+  check("Remove from canvas takes the card off and hides its lines", !t4.cards.some((c) => c.id === b.id) && t4.removed.includes(b.id));
+  check("the removed page shows in the timeline as removed", (await ui.evaluate(() => window.scout.trailTimeline())).flatMap((x) => x.items).some((i) => /n=ax$/.test(i.url || "") && i.removedFromCanvas));
+  await ui.evaluate((id) => window.scout.trailPlace({ card: id }), b.id);
+  t4 = await ui.evaluate(() => window.scout.trailGet());
+  check("putting it back brings its lines back", t4.cards.some((c) => c.id === b.id) && t4.lines.some((l) => l.kind === "nav" && l.to === b.id));
+  // Canvas: the selected card's actions, and new cards in violet.
+  await ui.evaluate(() => window.scout.canvasShow());
+  await sleep(1200);
+  await ui.click(`#canvas .cv-card[data-id="${p.id}"]`);
+  await sleep(300);
+  check("a selected card shows Open and Remove from canvas", await ui.evaluate(() => !document.querySelector("#canvas .cv-selbar").hidden && document.querySelector("#canvas .cv-selbar").textContent.includes("Remove from canvas")));
+  await ui.click("#canvas .cv-selbar .quiet");
+  await sleep(800);
+  check("Remove from canvas on the canvas removes it", !(await ui.evaluate((id) => Boolean(document.querySelector(`#canvas .cv-card[data-id="${id}"]`)), p.id)));
+  // Tabs still open when leaving the trail become cards.
+  await ui.evaluate(() => tabs.length && window.scout.activateTab(tabs[0].id));
+  await sleep(500);
+  const before4 = (await cardsNow2()).length;
+  const trailA = (await ui.evaluate(() => window.scout.trailGet())).trail.id;
+  await ui.evaluate(() => window.scout.trailNew("Other"));
+  await sleep(800);
+  const old = await ui.evaluate((id) => window.scout.trailGet(id), trailA);
+  check("a tab still open when leaving the trail becomes a card there", old.cards.filter((c) => !c.removed).length === before4 + 1 && old.cards.some((c) => /n=c$/.test(c.url || "")), JSON.stringify(old.cards.map((c) => c.url)));
   await app.close();
   server.close();
   console.log(failed ? `\n${failed} failed` : "\nall passed");

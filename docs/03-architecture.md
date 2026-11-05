@@ -211,6 +211,14 @@ Each tab stores its resolved rule (`tab.rule`), recomputed on every navigation:
 - **Tokens:** `--canvas-group`, `--canvas-group-line`, `--canvas-dot` in `renderer/styles.css`, with light values under `:root[data-theme="light"]` for when NODE has a light theme. No other colour values.
 - **Tests:** `test/canvas-demo.js` (`npm run test:canvas`) checks the view maths; `test/e2e/42-trail-canvas.js` checks the drawing, pan, zoom, Fit, saving and frame times with 220 cards.
 
+## Pages becoming cards (B104)
+
+- **When:** a page becomes a card when the person engages with it: 20 s on screen (the shown tab or a Mosaic tile, with NODE's window in front, counted once a second in `main.js`), a scroll by hand of more than half a screen (`view-preload.js` sends `tab:engaged`; scrolls within a second of a wheel, touch or key count, the page's own scrolling does not), a capture from it, an Ask about it, or its tab still being open when the person leaves the trail (switches trails or quits; agreed with Sven). Private tabs never count. A visit that ends without any of these is recorded as a `bounced` event with its time on page, and the timeline shows it as timeline-only with that time.
+- **Where:** `core/placement.js` `placeNear(view, source, w, h)`. The source is the page it was opened from (the page before it in the tab, or the page that opened the tab). Inside the source's group: the free spot nearest the source (24 px sides and bottom, 48 px top). Group full: the group grows at the bottom, and every group and card that starts below it moves down by the same amount; pinned cards never move. Source not in a group: right of it, below, left, above, then the corners, then the nearest free spot. No source: the free spot nearest the middle of the canvas as last seen. No overlaps. The new card gets an "opened from" line from its source.
+- **Store:** `TrailStore.placePage(id, url, opts)` adds the card (or puts a removed one back) and its line; `TrailStore.bounce(id, url, dwell)` records a short visit. Group growth and moved cards are saved with the trail; they are not events.
+- **Put on canvas / Remove from canvas:** `trail:place` ({ url } or { card }, with x, y when dropped) and `trail:remove`. In the sidebar a timeline-only row has a + button and can be dragged onto the canvas. On the canvas the selected card shows Open and Remove from canvas. A removed card keeps its events and lines; putting it back brings them back.
+- **New cards:** cards placed since the person last saw that trail's canvas have a violet border until selected (the time is kept per trail in the window's storage). `main.js` sends `trail-changed` when a card is placed, and the canvas and timeline draw again.
+
 ## Sidebar-only chrome (B103)
 
 The sidebar is NODE's only chrome; the top bar and the layout setting are gone (`chromeLayout` is always `side`; an old `top` value is ignored). `renderer/index.html` keeps the real controls in the hidden header, and `placeSidebar()` in `app.js` moves them into the sidebar's slots at start, so each keeps its handlers.
@@ -257,7 +265,7 @@ The renderer stores hidden keywords and the Auto setting in local storage.
 | Layout | `layout:set`, `layout:sidebar`, `layout:library`, `layout:chrome` (sidebar width), `layout:side-over` (sidebar over the page) |
 | Find, zoom, history | `find:start`, `find:stop`, `tab:zoom`, `history:search`, `history:clear`, `history:remove` |
 | Site rules | `rules:edit`, `rules:reload` |
-| Trail store | `trail:get`, `trail:list`, `trail:new`, `trail:switch`, `trail:rename`, `trail:view`, `trail:timeline`, `trail:previews` |
+| Trail store | `trail:get`, `trail:list`, `trail:new`, `trail:switch`, `trail:rename`, `trail:view`, `trail:timeline`, `trail:previews`, `trail:place`, `trail:remove`; `tab:engaged` (page → main) |
 | Research session (over the trail store) | `research:get`, `research:list`, `research:new`, `research:switch`, `research:rename`, `research:pins`, `research:visit`, `research:opened`, `research:dismiss`, `research:undismiss`, `research:export` |
 | Keywords and search | `page:extract`, `page:keywords`, `suggest:search` (legacy, used by Tauri), `suggest:for`, `suggest:preview` |
 | Sources and AI | `settings:get`, `settings:set`, `search:status`, `search:test`, `ai:test` |

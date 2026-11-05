@@ -60,6 +60,8 @@ contextBridge.exposeInMainWorld("scout", {
   trailView: (patch) => ipcRenderer.invoke("trail:view", patch),
   trailTimeline: (id) => ipcRenderer.invoke("trail:timeline", id),
   trailPreviews: () => ipcRenderer.invoke("trail:previews"),
+  trailPlace: (opts) => ipcRenderer.invoke("trail:place", opts),
+  trailRemove: (card) => ipcRenderer.invoke("trail:remove", card),
   canvasShow: () => ipcRenderer.invoke("canvas:show"),
   surveyCard: () => ipcRenderer.invoke("survey:card"),
   surveyCardAnswer: (act) => ipcRenderer.invoke("survey:card-answer", act),

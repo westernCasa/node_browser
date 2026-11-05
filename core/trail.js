@@ -16,6 +16,7 @@
 // Names may contain "/" (for example "t1/trail.json").
 
 const { isSensitiveUrl, hostOf } = require("./urls");
+const { placeNear } = require("./placement");
 
 const FORMAT = 1;
 const SESSION_GAP_MS = 30 * 60 * 1000; // a gap of more than 30 minutes starts a new session
@@ -297,6 +298,45 @@ class TrailStore {
     this.save(id);
     return c;
   }
+  // ---- pages becoming cards (B104, core/placement.js) ----
+  // A page the person engaged with becomes a card near the page it was opened
+  // from (from: that page's address), with an "opened from" line. A page that
+  // already has a card is left alone; a removed one comes back where it was,
+  // with its lines. near: the middle of the screen, in world units, used when
+  // there is no source card. reason: what made it a card (dwell, scroll,
+  // capture, link, ask, tab-open, put). Returns the card, or null.
+  placePage(id, url, { title = "", keywords = [], from = "", near, reason = "", at = this.now(), x, y } = {}) {
+    const d = this.get(id);
+    if (!d || !url || isSensitiveUrl(url) || !isReading(url)) return null;
+    const have = this.pageCard(id, url);
+    if (have && !have.removed) return have;
+    if (have) return this.restoreCard(id, have.id, { at, x, y });
+    const [w, h] = SIZE.page;
+    const source = from && from !== url ? this.pageCard(id, from) : null;
+    let pos = typeof x === "number" && typeof y === "number" ? { x, y, moves: [] } : null;
+    if (!pos) {
+      const view = { cards: d.cards.filter((c) => !c.removed), groups: d.groups };
+      pos = placeNear(view, source && !source.removed ? source : null, w, h, { near: near || this.below(id, w) });
+      for (const m of pos.moves) {
+        const o = (m.kind === "group" ? d.groups : d.cards).find((k) => k.id === m.id);
+        if (!o) continue;
+        if (typeof m.y === "number") o.y = m.y;
+        if (typeof m.h === "number") o.h = m.h;
+      }
+    }
+    const rows = this.pageRows(id);
+    const row = rows.find((r) => r.url === url);
+    const card = this.addCard(id, { kind: "page", url, title: String(title || row?.title || url).slice(0, 300), keywords: (keywords.length ? keywords : row?.keywords || []).slice(0, 6), placedAt: at, x: pos.x, y: pos.y }, { at, data: { url, reason } });
+    if (card && source && !source.removed) this.link(id, source.id, card.id, { kind: "nav", at });
+    return card;
+  }
+  // A visit that ended without the page becoming a card: kept in the timeline
+  // as "timeline only" with its time on page (ms).
+  bounce(id, url, dwell, { at = this.now() } = {}) {
+    if (!url || !isReading(url) || !this.get(id) || this.pageCard(id, url)) return null;
+    return this.event(id, { type: "bounced", at, data: { url, dwell: Math.round(dwell) } });
+  }
+
   deleteCard(id, cardId, { at = this.now() } = {}) {
     const d = this.get(id);
     const i = d?.cards.findIndex((c) => c.id === cardId) ?? -1;
@@ -425,7 +465,7 @@ class TrailStore {
     if (!t) return [];
     const cardsById = new Map(t.data.cards.map((c) => [c.id, c]));
     const pageCard = new Map(t.data.cards.filter((c) => c.url).map((c) => [c.url, c]));
-    const shown = t.events.filter((e) => ["opened", "captured", "asked", "reported", "noted"].includes(e.type));
+    const shown = t.events.filter((e) => ["opened", "bounced", "captured", "asked", "reported", "noted"].includes(e.type));
     const sessions = [];
     const open = new Map(); // device -> its latest session
     for (const e of shown) {
@@ -435,6 +475,12 @@ class TrailStore {
         s = { device, startAt: e.at, endAt: e.at, items: [] };
         sessions.push(s);
         open.set(device, s);
+      }
+      // A visit that ended without the page becoming a card: its time on page.
+      if (e.type === "bounced") {
+        const it = s.items.findLast((i) => i.type === "opened" && i.url === e.data?.url);
+        if (it && typeof e.data?.dwell === "number") it.dwell = e.data.dwell;
+        continue;
       }
       s.endAt = Math.max(s.endAt, e.at);
       const url = e.data?.url;

@@ -36,6 +36,32 @@ const activity = () => {
   }
 };
 window.addEventListener("scroll", activity, { capture: true, passive: true });
+
+// The person scrolled the page (B104): a page becomes a card once scrolled
+// by hand, by more than half a screen. Scrolling by the page itself does not
+// count: only scrolls within a second of a wheel, touch or key.
+let handAt = 0;
+let scrolled = 0;
+let lastY = null;
+let scrollSent = false;
+const hand = () => (handAt = Date.now());
+window.addEventListener("wheel", hand, { capture: true, passive: true });
+window.addEventListener("touchmove", hand, { capture: true, passive: true });
+window.addEventListener("keydown", (e) => ["PageDown", "PageUp", "ArrowDown", "ArrowUp", " ", "End", "Home"].includes(e.key) && hand(), true);
+window.addEventListener(
+  "scroll",
+  () => {
+    if (!tabId || scrollSent) return;
+    const y = window.scrollY;
+    if (lastY !== null && Date.now() - handAt < 1000) scrolled += Math.abs(y - lastY);
+    lastY = y;
+    if (scrolled > window.innerHeight / 2) {
+      scrollSent = true;
+      ipcRenderer.send("tab:engaged", "scroll");
+    }
+  },
+  { capture: true, passive: true },
+);
 window.addEventListener("resize", activity, { passive: true });
 document.addEventListener("selectionchange", activity);
 

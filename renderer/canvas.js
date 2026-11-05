@@ -231,7 +231,19 @@
       this.resumeList = h("div", "cv-resume-list");
       this.resume.append(rt, this.resumeList);
       this.top.append(this.heading, this.form, this.survey, this.resume);
-      el.append(this.vp, key, corner, this.top);
+      // The selected card's actions (B104), drawn at screen size above it.
+      this.selBar = h("div", "cv-selbar");
+      this.selBar.hidden = true;
+      this.selMeta = h("span", "cv-selbar-meta");
+      const openB = h("button", "cv-selbar-btn", "Open");
+      openB.type = "button";
+      openB.addEventListener("click", () => this.selected && this.openCard(this.selected));
+      this.selOpen = openB;
+      const rm = h("button", "cv-selbar-btn quiet", "Remove from canvas");
+      rm.type = "button";
+      rm.addEventListener("click", () => this.selected && this.hooks.remove?.(this.selected));
+      this.selBar.append(this.selMeta, openB, rm);
+      el.append(this.vp, key, corner, this.top, this.selBar);
       this.bind();
     }
 
@@ -275,6 +287,20 @@
       };
       vp.addEventListener("pointerup", end);
       vp.addEventListener("pointercancel", end);
+      // Put on canvas by dragging a timeline row here (B104).
+      vp.addEventListener("dragover", (e) => {
+        if (![...e.dataTransfer.types].includes("text/node-url")) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "copy";
+      });
+      vp.addEventListener("drop", (e) => {
+        const url = e.dataTransfer.getData("text/node-url");
+        if (!url) return;
+        e.preventDefault();
+        const r = vp.getBoundingClientRect();
+        const wx = (e.clientX - r.left - this.v.x) / this.v.z, wy = (e.clientY - r.top - this.v.y) / this.v.z;
+        this.hooks.put?.({ url, x: wx - 130, y: wy - 100 });
+      });
       vp.addEventListener("dblclick", (e) => {
         const card = e.target.closest?.(".cv-card");
         if (card) this.openCard(card.dataset.id);
@@ -327,7 +353,10 @@
 
     // ---- data ----
     // snap: the trail:get result. previews: { url: { thumb, tabId } } for open tabs.
-    show(snap, previews = {}) {
+    // seenAt: when the person last saw this trail's canvas; cards placed after
+    // it are new (violet) until selected.
+    show(snap, previews = {}, { seenAt = 0 } = {}) {
+      this.seenAt = seenAt;
       this.data = snap;
       this.previews = previews || {};
       this.selected = snap?.view?.selected || null;
@@ -406,6 +435,7 @@
       el.style.width = `${c.w}px`;
       el.style.height = `${c.h}px`;
       if (c.id === this.selected) el.classList.add("selected");
+      if (this.seenAt && c.placedAt > this.seenAt && c.id !== this.selected) el.classList.add("new");
       if (c.kind === "question" && c.status === "resolved") el.classList.add("resolved");
       const pv = c.url ? this.previews[c.url] : null;
       if (pv) el.classList.add("open");
@@ -551,6 +581,19 @@
       if (this.zoomLabel.textContent !== pct) this.zoomLabel.textContent = pct;
       this.el.dataset.zoom = String(Math.round(v.z * 100));
       this.paintMiniSeen();
+      this.paintSelBar();
+    }
+
+    paintSelBar() {
+      const c = this.selected && this.data?.cards.find((k) => k.id === this.selected);
+      this.selBar.hidden = !c;
+      if (!c) return;
+      this.selMeta.textContent = c.url ? hostOf(c.url) : KIND_LABEL[c.kind] || "";
+      this.selOpen.hidden = !c.url;
+      const vp = this.vp.getBoundingClientRect(), el = this.el.getBoundingClientRect();
+      const x = vp.left - el.left + this.v.x + c.x * this.v.z;
+      const y = vp.top - el.top + this.v.y + c.y * this.v.z - 8;
+      this.selBar.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px) translateY(-100%)`;
     }
 
     zoomCentre(z, animate) {
@@ -607,6 +650,8 @@
       this.selected = id || null;
       const el = id && this.cardsEl.querySelector(`.cv-card[data-id="${CSS.escape(id)}"]`);
       if (el) el.classList.add("selected");
+      el?.classList.remove("new");
+      this.paintSelBar();
       if (reveal && el) {
         const c = this.data.cards.find((k) => k.id === id);
         const s = this.size();

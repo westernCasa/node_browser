@@ -573,6 +573,75 @@ function openTrails() {
   return new ResearchStore(sessionStorageOver(trailStore));
 }
 // The trail the canvas shows, with research changes saved first.
+// ---- Pages becoming cards (B104, handoff spec 3) ----
+// A page becomes a card on the canvas when the person engages with it: 20 s
+// on screen (the shown tab or a Mosaic tile, NODE in front), scrolling it,
+// capturing from it, asking AI about it, or still having its tab open when
+// they leave the trail (switch trails or quit). Shorter visits stay in the
+// timeline as "timeline only" with their time on page. The card goes near the
+// page it was opened from (core/placement.js) with an "opened from" line.
+// Private tabs never count. Sign-in and payment pages never become cards (B66).
+const ENGAGE_MS = 20000;
+function pageStarted(tab, url) {
+  pageEnded(tab);
+  if (!/^https?:/i.test(url || "") || tab.private) return void (tab.page = null);
+  // Opened from: the page before it in this tab, or the page that opened the tab.
+  const from = tab.page?.url || tab.lastPageUrl || tab.openedFrom || "";
+  tab.page = { url, from, shownMs: 0, engaged: false, trail: tab.trail };
+  tab.openedFrom = "";
+}
+function pageEnded(tab) {
+  const p = tab.page;
+  if (!p) return;
+  tab.lastPageUrl = p.url;
+  if (!p.engaged && p.shownMs > 0) trailStore?.bounce(p.trail, p.url, p.shownMs);
+  tab.page = null;
+}
+function onScreen(tab) {
+  if (!win || canvasOn || libraryOpen || !win.isFocused() || win.isMinimized()) return false;
+  if (!tab.attached || tab.sleeping) return false;
+  return layout === "mosaic" ? mosaicIds().includes(tab.id) : tab.id === activeId;
+}
+// Once a second: time on screen for the pages that are on screen.
+setInterval(() => {
+  for (const tab of tabs.values()) {
+    const p = tab.page;
+    if (!p || p.engaged || !onScreen(tab)) continue;
+    p.shownMs += 1000;
+    if (p.shownMs >= ENGAGE_MS) engagePage(tab, "dwell");
+  }
+}, 1000).unref?.();
+function engagePage(tab, reason) {
+  const p = tab?.page;
+  if (!p || p.engaged || tab.private || !trailStore) return null;
+  p.engaged = true;
+  return placeCard(p.trail || currentTrail(), p.url, { title: tab.view.webContents.getTitle(), from: p.from, reason });
+}
+function engageUrl(url, reason) {
+  const tab = [...tabs.values()].find((t) => t.page?.url === url);
+  if (tab) return engagePage(tab, reason);
+  return placeCard(currentTrail(), url, { reason });
+}
+function keepOpenTabs(trailId) {
+  if (!trailStore || !trailId) return;
+  for (const tab of tabs.values()) if (tab.trail === trailId && tab.page && !tab.page.engaged) engagePage(tab, "tab-open");
+}
+// The middle of the canvas as last seen, in world units: where a card with no
+// source goes.
+function canvasMiddle(id) {
+  const v = trailStore.view(id);
+  const [w, h] = win ? win.getContentSize() : [1440, 900];
+  const cw = Math.max(400, w - (chromeLeft || 300) - (sidebarWidth || 0));
+  return { x: Math.round((cw / 2 - (v.x || 0)) / (v.z || 1)), y: Math.round((h / 2 - (v.y || 0)) / (v.z || 1)) };
+}
+function placeCard(id, url, opts = {}) {
+  if (!trailStore?.has(id)) return null;
+  research?.saveNow?.();
+  const card = trailStore.placePage(id, url, { near: canvasMiddle(id), ...opts });
+  if (card) sendUi("trail-changed", { trail: id, card: card.id });
+  return card;
+}
+
 function trailSnapshot(id) {
   research.saveNow();
   return trailStore.snapshot(id || research.current.id);
@@ -593,6 +662,7 @@ const trailActive = new Map(); // trail id → the tab that was active in it
 // Runs a change of trail (switch, new) and shows that trail's tabs.
 function changeTrail(fn) {
   const before = currentTrail();
+  keepOpenTabs(before); // B104: tabs still open when leaving a trail become cards
   const result = fn();
   const after = currentTrail();
   if (before === after) return result;
@@ -850,6 +920,7 @@ function attachListeners(tab) {
   // Ctrl/Cmd + mouse wheel or trackpad pinch.
   on("zoom-changed", (_e, direction) => zoomTab(tab, direction === "in" ? 0.5 : -0.5));
   on("did-navigate", (_e, url) => {
+    pageStarted(tab, url); // B104: time on page, engagement
     if (/^https?:/i.test(url)) tab.lastUrl = url;
     // The toolbar count is per page (B73). It starts again when a new page
     // starts loading (did-start-navigation), not here: by the time
@@ -970,7 +1041,7 @@ function attachListeners(tab) {
     if (allowed && routesToGoogleWindow(url, googleMode())) {
       routeGoogle(url, tab.id);
     } else if (allowed) {
-      createTab(url, { background: disposition === "background-tab" });
+      createTab(url, { background: disposition === "background-tab", from: tab.page?.url || "" });
     } else {
       emit({ type: "popup-blocked", tabId: tab.id, url });
     }
@@ -1673,7 +1744,7 @@ function createTab(url, opts = {}) {
   });
   view.setBackgroundColor("#ffffff"); // pages without their own background expect white
   view.webContents.setUserAgent(USER_AGENT);
-  const tab = { id, view, audio: "auto", audioByUser: false, lastGesture: 0, lastActive: Date.now(), idleMs: 0, tile: Boolean(opts.tile), trail: opts.private ? null : opts.trail || currentTrail(), private: Boolean(opts.private) };
+  const tab = { id, view, audio: "auto", audioByUser: false, lastGesture: 0, lastActive: Date.now(), idleMs: 0, tile: Boolean(opts.tile), trail: opts.private ? null : opts.trail || currentTrail(), private: Boolean(opts.private), openedFrom: opts.from || "" };
   refreshRule(tab, normalizeUrl(url));
   tabs.set(id, tab);
   win.contentView.addChildView(view);
@@ -3171,6 +3242,10 @@ ipcMain.handle("tab:menu", (_e, id, x, y) => {
   popupHold = true;
   Menu.buildFromTemplate(items).popup({ window: win, x: Math.round(x), y: Math.round(y), callback: () => (popupHold = false) });
 });
+// The person scrolled the page by hand (view-preload.js, B104).
+ipcMain.on("tab:engaged", (e, reason) => {
+  if (reason === "scroll") engagePage(senderTab(e), "scroll");
+});
 ipcMain.on("tab:activity", (e) => {
   const tab = senderTab(e);
   if (tab) tab.activityAt = Date.now();
@@ -3266,6 +3341,7 @@ function loopMenu(id) {
 ipcMain.handle("ai:ask", async (_e, id, question, history) => {
   const tab = tabs.get(id || activeId);
   if (!tab) return { ok: false, error: "No page open." };
+  engagePage(tab, "ask"); // B104: a page asked about becomes a card
   const ai = loadSettings().ai;
   if (!Chat.canChat(ai)) return { ok: false, error: "Set up a model first under Settings → AI: a local model (Ollama or LM Studio) or a Grok API key." };
   usage().count("agentRuns");
@@ -3622,6 +3698,7 @@ function addRecord(folder, name, sourceUrl, note) {
   // Screenshots, saved pages and media from a page also go in the session's trail.
   const kind = { screenshots: "shot", saves: "save", media: "media" }[folder];
   if (research && kind && /^https?:/i.test(sourceUrl || "")) {
+    engageUrl(sourceUrl, "capture"); // B104: a page captured from becomes a card
     research.capture({ libraryId: item.id, kind, name, url: sourceUrl, title: folder === "media" ? "" : note });
     usage().count("captures");
   }
@@ -3678,6 +3755,27 @@ ipcMain.handle("trail:list", () => {
     // playing: media in that trail's tabs (it keeps playing, muted, in other trails).
     return { ...t, tabs: own.length, playing: own.some((x) => x.view.webContents.isCurrentlyAudible()) };
   });
+});
+// Put on canvas (B104): a timeline-only page, or a removed card, by address
+// or card id; x, y: where it was dropped (world units), else placed near its
+// source. Remove from canvas: the card leaves the canvas; its events and
+// lines are kept and come back when it is put back.
+ipcMain.handle("trail:place", (_e, { url, card, x, y } = {}) => {
+  const id = currentTrail();
+  research.saveNow();
+  const pos = typeof x === "number" && typeof y === "number" ? { x: Math.round(x), y: Math.round(y) } : {};
+  let c = null;
+  if (card) c = trailStore.restoreCard(id, String(card), pos);
+  else if (url) {
+    const row = trailStore.pageRows(id).find((r) => r.url === url);
+    c = placeCard(id, String(url), { title: row?.title || "", reason: "put", ...pos });
+  }
+  return c ? trailSnapshot(id) : null;
+});
+ipcMain.handle("trail:remove", (_e, cardId) => {
+  const id = currentTrail();
+  research.saveNow();
+  return trailStore.removeCard(id, String(cardId)) ? trailSnapshot(id) : null;
 });
 ipcMain.handle("trail:new", (_e, name) => {
   changeTrail(() => research.create(name));
@@ -4055,6 +4153,7 @@ async function releasePages() {
 
 app.on("before-quit", (e) => {
   try {
+    if (!pagesReleased && research) keepOpenTabs(currentTrail());
     research?.saveNow();
     historyStore?.saveNow();
   } catch (_) {}
