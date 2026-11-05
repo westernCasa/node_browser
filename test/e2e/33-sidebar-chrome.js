@@ -4,6 +4,7 @@
 // canvas it always shows; pages, Mosaic and private tabs fill the window and
 // the sidebar comes over them in its own layer. Private tabs: no trail, no
 // history.
+// Since B107 the Mosaic tool opens the Gallery when no tabs are chosen; View in Mosaic with none chosen shows the usual tabs.
 const { _electron: electron } = require(process.env.PLAYWRIGHT_PATH || "playwright");
 const path = require("path"), fs = require("fs"), os = require("os");
 const OUT = process.argv[2] || fs.mkdtempSync(path.join(os.tmpdir(), "node-e2e-"));
@@ -143,12 +144,12 @@ const inSidebar = (ui, sel) => ui.evaluate((s) => Boolean(document.querySelector
   await sleep(500);
   check("Sound: all turns the tile violet", (await ui.$eval("#sidebar #sound-btn", (b) => getComputedStyle(b).borderColor)) === "rgb(177, 140, 255)" && (await ui.$eval("#sb-sound", (s) => s.textContent)) === "SOUND: ALL");
   await ui.click("#sidebar #sound-btn");
-  await ui.click("#sidebar #layout-btn");
+  await ui.click("#sidebar #layout-btn"); await sleep(600); if (await ui.evaluate(() => ovOpen)) await ui.click("#ov-done");
   await sleep(1200);
   const mv = await views(app);
   check("Mosaic on: the tile is violet and the tiles fill the window", (await ui.$eval("#sidebar #layout-btn", (b) => getComputedStyle(b).borderColor)) === "rgb(177, 140, 255)" && mv.length >= 2 && Math.min(...mv.map((b) => b.x)) < 20, JSON.stringify(mv));
   check("the Mosaic group lists the tiles", !(await ui.$eval("#sb-mosaic", (g) => g.hidden)) && (await ui.$$eval("#sb-mosaic .sb-mosaic-row", (r) => r.length)) >= 2);
-  await ui.click("#sidebar #layout-btn");
+  await ui.click("#sidebar #layout-btn"); await sleep(600); if (await ui.evaluate(() => ovOpen)) await ui.click("#ov-done");
   await sleep(1000);
 
   // Private tab.

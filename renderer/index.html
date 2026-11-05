@@ -247,16 +247,16 @@
   <!-- Tab overview (B71): every tab zoomed out; pick the Mosaic tiles like photos. -->
   <div id="overview" hidden role="dialog" aria-modal="true" aria-labelledby="ov-title">
     <div class="ov-head">
-      <h1 id="ov-title">Choose tabs for Mosaic</h1>
+      <h1 id="ov-title">Gallery</h1>
       <span class="ov-count" id="ov-count" aria-live="polite"></span>
       <div class="ov-actions">
         <button class="chip" id="ov-clear">Clear</button>
         <button class="chip" id="ov-cancel">Cancel</button>
-        <button class="chip" id="ov-done">Done</button>
+        <button class="chip" id="ov-done">View in Mosaic</button>
       </div>
     </div>
     <div class="ov-grid" id="ov-grid" role="listbox" aria-multiselectable="true" aria-labelledby="ov-title"></div>
-    <p class="ov-hint" id="ov-hint">Click tabs to show them in Mosaic. Arrow keys move, Space picks, Enter is Done, Esc cancels.</p>
+    <p class="ov-hint" id="ov-hint">Click tabs to choose them for Mosaic; double-click opens a page. Arrow keys move, Space chooses, Enter shows them in Mosaic, Esc cancels. Pinch in for the canvas, out for Mosaic.</p>
   </div>
   <div id="menu-overlay" hidden>
     <div class="menu-shots" id="menu-shots" aria-hidden="true"></div>
@@ -622,6 +622,7 @@
       <div class="fr-actions"><button type="button" class="chip" id="fr-done">Start browsing</button></div>
     </div>
   </div>
+  <script src="../core/ladder.js"></script>
   <script src="canvas.js"></script>
   <script src="app.js"></script>
 </body>

@@ -2,6 +2,7 @@
 // only search results read, a page with hidden instructions does not redirect
 // it, report with sources, saved to the Library and the session, Stop works,
 // no model set up.
+// Since B107 the Mosaic tool opens the Gallery when no tabs are chosen; View in Mosaic with none chosen shows the usual tabs.
 const { _electron: electron } = require(process.env.PLAYWRIGHT_PATH || "playwright");
 const http = require("http");
 const path = require("path"), fs = require("fs");
@@ -121,7 +122,7 @@ const log = (...a) => console.log("•", ...a);
   log("tabs after Open sources in Mosaic:", await ui.$$eval("#tabs .tab", (e) => e.length), "| layout button:", await ui.getAttribute("#layout-btn", "aria-label"));
 
   // Stop.
-  await ui.click("#layout-btn");
+  await ui.click("#layout-btn"); await sleep(600); if (await ui.evaluate(() => ovOpen)) await ui.click("#ov-done");
   slow = 1500;
   await ui.click("#agent-new");
   log("New question clears the thread:", (await ui.$$eval(".agent-turn", (e) => e.length)) === 0, "| question box back:", await ui.isVisible("#agent-input"));

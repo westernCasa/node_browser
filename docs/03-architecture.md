@@ -236,6 +236,14 @@ Each tab stores its resolved rule (`tab.rule`), recomputed on every navigation:
 - **Ask about this trail:** the Ask pane with the "Research session" scope (the trail's pages) and the question sent.
 - **Private search:** the results in a private tab; no card.
 
+## Zoom ladder and Gallery (B107)
+
+- **Ladder:** `core/ladder.js` (no platform imports; the window loads it too as `NodeLadder`). Levels: page → Mosaic → Gallery → canvas. A trackpad pinch that zooms out (fingers together, "pinch in" in B72's words) climbs one level; one that zooms in goes back down. One level per gesture: a gesture ends after 400 ms without wheel events (`Gesture`). On a page, a pinch that starts on a zoomed page, or zooms in at 100%, zooms the page instead; ⌘+ and ⌘− also zoom the page. On the canvas a pinch zooms the canvas (B101), so the ladder stops there. `main.js` `onPinch` and `goLevel`; `layout:ladder` sets a level.
+- **Gallery** (the B71 tab overview, renamed): every open tab in the trail, 4 across. Click chooses ("n chosen"), View in Mosaic shows the chosen tabs as tiles (none chosen: Mosaic's usual tabs), double-click opens the page, ✕ closes the tab, Esc or Cancel changes nothing. Opened from Mosaic it starts with the Mosaic's tabs chosen (`galleryChoice`: the chosen tiles, or the tabs Mosaic shows). Pinch in goes on to the canvas, pinch out back to Mosaic.
+- **Mosaic tool** (and ⇧⌘M): with no tabs chosen it opens the Gallery to choose (with one tab, Mosaic as before).
+- **Group "Mosaic · n":** a group with two or more pages has this button above its right edge; it shows those pages as tiles.
+- View in Mosaic from the Gallery over the canvas leaves the canvas; ⌘1 to ⌘4 pick tiles only while Mosaic is on screen.
+
 ## Sidebar-only chrome (B103)
 
 The sidebar is NODE's only chrome; the top bar and the layout setting are gone (`chromeLayout` is always `side`; an old `top` value is ignored). `renderer/index.html` keeps the real controls in the hidden header, and `placeSidebar()` in `app.js` moves them into the sidebar's slots at start, so each keeps its handlers.
@@ -279,7 +287,7 @@ The renderer stores hidden keywords and the Auto setting in local storage.
 | --- | --- |
 | Tabs | `tab:create`, `tab:private`, `tab:close`, `tab:activate`, `tab:navigate`, `tab:back`, `tab:forward`, `tab:reload`, `tab:audio`, `tab:audio-reset`, `tab:clicked`, `tab:hotkey`, `tab:activity`, `tab:gesture`, `tab:order`, `tab:pip`, `audio:all` |
 | Bookmarks and Ask AI | `bookmarks:search`, `bookmarks:has`, `bookmarks:toggle`, `bookmarks:remove`, `ai:ask`, `ai:chat-info` |
-| Layout | `layout:set`, `layout:sidebar`, `layout:library`, `layout:chrome` (sidebar width), `layout:side-over` (sidebar over the page) |
+| Layout | `layout:set`, `layout:ladder`, `layout:sidebar`, `layout:library`, `layout:chrome` (sidebar width), `layout:side-over` (sidebar over the page) |
 | Find, zoom, history | `find:start`, `find:stop`, `tab:zoom`, `history:search`, `history:clear`, `history:remove` |
 | Site rules | `rules:edit`, `rules:reload` |
 | Trail store | `trail:get`, `trail:list`, `trail:new`, `trail:switch`, `trail:rename`, `trail:view`, `trail:timeline`, `trail:previews`, `trail:place`, `trail:remove`, `trail:move`, `trail:group-move`, `trail:link`, `trail:link-label`, `trail:unlink`, `trail:group`, `trail:group-rename`, `trail:question`, `trail:note`, `trail:search`; `tab:engaged` (page → main) |

@@ -535,6 +535,16 @@
         el.dataset.id = g.id;
         const name = h("div", "cv-group-name", (g.label || "New group") + (g.resolved ? " · Resolved" : ""));
         el.append(name);
+        // A group with two or more pages: "Mosaic · n" shows them as tiles (B107).
+        const pages = d.cards.filter((c) => c.url && (c.kind === "page" || c.kind === "video") && c.x + c.w / 2 >= g.x && c.x + c.w / 2 <= g.x + g.w && c.y + c.h / 2 >= g.y && c.y + c.h / 2 <= g.y + g.h);
+        if (pages.length >= 2 && !g.suggested) {
+          const mb = h("button", "cv-group-mosaic", `Mosaic · ${pages.length}`);
+          mb.type = "button";
+          mb.title = `View this group's ${pages.length} pages at once`;
+          mb.addEventListener("pointerdown", (e) => e.stopPropagation());
+          mb.addEventListener("click", () => this.hooks.mosaic?.(pages.map((c) => c.id)));
+          el.append(mb);
+        }
         gFrag.append(el);
       }
       this.groupsEl.replaceChildren(gFrag);

@@ -1530,3 +1530,11 @@ body.chrome-overlay.side.shown #bar { transform: none; transition: transform var
 #canvas .cv-card.match { outline: 1px solid var(--ink-muted); outline-offset: 4px; }
 #canvas .cv-card.k-search .cv-card-foot { color: var(--ink); }
 @media (prefers-reduced-motion: reduce) { #canvas .cv-card { transition: none; } }
+
+/* The Gallery (B107): 4 across; ✕ closes a tab. */
+#overview .ov-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.ov-card .ov-x { position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; padding: 0; background: var(--surface); color: var(--ink-muted); border: 1px solid var(--line); border-radius: var(--radius-sm); font: 15px/20px var(--sans); cursor: pointer; opacity: 0; }
+.ov-card:hover .ov-x, .ov-card:focus-within .ov-x, .ov-card .ov-x:focus-visible { opacity: 1; }
+.ov-card .ov-x:hover { color: var(--ink); border-color: var(--ink); }
+#canvas .cv-group-mosaic { position: absolute; right: 0; top: -30px; height: 24px; padding: 0 8px; background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius-sm); font: 600 11px var(--sans); letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; }
+#canvas .cv-group-mosaic:hover { border-color: var(--ink); }

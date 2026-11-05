@@ -72,6 +72,7 @@ contextBridge.exposeInMainWorld("scout", {
   trailQuestion: (o) => ipcRenderer.invoke("trail:question", o),
   trailNote: (o) => ipcRenderer.invoke("trail:note", o),
   trailSearch: (q, opts) => ipcRenderer.invoke("trail:search", q, opts),
+  ladder: (level) => ipcRenderer.invoke("layout:ladder", level),
   canvasShow: () => ipcRenderer.invoke("canvas:show"),
   surveyCard: () => ipcRenderer.invoke("survey:card"),
   surveyCardAnswer: (act) => ipcRenderer.invoke("survey:card-answer", act),

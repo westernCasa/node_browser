@@ -1,6 +1,7 @@
 // Mosaic tile choice (B69): at most 4 tiles by default, tabs chosen for
 // Mosaic, leaving Mosaic for a tab without a tile, the Settings choice, and
 // chosen tiles kept across a restart.
+// Since B107 the Mosaic tool opens the Gallery when no tabs are chosen; View in Mosaic with none chosen shows the usual tabs.
 const { _electron: electron } = require(process.env.PLAYWRIGHT_PATH || "playwright");
 const path = require("path"), fs = require("fs"), os = require("os");
 const OUT = process.argv[2] || fs.mkdtempSync(path.join(os.tmpdir(), "node-e2e-"));
@@ -45,7 +46,7 @@ const pressed = (ui) => ui.getAttribute("#layout-btn", "aria-pressed");
   const ids = await ui.$$eval("#tabs .tab", (els) => els.length);
   check("six tabs open", ids === 6, String(ids));
 
-  await ui.click("#layout-btn");
+  await ui.click("#layout-btn"); await sleep(600); if (await ui.evaluate(() => ovOpen)) await ui.click("#ov-done");
   await sleep(1500);
   let t = await tiles(app);
   check("Mosaic shows at most 4 tiles by default", t.length === 4, t.join(","));
@@ -70,7 +71,7 @@ const pressed = (ui) => ui.getAttribute("#layout-btn", "aria-pressed");
   await sleep(1200);
   t = await tiles(app);
   check("opening a tab without a tile leaves Mosaic", t.join(",") === "5" && (await pressed(ui)) === "false", `${t.join(",")} pressed=${await pressed(ui)}`);
-  await ui.click("#layout-btn");
+  await ui.click("#layout-btn"); await sleep(600); if (await ui.evaluate(() => ovOpen)) await ui.click("#ov-done");
   await sleep(1200);
   t = await tiles(app);
   check("back into Mosaic shows the chosen tiles again", t.join(",") === "2,4" && (await pressed(ui)) === "true", t.join(","));
@@ -106,7 +107,7 @@ const pressed = (ui) => ui.getAttribute("#layout-btn", "aria-pressed");
   for (const n of [5, 6, 2]) await ui.click(`.ov-card[data-id="${idOf(n)}"]`);
   await sleep(300);
   check("picked cards are marked selected", (await ui.$$eval('.ov-card[aria-selected="true"]', (els) => els.length)) === 3);
-  check("the count says 3 of 4", /3 of 4/.test(await ui.textContent("#ov-count")), await ui.textContent("#ov-count"));
+  check("the count says 3 chosen", /^3 chosen$/.test(await ui.textContent("#ov-count")), await ui.textContent("#ov-count"));
   await ui.click(`.ov-card[data-id="${idOf(6)}"]`);
   check("clicking again unpicks", (await ui.$$eval('.ov-card[aria-selected="true"]', (els) => els.length)) === 2);
   await ui.keyboard.press("Escape");

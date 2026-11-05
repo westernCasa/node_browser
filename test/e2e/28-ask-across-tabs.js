@@ -2,6 +2,7 @@
 // research session as numbered sources, citations that open the source, a
 // session page read logged out after its tab was closed, sign-in pages left
 // out, and the cited session summary saved to the Library.
+// Since B107 the Mosaic tool opens the Gallery when no tabs are chosen; View in Mosaic with none chosen shows the usual tabs.
 const { _electron: electron } = require(process.env.PLAYWRIGHT_PATH || "playwright");
 const path = require("path"), fs = require("fs"), os = require("os"), http = require("http");
 const OUT = process.argv[2] || fs.mkdtempSync(path.join(os.tmpdir(), "node-e2e-"));
@@ -53,7 +54,7 @@ const check = (name, ok, detail = "") => {
   const go = async (url) => { await ui.fill("#omni", url); await ui.press("#omni", "Enter"); await sleep(2500); };
   await go(`${BASE}/article.html`);
   for (const u of ["/other.html", "/big.html"]) { await ui.evaluate((x) => window.scout.createTab(x), BASE + u); await sleep(2500); }
-  await ui.click("#layout-btn");
+  await ui.click("#layout-btn"); await sleep(600); if (await ui.evaluate(() => ovOpen)) await ui.click("#ov-done");
   await sleep(1200);
 
   // Ask about the tabs in Mosaic.

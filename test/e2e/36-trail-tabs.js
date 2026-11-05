@@ -2,6 +2,7 @@
 // current when it opened; switching trails shows that trail's tabs and keeps
 // the others open out of view; Mosaic, tab shortcuts, closing and reordering
 // work on the current trail's tabs; the split is kept across a restart.
+// Since B107 the Mosaic tool opens the Gallery when no tabs are chosen; View in Mosaic with none chosen shows the usual tabs.
 const { _electron: electron } = require(process.env.PLAYWRIGHT_PATH || "playwright");
 const path = require("path"), fs = require("fs"), os = require("os");
 const OUT = process.argv[2] || fs.mkdtempSync(path.join(os.tmpdir(), "node-e2e-"));
@@ -63,11 +64,11 @@ const menuItem = (app, label) => app.evaluate(({ Menu }, l) => Menu.getApplicati
   await menuItem(app, "Next Tab");
   await sleep(500);
   check("Next Tab cycles through this trail's tabs only", !(await active(ui)).startsWith("a") && !(await active(ui)).startsWith("old"), await active(ui));
-  await ui.click("#layout-btn");
+  await ui.click("#layout-btn"); await sleep(600); if (await ui.evaluate(() => ovOpen)) await ui.click("#ov-done");
   await sleep(1200);
   const tiles = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].contentView.children.filter((v) => v.webContents && v.getBounds().width > 0 && /8765|start/.test(v.webContents.getURL())).map((v) => v.webContents.getURL().replace(/^.*\?n=/, "")));
   check("Mosaic shows this trail's tabs only", tiles.length >= 2 && tiles.every((t) => !t.startsWith("a") && t !== "old"), tiles.join());
-  await ui.click("#layout-btn");
+  await ui.click("#layout-btn"); await sleep(600); if (await ui.evaluate(() => ovOpen)) await ui.click("#ov-done");
   await sleep(800);
 
   // Reordering works while other trails' tabs are hidden.

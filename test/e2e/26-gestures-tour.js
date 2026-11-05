@@ -2,6 +2,7 @@
 // pinch to zoom the page, Ctrl + mouse wheel left alone, ⌘1-⌘4 in Mosaic, the
 // loop shortcut, and the gestures tutorial (practice tabs, coach band, steps,
 // putting the user's tabs back, the one-time offer).
+// Since B107 the Mosaic tool opens the Gallery when no tabs are chosen; View in Mosaic with none chosen shows the usual tabs.
 const { _electron: electron } = require(process.env.PLAYWRIGHT_PATH || "playwright");
 const path = require("path"), fs = require("fs"), os = require("os");
 const OUT = process.argv[2] || fs.mkdtempSync(path.join(os.tmpdir(), "node-e2e-"));
@@ -83,6 +84,7 @@ const zoomOf = (app, match) => app.evaluate(({ webContents }, m) => webContents.
   check("pinch in in Mosaic opens the tab overview", (await layoutOf(ui)).ov && (await ui.isVisible("#overview")));
   await pinchUi(ui, "out");
   await sleep(1200);
+  // Since B107 the Gallery opened from Mosaic starts with the Mosaic's tabs chosen.
   check("pinch out in the overview = Done, back to Mosaic", !(await layoutOf(ui)).ov && (await layoutOf(ui)).layout === "mosaic");
 
   // Pinch out on a tile focuses that tile.
@@ -93,7 +95,7 @@ const zoomOf = (app, match) => app.evaluate(({ webContents }, m) => webContents.
   check("pinch out on a tile focuses that tile", l3.layout === "focus" && /n=2/.test(activeUrl), activeUrl);
 
   // ⌘1-⌘4 in Mosaic focus a tile; outside Mosaic they pick tabs.
-  await ui.click("#layout-btn");
+  await ui.click("#layout-btn"); await sleep(600); if (await ui.evaluate(() => ovOpen)) await ui.click("#ov-done");
   await sleep(1000);
   await menuClick(app, "Tab 3");
   await sleep(1000);
@@ -105,7 +107,7 @@ const zoomOf = (app, match) => app.evaluate(({ webContents }, m) => webContents.
   check("⌘2 outside Mosaic picks page tab 1", (await layoutOf(ui)).layout === "focus" && /n=1/.test(await ui.evaluate(() => tabs.find((t) => t.id === activeId)?.url)));
 
   // The tutorial.
-  const before = await ui.evaluate(() => ({ n: tabs.length, active: activeId }));
+  const before = await ui.evaluate(() => ({ n: tabs.length, active: activeId, tiles: tabs.filter((t) => t.tile).length }));
   await ui.evaluate(() => startTour());
   await sleep(2500);
   const t0 = await ui.evaluate(() => ({ n: tabs.length, tiles: tabs.filter((t) => t.tile).length, coach: !document.getElementById("coach").hidden, step: document.querySelector("#coach h2")?.textContent }));
@@ -150,7 +152,7 @@ const zoomOf = (app, match) => app.evaluate(({ webContents }, m) => webContents.
   await ui.click("#coach-close");
   await sleep(1500);
   const after = await ui.evaluate(() => ({ n: tabs.length, active: activeId, tiles: tabs.filter((t) => t.tile).length, coach: !document.getElementById("coach").hidden, layout }));
-  check("closing puts the user's tabs back", after.n === before.n && after.active === before.active && after.tiles === 0 && !after.coach && after.layout === "focus", JSON.stringify(after));
+  check("closing puts the user's tabs back", after.n === before.n && after.active === before.active && after.tiles === before.tiles && !after.coach && after.layout === "focus", JSON.stringify(after));
   const box2 = await app.evaluate(({ BrowserWindow }) => { const w = BrowserWindow.getAllWindows()[0]; const v = w.contentView.children.find((c) => c.webContents && /n=1/.test(c.webContents.getURL())); return { page: v.getBounds(), win: w.getContentBounds() }; });
   check("the pages take the full height again", box2.page.y + box2.page.height >= box2.win.height - 1, JSON.stringify(box2.page));
 

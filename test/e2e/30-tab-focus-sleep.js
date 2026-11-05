@@ -2,6 +2,7 @@
 // (reported by Sven on the Mac with 0.9.4): a Mosaic tile that loads a new
 // page takes focus, which used to make it the active tab; stepping away from
 // the computer counted toward putting tabs to sleep.
+// Since B107 the Mosaic tool opens the Gallery when no tabs are chosen; View in Mosaic with none chosen shows the usual tabs.
 const { _electron: electron } = require(process.env.PLAYWRIGHT_PATH || "playwright");
 const path = require("path"), fs = require("fs"), os = require("os");
 const OUT = process.argv[2] || fs.mkdtempSync(path.join(os.tmpdir(), "node-e2e-"));
@@ -30,7 +31,7 @@ fs.writeFileSync(path.join(userData, "settings.json"), JSON.stringify({ firstRun
   await ui.evaluate((u) => window.scout.createTab(u), `${BASE}/grabfocus.html?m=nav`);
   for (let i = 1; i <= 2; i++) await ui.evaluate((u) => window.scout.createTab(u), `${BASE}/other.html?n=${i}`);
   await sleep(500);
-  await ui.click("#layout-btn");
+  await ui.click("#layout-btn"); await sleep(600); if (await ui.evaluate(() => ovOpen)) await ui.click("#ov-done");
   await sleep(4500);
   check("a tile loading a new page by itself does not take over", /n=2$/.test(await active()), await active());
 
@@ -46,7 +47,7 @@ fs.writeFileSync(path.join(userData, "settings.json"), JSON.stringify({ firstRun
     await sleep(800);
   }
   check("clicking a tile still makes it active", /n=after$/.test(await active()), await active());
-  await ui.click("#layout-btn");
+  await ui.click("#layout-btn"); await sleep(600); if (await ui.evaluate(() => ovOpen)) await ui.click("#ov-done");
   await sleep(1000);
 
   // Sleep: time away does not count; time in use does (30 minutes by default).

@@ -47,6 +47,7 @@ const { extractionScript, autoplayScript, blockAutoplayScript, centerOnClickScri
 const { PlaybackLimiter } = require("./core/playback");
 const { fsStorage } = require("./fs-storage");
 const { normalizeUrl, hostOf, SEARCH_URL, isSensitiveUrl } = require("./core/urls");
+const Ladder = require("./core/ladder");
 const { routesToGoogleWindow, MODES: GOOGLE_MODES } = require("./core/google");
 const { createCompanion } = require("./companion");
 const { createAgentServer } = require("./agent-server");
@@ -1958,8 +1959,8 @@ function stepTab(dir) {
 }
 
 function pickTab(index) {
-  // In Mosaic, ⌘1 to ⌘4 focus that tile (B72).
-  if (layout === "mosaic" && !libraryOpen && index >= 0) {
+  // In Mosaic (on screen), ⌘1 to ⌘4 focus that tile (B72).
+  if (layout === "mosaic" && !libraryOpen && !canvasOn && index >= 0) {
     const id = mosaicIds()[index];
     if (id) return focusTile(id);
   }
@@ -2900,24 +2901,25 @@ function focusTile(id) {
   setLayoutMode("focus", { tell: true });
 }
 
-// ---- Pinch (B72) ----
+// ---- Pinch (B72, B107) ----
 // view-preload.js sends trackpad pinches (not Ctrl + mouse wheel) as scale
-// steps. Like Safari: in Focus, pinching out zooms the page; pinching in
-// zooms the page back to 100%, and from 100% on to Mosaic. In Mosaic, pinch
-// in opens the tab overview and pinch out focuses the tile under the fingers.
-// One gesture changes one level.
-const PINCH_IN = 0.82;
-const PINCH_OUT = 1.22;
+// steps. Like Safari: on a page, pinching out zooms the page; pinching in
+// zooms the page back to 100%, and from 100% on up the ladder.
 let pinchG = null;
+// The zoom ladder (B107, core/ladder.js): on a page or in Mosaic, a pinch
+// moves one level per gesture: page → Mosaic → Gallery → canvas, and back
+// down. A gesture that starts on a zoomed page, or zooms in on a page, zooms
+// the page instead (⌘+ and ⌘− also zoom the page).
+const ladderGesture = new Ladder.Gesture();
 function onPinch(tab, factor) {
   const f = Math.max(0.5, Math.min(2, Number(factor) || 1));
-  if (!pinchG || pinchG.id !== tab.id) {
+  const now = Date.now();
+  const level = layout === "mosaic" ? "mosaic" : "page";
+  if (!pinchG || pinchG.id !== tab.id || now - pinchG.at > Ladder.GESTURE_END_MS) {
     const zoomed = tab.view.webContents.getZoomFactor() > 1.01;
-    const mode = layout === "mosaic" && !libraryOpen ? "level" : zoomed || f > 1 ? "page" : "level";
-    pinchG = { id: tab.id, mode, acc: 1, fired: false };
+    pinchG = { id: tab.id, mode: level === "page" && (zoomed || f > 1) ? "page" : "ladder" };
   }
-  clearTimeout(pinchG.timer);
-  pinchG.timer = setTimeout(() => (pinchG = null), 260);
+  pinchG.at = now;
   if (pinchG.mode === "page") {
     const wc = tab.view.webContents;
     wc.setZoomFactor(Math.max(1, Math.min(3, wc.getZoomFactor() * f)));
@@ -2925,17 +2927,19 @@ function onPinch(tab, factor) {
     pinchG.emit = setTimeout(emitList, 120);
     return;
   }
-  if (pinchG.fired) return;
-  pinchG.acc *= f;
-  if (pinchG.acc < PINCH_IN) {
-    pinchG.fired = true;
-    if (layout === "mosaic") sendUi("overview");
-    else setLayoutMode("mosaic", { tell: true });
-  } else if (pinchG.acc > PINCH_OUT && layout === "mosaic") {
-    pinchG.fired = true;
-    focusTile(tab.id);
-  }
+  const dir = ladderGesture.feed(f, now);
+  if (dir) goLevel(Ladder.step(level, dir), tab);
 }
+// Shows one level of the ladder. tab: the page the pinch was on.
+function goLevel(level, tab = tabs.get(activeId)) {
+  if (level === "page") return tab && focusTile(tab.id);
+  if (level === "mosaic") return setLayoutMode("mosaic", { tell: true });
+  if (level === "gallery") return sendUi("overview", { fromMosaic: layout === "mosaic" });
+  if (level === "canvas") return showCanvas();
+}
+ipcMain.handle("layout:ladder", (_e, level) => {
+  if (Ladder.LEVELS.includes(level)) goLevel(level);
+});
 // Messages from the page script (view-preload.js) name their tab by the
 // webContents that sent them, never by the id the script read from its
 // process: Chromium can host frames of one site from several tabs in one
@@ -3203,6 +3207,11 @@ ipcMain.handle("overview:close", (_e, ids) => {
     let n = 0;
     for (const t of shownTabs()) t.tile = pick.has(t.id) && n++ < max;
     layout = "mosaic";
+    // View in Mosaic from the Gallery over the canvas: the tiles come back (B107).
+    if (canvasOn) {
+      canvasOn = false;
+      sendUi("canvas", { open: false });
+    }
     const shown = mosaicIds();
     if (shown.length && !shown.includes(activeId)) activeId = shown[0];
     wakeTab(tabs.get(activeId));

@@ -1013,6 +1013,8 @@ layoutBtn.addEventListener("contextmenu", (e) => {
   openOverview();
 });
 layoutBtn.addEventListener("click", async () => {
+  // Mosaic with nothing chosen opens the Gallery to choose (B107).
+  if (layout !== "mosaic" && !tabs.some((t) => t.tile) && tabs.length > 1) return openOverview();
   const next = layout === "mosaic" ? "focus" : "mosaic";
   layout = api ? await api.setLayout(next) : next;
   paintLayout(true);
@@ -3795,7 +3797,7 @@ api?.onCommand?.((msg) => {
   else if (msg.cmd === "open-menu") {
     openMenu(msg.section || menuSection).then(() => msg.box && setTimeout(() => (document.getElementById(msg.box)?.previousElementSibling || document.getElementById(msg.box))?.scrollIntoView({ block: "start" }), 300));
   } else if (msg.cmd === "passwords-changed") renderPasswords().catch(() => {});
-  else if (msg.cmd === "overview") openOverview();
+  else if (msg.cmd === "overview") openOverview({ fromMosaic: msg.fromMosaic });
   else if (msg.cmd === "tour") startTour();
   else if (msg.cmd === "canvas") (msg.open ? openCanvas(msg) : closeCanvas());
   else if (msg.cmd === "side-over") mirrorWhileImmersive(msg.shown);
@@ -3911,11 +3913,13 @@ canvasEl.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && e.target === trailCanvas?.vp) trailCanvas.select(null);
 });
 
-// ---- Tab overview (B71) ----
-// Zoom out to every open tab and pick which ones Mosaic shows, like selecting
-// photos: click (or Space) picks or unpicks a tab, Done shows the picked tabs
-// in Mosaic, Esc or Cancel leaves everything as it was. None picked + Done:
-// Mosaic shows its usual tabs (the first ones and the current one).
+// ---- The Gallery (B71 tab overview, B107) ----
+// Every open tab in the trail as a picture, 4 across: click (or Space)
+// chooses a tab, "n chosen · View in Mosaic" shows the chosen tabs in Mosaic,
+// double-click opens the page, ✕ closes the tab, Esc or Cancel leaves
+// everything as it was. Opened from Mosaic, it starts with the Mosaic's
+// pages chosen. On the zoom ladder: pinch out goes on to the canvas, pinch in
+// back to Mosaic.
 const ovEl = document.getElementById("overview");
 const ovGrid = document.getElementById("ov-grid");
 const ovCount = document.getElementById("ov-count");
@@ -3937,7 +3941,7 @@ function hostOf(url) {
 function paintOverview() {
   if (typeof tourCheck === "function") setTimeout(tourCheck, 0);
   const full = ovMax && ovPicked.length >= ovMax;
-  ovCount.textContent = ovPicked.length ? `${ovPicked.length} of ${ovMax || "all"} picked` : ovMax ? `Pick up to ${ovMax}` : "Pick any tabs";
+  ovCount.textContent = ovPicked.length ? `${ovPicked.length} chosen` : ovMax ? `Choose up to ${ovMax}` : "Choose any tabs";
   ovCount.classList.toggle("full", Boolean(full));
   for (const card of ovGrid.children) {
     const on = ovPicked.includes(card.dataset.id);
@@ -3959,7 +3963,7 @@ function toggleOverviewPick(id) {
   paintOverview();
 }
 
-async function openOverview() {
+async function openOverview({ fromMosaic = false } = {}) {
   if (ovOpen || !api?.openOverview) return;
   if (menuOpen) await closeMenu();
   ovOpen = true;
@@ -3968,7 +3972,7 @@ async function openOverview() {
   holdChrome("overview", true);
   const r = await api.openOverview();
   ovMax = r.max;
-  ovPicked = r.tabs.filter((t) => t.tile).map((t) => t.id);
+  ovPicked = NodeLadder.galleryChoice({ tiles: r.tabs.filter((t) => t.tile).map((t) => t.id), shown: fromMosaic ? mosaicShown : [] });
   ovGrid.innerHTML = "";
   for (const t of r.tabs) {
     const card = document.createElement("div");
@@ -4005,7 +4009,21 @@ async function openOverview() {
       meta.lastChild.replaceWith(now);
     }
     card.setAttribute("aria-label", `${t.title || "New tab"}, ${hostOf(t.url)}`);
-    card.append(thumb, meta);
+    // ✕ closes the tab (B107).
+    const x = document.createElement("button");
+    x.type = "button";
+    x.className = "ov-x";
+    x.textContent = "×";
+    x.title = "Close tab";
+    x.setAttribute("aria-label", `Close ${t.title || "tab"}`);
+    x.addEventListener("click", (e) => {
+      e.stopPropagation();
+      api.closeTab(t.id);
+      ovPicked = ovPicked.filter((id) => id !== t.id);
+      card.remove();
+      paintOverview();
+    });
+    card.append(thumb, meta, x);
     ovGrid.appendChild(card);
   }
   paintOverview();
@@ -4070,17 +4088,30 @@ ovGrid.addEventListener("click", (e) => {
   card.focus();
   toggleOverviewPick(card.dataset.id);
 });
-ovGrid.addEventListener("dblclick", (e) => {
-  // Double-click: pick the tab (if it is not picked yet) and finish.
+ovGrid.addEventListener("dblclick", async (e) => {
+  // Double-click opens the page (B107).
   const card = e.target.closest(".ov-card");
-  if (card && !ovPicked.includes(card.dataset.id)) toggleOverviewPick(card.dataset.id);
-  if (card) closeOverview(true);
+  if (!card) return;
+  const id = card.dataset.id;
+  await closeOverview(false);
+  api.activateTab(id);
+  if (layout === "mosaic") {
+    layout = await api.setLayout("focus");
+    paintLayout(true);
+  }
 });
 document.getElementById("ov-done").addEventListener("click", () => closeOverview(true));
 document.getElementById("ov-cancel").addEventListener("click", () => closeOverview(false));
 document.getElementById("ov-clear").addEventListener("click", () => {
   ovPicked = [];
   paintOverview();
+});
+// Esc closes the Gallery even when the focus left it (a closed tab's card).
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && ovOpen && !ovEl.contains(e.target)) {
+    e.preventDefault();
+    closeOverview(false);
+  }
 });
 ovEl.addEventListener("keydown", (e) => {
   const cards = [...ovGrid.children];
@@ -4244,22 +4275,22 @@ async function maybeTourPrompt(afterSetup = false, tries = 0) {
 }
 setTimeout(() => maybeTourPrompt().catch(() => {}), 2500);
 
-// Trackpad pinch in the tab overview: pinch out = Done (B72). The overview is
-// part of this window, so its pinches arrive here, not through a page.
+// Trackpad pinch in the Gallery, one level per gesture (B107, core/ladder.js):
+// pinch in goes back to Mosaic with the chosen tabs; pinch out goes on to the
+// canvas. The Gallery is part of this window, so its pinches arrive here.
+const galleryGesture = new NodeLadder.Gesture();
 ovEl.addEventListener(
   "wheel",
-  (e) => {
+  async (e) => {
     if (!e.ctrlKey) return;
     e.preventDefault();
-    if (Number.isInteger(e.deltaY) && Math.abs(e.deltaY) >= 10) return; // Ctrl + mouse wheel
-    const g = (ovEl.__pinch = ovEl.__pinch || { acc: 1, fired: false });
-    clearTimeout(g.timer);
-    g.timer = setTimeout(() => (ovEl.__pinch = null), 260);
-    if (g.fired) return;
-    g.acc *= Math.exp(-e.deltaY / 100);
-    if (g.acc > 1.22) {
-      g.fired = true;
-      closeOverview(true);
+    const scale = NodeLadder.pinchScale(e);
+    if (scale === null) return; // Ctrl + mouse wheel
+    const dir = galleryGesture.feed(scale, performance.now());
+    if (dir === "in") closeOverview(true);
+    else if (dir === "out") {
+      await closeOverview(false);
+      api.ladder("canvas");
     }
   },
   { passive: false }
