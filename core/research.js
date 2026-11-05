@@ -82,6 +82,15 @@ class ResearchStore {
     this.storage.write("current.txt", this.current.id);
   }
 
+  // Reads the current session again after its trail was changed elsewhere
+  // (the canvas tools write to the trail store directly).
+  reload() {
+    clearTimeout(this.timer);
+    const s = this.loadCurrent();
+    if (s) this.current = s;
+    return this.current;
+  }
+
   saveSoon() {
     clearTimeout(this.timer);
     this.timer = setTimeout(() => {

@@ -90,6 +90,22 @@
     }
   }
 
+  const TOOLS = [
+    ["select", "Select", "V"],
+    ["hand", "Hand", "H"],
+    ["group", "Group", "G"],
+    ["link", "Link", "L"],
+    ["question", "Question", "Q"],
+    ["note", "Note", "N"],
+  ];
+  const LABELS = [
+    ["supports", "Supports"],
+    ["contradicts", "Contradicts"],
+    ["answers", "Answers"],
+    ["raises", "Raises"],
+    ["", "No label"],
+  ];
+  const LABEL_TEXT = { supports: "Supports", contradicts: "Contradicts", answers: "Answers", raises: "Raises" };
   const KIND_LABEL = { page: "Page", video: "Video", capture: "Capture", report: "Report", question: "Question", note: "Note", voice: "Voice", search: "Search" };
 
   const helpers = { Z_MIN, Z_MAX, DOT_GAP, clampZ, zoomAt, worldBounds, fitView, centreOn, lineEnds, minimap, gridFor, hostOf };
@@ -243,8 +259,34 @@
       rm.type = "button";
       rm.addEventListener("click", () => this.selected && this.hooks.remove?.(this.selected));
       this.selBar.append(this.selMeta, openB, rm);
-      el.append(this.vp, key, corner, this.top, this.selBar);
+      // Tools (B105), bottom centre: Select V, Hand H, Group G, Link L, Question Q, Note N.
+      this.tool = "select";
+      this.multi = new Set();
+      this.toolsEl = h("div", "cv-tools");
+      this.toolsEl.setAttribute("role", "toolbar");
+      this.toolsEl.setAttribute("aria-label", "Canvas tools");
+      for (const [id, name, key] of TOOLS) {
+        const b = h("button", "cv-tool");
+        b.type = "button";
+        b.dataset.tool = id;
+        b.title = `${name} (${key})`;
+        b.setAttribute("aria-pressed", String(id === "select"));
+        b.append(h("span", "", name), h("kbd", "", key));
+        b.addEventListener("click", () => this.setTool(id));
+        this.toolsEl.append(b);
+      }
+      // Several cards selected: "n selected · View in Mosaic".
+      this.multiBar = h("div", "cv-multibar");
+      this.multiBar.hidden = true;
+      this.multiText = h("span", "");
+      const mos = h("button", "cv-selbar-btn", "View in Mosaic");
+      mos.type = "button";
+      mos.addEventListener("click", () => this.hooks.mosaic?.([...this.multi]));
+      this.multiBar.append(this.multiText, mos);
+      this.draft = svg("line", { class: "cv-line you draft", x1: 0, y1: 0, x2: 0, y2: 0 });
+      el.append(this.vp, key, corner, this.top, this.selBar, this.toolsEl, this.multiBar);
       this.bind();
+      this.bindKeys();
     }
 
     bind() {
@@ -260,33 +302,110 @@
         },
         { passive: false },
       );
-      // Drag on the background pans. A click on a card selects it.
+      // Pointer: depends on the tool (B105). Select: drag a card to move it,
+      // shift-click to select several, drag the background to pan. Hand: drag
+      // pans. Group: drag a box. Link: drag from card to card. Question and
+      // Note: click to place. A group's name drags the group with its cards.
       let drag = null;
+      const world = (e) => {
+        const r = vp.getBoundingClientRect();
+        return { x: (e.clientX - r.left - this.v.x) / this.v.z, y: (e.clientY - r.top - this.v.y) / this.v.z };
+      };
       vp.addEventListener("pointerdown", (e) => {
-        if (e.button !== 0) return;
+        if (e.button !== 0 || e.target.closest(".cv-edit, .cv-menu")) return;
+        this.closeMenu();
         const card = e.target.closest?.(".cv-card");
-        if (card) {
-          this.select(card.dataset.id);
-          return;
+        const name = e.target.closest?.(".cv-group-name");
+        const label = e.target.closest?.("[data-line]");
+        const tool = this.readonly ? "select" : this.tool;
+        if (label && !this.readonly && tool === "select") {
+          e.preventDefault();
+          return this.openLabelMenu(label.dataset.line);
         }
-        drag = { sx: e.clientX, sy: e.clientY, x: this.v.x, y: this.v.y, moved: false };
-        vp.setPointerCapture(e.pointerId);
-        vp.classList.add("panning");
+        if (name && tool === "select" && !this.readonly) {
+          const g = this.data.groups.find((k) => k.id === name.closest(".cv-group").dataset.id);
+          drag = { mode: "group", id: g.id, sx: e.clientX, sy: e.clientY, gx: g.x, gy: g.y, el: name.closest(".cv-group"), moved: false };
+        } else if (card && tool === "link") {
+          drag = { mode: "link", from: card.dataset.id, start: world(e) };
+        } else if (card && tool === "select") {
+          const id = card.dataset.id;
+          if (e.shiftKey) return this.toggleMulti(id);
+          this.clearMulti();
+          this.select(id);
+          if (this.readonly) return;
+          const c = this.data.cards.find((k) => k.id === id);
+          drag = { mode: "card", id, sx: e.clientX, sy: e.clientY, cx: c.x, cy: c.y, el: card, moved: false };
+        } else if (tool === "group") {
+          const p = world(e);
+          drag = { mode: "box", start: p, box: h("div", "cv-box") };
+          this.labelsEl.append(drag.box);
+        } else if ((tool === "question" || tool === "note") && !card) {
+          e.preventDefault();
+          return this.openEditor(tool, world(e));
+        } else if (!card || tool === "hand") {
+          drag = { mode: "pan", sx: e.clientX, sy: e.clientY, x: this.v.x, y: this.v.y, moved: false };
+          vp.classList.add("panning");
+        }
+        if (drag) vp.setPointerCapture(e.pointerId);
       });
       vp.addEventListener("pointermove", (e) => {
         if (!drag) return;
         const dx = e.clientX - drag.sx, dy = e.clientY - drag.sy;
         if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true;
-        this.setView({ x: drag.x + dx, y: drag.y + dy, z: this.v.z });
+        if (drag.mode === "pan") this.setView({ x: drag.x + dx, y: drag.y + dy, z: this.v.z });
+        else if (drag.mode === "card" && drag.moved) drag.el.style.transform = `translate(${drag.cx + dx / this.v.z}px, ${drag.cy + dy / this.v.z}px)`;
+        else if (drag.mode === "group" && drag.moved) drag.el.style.transform = `translate(${drag.gx + dx / this.v.z}px, ${drag.gy + dy / this.v.z}px)`;
+        else if (drag.mode === "box") {
+          const p = world(e), a = drag.start;
+          drag.rect = { x: Math.min(a.x, p.x), y: Math.min(a.y, p.y), w: Math.abs(p.x - a.x), h: Math.abs(p.y - a.y) };
+          Object.assign(drag.box.style, { transform: `translate(${drag.rect.x}px, ${drag.rect.y}px)`, width: `${drag.rect.w}px`, height: `${drag.rect.h}px` });
+          const n = this.data.cards.filter((c) => c.x + c.w / 2 >= drag.rect.x && c.x + c.w / 2 <= drag.rect.x + drag.rect.w && c.y + c.h / 2 >= drag.rect.y && c.y + c.h / 2 <= drag.rect.y + drag.rect.h).length;
+          drag.box.dataset.count = n ? `${n} ${n === 1 ? "card" : "cards"}` : "";
+        } else if (drag.mode === "link") this.drawDraft(drag.from, world(e));
       });
-      const end = () => {
-        if (!drag) return;
-        if (!drag.moved) this.select(null);
+      const end = async (e) => {
+        const d = drag;
         drag = null;
         vp.classList.remove("panning");
+        if (!d) return;
+        if (d.mode === "pan" && !d.moved) {
+          this.select(null);
+          this.clearMulti();
+        } else if (d.mode === "card" && d.moved) {
+          const x = d.cx + (e.clientX - d.sx) / this.v.z, y = d.cy + (e.clientY - d.sy) / this.v.z;
+          this.apply(await this.hooks.move?.(d.id, x, y));
+        } else if (d.mode === "group" && d.moved) {
+          const x = d.gx + (e.clientX - d.sx) / this.v.z, y = d.gy + (e.clientY - d.sy) / this.v.z;
+          this.apply(await this.hooks.groupMove?.(d.id, x, y));
+        } else if (d.mode === "box") {
+          d.box.remove();
+          if (d.rect && (d.rect.w > 20 || d.rect.h > 20)) {
+            const r = await this.hooks.group?.(d.rect);
+            this.apply(r);
+            if (r?.result) this.openRename(r.result.id);
+          }
+          this.setTool("select");
+        } else if (d.mode === "link") {
+          this.drawDraft(null);
+          const under = document.elementFromPoint(e.clientX, e.clientY)?.closest?.(".cv-card");
+          if (under && under.dataset.id !== d.from) {
+            const r = await this.hooks.link?.(d.from, under.dataset.id);
+            this.apply(r);
+            if (r?.result) this.openLabelMenu(r.result.id);
+          }
+          this.setTool("select");
+        }
       };
       vp.addEventListener("pointerup", end);
-      vp.addEventListener("pointercancel", end);
+      vp.addEventListener("pointercancel", () => {
+        if (drag?.box) drag.box.remove();
+        drag = null;
+        this.drawDraft(null);
+      });
+      vp.addEventListener("dblclick", (e) => {
+        const name = e.target.closest?.(".cv-group-name");
+        if (name && !this.readonly) this.openRename(name.closest(".cv-group").dataset.id);
+      });
       // Put on canvas by dragging a timeline row here (B104).
       vp.addEventListener("dragover", (e) => {
         if (![...e.dataTransfer.types].includes("text/node-url")) return;
@@ -358,6 +477,12 @@
     show(snap, previews = {}, { seenAt = 0 } = {}) {
       this.seenAt = seenAt;
       this.data = snap;
+      // Tools are off for opened files (read-only trails) (B105).
+      this.readonly = Boolean(snap?.trail?.readonly);
+      this.toolsEl.hidden = this.readonly;
+      this.setTool("select");
+      this.multi.clear();
+      this.paintMulti();
       this.previews = previews || {};
       this.selected = snap?.view?.selected || null;
       this.bounds = worldBounds(snap?.cards, snap?.groups);
@@ -410,9 +535,17 @@
         g.prepend(svg("line", { class: `cv-line ${kind}`, x1: p.x1, y1: p.y1, x2, y2 }));
         if (kind === "you") g.append(svg("circle", { class: "cv-end", cx: p.x1, cy: p.y1, r: 4 }), svg("circle", { class: "cv-end", cx: p.x2, cy: p.y2, r: 4 }));
         lFrag.append(g);
-        if (ln.label) {
-          const lab = h("div", `cv-line-label ${kind}`, ln.label);
+        // Drawn lines: the label (or a small target where it would be) opens
+        // the label menu (B105).
+        if (ln.label || kind === "you") {
+          const lab = h(kind === "you" ? "button" : "div", `cv-line-label ${kind}${ln.label ? "" : " empty"}`, ln.label ? LABEL_TEXT[ln.label] || ln.label : "");
           lab.style.transform = `translate(${(p.x1 + p.x2) / 2}px, ${(p.y1 + p.y2) / 2}px) translate(-50%, -50%)`;
+          if (kind === "you") {
+            lab.type = "button";
+            lab.dataset.line = ln.id;
+            lab.title = "Change label";
+            lab.setAttribute("aria-label", ln.label ? `Link: ${ln.label}. Change label` : "Link. Add a label");
+          }
           labFrag.append(lab);
         }
       }
@@ -435,6 +568,7 @@
       el.style.width = `${c.w}px`;
       el.style.height = `${c.h}px`;
       if (c.id === this.selected) el.classList.add("selected");
+      if (this.multi?.has(c.id)) el.classList.add("multi");
       if (this.seenAt && c.placedAt > this.seenAt && c.id !== this.selected) el.classList.add("new");
       if (c.kind === "question" && c.status === "resolved") el.classList.add("resolved");
       const pv = c.url ? this.previews[c.url] : null;
@@ -534,6 +668,175 @@
     selectUrl(url) {
       const c = url && this.data?.cards.find((k) => k.url === url);
       if (c) this.select(c.id, { reveal: true });
+    }
+
+    // ---- tools (B105) ----
+    bindKeys() {
+      document.addEventListener("keydown", (e) => {
+        if (this.el.hidden || !this.el.offsetParent) return;
+        const t = e.target;
+        if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+        if (e.metaKey || e.ctrlKey || e.altKey) return;
+        const tool = { v: "select", h: "hand", g: "group", l: "link", q: "question", n: "note" }[e.key.toLowerCase()];
+        if (tool && !this.readonly) {
+          e.preventDefault();
+          this.setTool(tool);
+        } else if (e.key === "Escape") {
+          if (this.closeMenu()) return;
+          if (this.tool !== "select") this.setTool("select");
+          else {
+            this.select(null);
+            this.clearMulti();
+          }
+        }
+      });
+    }
+    setTool(tool) {
+      this.tool = this.readonly ? "select" : tool;
+      for (const b of this.toolsEl.children) b.setAttribute("aria-pressed", String(b.dataset.tool === this.tool));
+      this.el.dataset.tool = this.tool;
+    }
+    toggleMulti(id) {
+      if (!this.multi.size && this.selected && this.selected !== id) this.multi.add(this.selected);
+      this.multi.has(id) ? this.multi.delete(id) : this.multi.add(id);
+      this.select(null);
+      this.paintMulti();
+    }
+    clearMulti() {
+      if (!this.multi.size) return;
+      this.multi.clear();
+      this.paintMulti();
+    }
+    paintMulti() {
+      for (const el of this.cardsEl.querySelectorAll(".cv-card")) el.classList.toggle("multi", this.multi.has(el.dataset.id));
+      this.multiBar.hidden = this.multi.size < 2;
+      this.multiText.textContent = `${this.multi.size} selected`;
+    }
+    // A hook's result: { result, snap }. Draws the new snapshot, keeping the view.
+    apply(r) {
+      if (!r?.snap) {
+        this.render();
+        return;
+      }
+      this.data = r.snap;
+      this.bounds = worldBounds(r.snap.cards, r.snap.groups);
+      this.render();
+      this.paintMulti();
+      this.paintView();
+    }
+    toScreen(wx, wy) {
+      const vp = this.vp.getBoundingClientRect(), el = this.el.getBoundingClientRect();
+      return { x: vp.left - el.left + this.v.x + wx * this.v.z, y: vp.top - el.top + this.v.y + wy * this.v.z };
+    }
+    drawDraft(from, p) {
+      if (!from) return this.draft.remove();
+      const c = this.data.cards.find((k) => k.id === from);
+      if (!c) return;
+      Object.entries({ x1: c.x + c.w / 2, y1: c.y + c.h / 2, x2: p.x, y2: p.y }).forEach(([k, v]) => this.draft.setAttribute(k, v));
+      if (!this.draft.parentNode) this.lines.append(this.draft);
+    }
+    closeMenu() {
+      const m = this.el.querySelector(".cv-menu, .cv-edit");
+      if (!m) return false;
+      m.remove();
+      return true;
+    }
+    // The label menu on a drawn line: supports, contradicts, answers, raises,
+    // No label, Remove link.
+    openLabelMenu(lineId) {
+      this.closeMenu();
+      const ln = this.data.lines.find((l) => l.id === lineId);
+      const a = ln && this.data.cards.find((c) => c.id === ln.from), b = ln && this.data.cards.find((c) => c.id === ln.to);
+      if (!ln || !a || !b) return;
+      const p = lineEnds(a, b, ln.kind) || { x1: a.x, y1: a.y, x2: b.x, y2: b.y };
+      const at = this.toScreen((p.x1 + p.x2) / 2, (p.y1 + p.y2) / 2);
+      const menu = h("div", "cv-menu");
+      menu.setAttribute("role", "menu");
+      menu.setAttribute("aria-label", "Link label");
+      const add = (text, run, cls = "") => {
+        const b2 = h("button", `cv-menu-item ${cls}`, text);
+        b2.type = "button";
+        b2.setAttribute("role", "menuitemradio");
+        b2.addEventListener("click", async () => {
+          menu.remove();
+          this.apply(await run());
+        });
+        menu.append(b2);
+        return b2;
+      };
+      for (const [val, text] of LABELS) add(text, () => this.hooks.linkLabel?.(lineId, val)).setAttribute("aria-checked", String((ln.label || "") === val));
+      add("Remove link", () => this.hooks.unlink?.(lineId), "danger");
+      menu.style.transform = `translate(${Math.round(at.x)}px, ${Math.round(at.y)}px)`;
+      menu.addEventListener("keydown", (e) => {
+        const items = [...menu.querySelectorAll("button")];
+        const i = items.indexOf(document.activeElement);
+        if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+          e.preventDefault();
+          items[(i + (e.key === "ArrowDown" ? 1 : -1) + items.length) % items.length].focus();
+        } else if (e.key === "Escape") {
+          menu.remove();
+          this.vp.focus();
+        }
+      });
+      this.el.append(menu);
+      menu.querySelector("button").focus();
+    }
+    // The name field of a group: Enter names it, Esc keeps the name it has.
+    openRename(groupId) {
+      this.closeMenu();
+      const g = this.data.groups.find((k) => k.id === groupId);
+      if (!g) return;
+      const at = this.toScreen(g.x, g.y);
+      const input = h("input", "cv-edit cv-edit-name");
+      input.value = g.label === "New group" ? "" : g.label;
+      input.placeholder = "NEW GROUP";
+      input.setAttribute("aria-label", "Group name");
+      input.style.transform = `translate(${Math.round(at.x)}px, ${Math.round(at.y - 32)}px)`;
+      let done = false;
+      const finish = async (keep) => {
+        if (done) return;
+        done = true;
+        const v = input.value.trim();
+        input.remove();
+        if (keep && v && v !== g.label) this.apply(await this.hooks.groupRename?.(g.id, v));
+        this.vp.focus({ preventScroll: true });
+      };
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") finish(true);
+        else if (e.key === "Escape") finish(false);
+      });
+      input.addEventListener("blur", () => finish(true));
+      this.el.append(input);
+      input.focus();
+    }
+    // Question or Note: type where clicked. Enter adds (Shift+Enter: a new line
+    // in a note), Esc cancels; empty ones are not kept.
+    openEditor(kind, p) {
+      this.closeMenu();
+      const at = this.toScreen(p.x, p.y);
+      const box = h("textarea", `cv-edit cv-edit-card k-${kind}`);
+      box.placeholder = kind === "question" ? "Ask a question" : "Write a note";
+      box.setAttribute("aria-label", kind === "question" ? "New question" : "New note");
+      box.style.transform = `translate(${Math.round(at.x)}px, ${Math.round(at.y)}px)`;
+      let done = false;
+      const finish = async (keep) => {
+        if (done) return;
+        done = true;
+        const v = box.value.trim();
+        box.remove();
+        this.setTool("select");
+        if (keep && v) this.apply(kind === "question" ? await this.hooks.question?.({ x: p.x, y: p.y, title: v }) : await this.hooks.note?.({ x: p.x, y: p.y, text: v }));
+        this.vp.focus({ preventScroll: true });
+      };
+      box.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !(kind === "note" && e.shiftKey)) {
+          e.preventDefault();
+          finish(true);
+        } else if (e.key === "Escape") finish(false);
+      });
+      box.addEventListener("blur", () => finish(true));
+      this.el.append(box);
+      box.focus();
     }
 
     cardSub(c) {

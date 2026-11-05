@@ -3796,6 +3796,7 @@ api?.onCommand?.((msg) => {
   else if (msg.cmd === "canvas") (msg.open ? openCanvas(msg) : closeCanvas());
   else if (msg.cmd === "side-over") mirrorWhileImmersive(msg.shown);
   else if (msg.cmd === "trail-changed") refreshCanvasData();
+  else if (msg.cmd === "session-reloaded") api.researchGet?.().then((s) => s && adoptSession(s));
 });
 
 // ---- Trail canvas (B101, B102) ----
@@ -3818,6 +3819,18 @@ async function openCanvas({ focus = false, select = "" } = {}) {
     // B104: Put on canvas (a timeline row dropped on it) and Remove from canvas.
     put: async (o) => (await api.trailPlace(o)) && refreshCanvasData(),
     remove: async (id) => (await api.trailRemove(id)) && refreshCanvasData(),
+    // B105: canvas tools. Each returns { result, snap } for the canvas to draw.
+    move: (id, x, y) => api.trailMove(id, x, y),
+    groupMove: (id, x, y) => api.trailGroupMove(id, x, y),
+    link: (from, to) => api.trailLink(from, to),
+    linkLabel: (line, label) => api.trailLinkLabel(line, label),
+    unlink: (line) => api.trailUnlink(line),
+    group: (rect) => api.trailGroup(rect),
+    groupRename: (id, label) => api.trailGroupRename(id, label),
+    question: (o) => api.trailQuestion(o),
+    note: (o) => api.trailNote(o),
+    // "n selected · View in Mosaic": the pages of the chosen cards, as tiles.
+    mosaic: (ids) => viewInMosaic(ids),
   });
   const wasShown = canvasShown;
   canvasShown = true;
@@ -3844,6 +3857,20 @@ async function openCanvas({ focus = false, select = "" } = {}) {
   if (select) trailCanvas.selectUrl(select);
   if (focus) trailCanvas.focusSearch();
   else if (!canvasEl.contains(document.activeElement)) trailCanvas.vp.focus({ preventScroll: true });
+}
+// Shows the pages of the chosen cards in Mosaic: their open tabs, or new tabs.
+async function viewInMosaic(ids) {
+  const cards = (trailCanvas?.data?.cards || []).filter((c) => ids.includes(c.id) && c.url);
+  if (!cards.length) return;
+  const chosen = [];
+  for (const c of cards) {
+    const open = tabs.find((t) => t.url === c.url);
+    chosen.push(open ? open.id : await api.createTab(c.url));
+  }
+  for (const t of tabs) if (t.tile && !chosen.includes(t.id)) await api.setTabTile(t.id, false);
+  for (const id of chosen) if (id) await api.setTabTile(id, true);
+  layout = await api.setLayout("mosaic");
+  paintLayout(true);
 }
 var canvasSeenAt = 0;
 var canvasSeenTrail = "";

@@ -219,6 +219,15 @@ Each tab stores its resolved rule (`tab.rule`), recomputed on every navigation:
 - **Put on canvas / Remove from canvas:** `trail:place` ({ url } or { card }, with x, y when dropped) and `trail:remove`. In the sidebar a timeline-only row has a + button and can be dragged onto the canvas. On the canvas the selected card shows Open and Remove from canvas. A removed card keeps its events and lines; putting it back brings them back.
 - **New cards:** cards placed since the person last saw that trail's canvas have a violet border until selected (the time is kept per trail in the window's storage). `main.js` sends `trail-changed` when a card is placed, and the canvas and timeline draw again.
 
+## Canvas tools (B105)
+
+- **Toolbar** at the bottom of the canvas: Select (V), Hand (H), Group (G), Link (L), Question (Q), Note (N). The keys work on the canvas when no field has the cursor. Every tool goes back to Select after one action; Esc leaves a tool, then clears the selection. Tools are off for read-only trails (opened files).
+- **Select:** click a card to select it; drag it to move it (the card is pinned: auto-layout never moves it again); shift-click to select several, which shows "n selected · View in Mosaic" (those pages become the Mosaic tiles, opened in tabs when needed). Drag a group's name to move the group and its cards (they are pinned too); double-click the name to rename it. Drag the background to pan.
+- **Link:** drag from one card to another to draw a line (kind `you`); the label menu opens on it: Supports, Contradicts, Answers, Raises, No label, Remove link. Clicking a drawn line's label (or the dot where it would be) opens the menu again. Drawing over a grey line keeps the grey line (one line per pair and kind).
+- **Group:** drag a box; the group fits the cards whose centre is in it (24 px sides and bottom, 48 px top), or keeps the box when it has none. The name field opens: Enter names it, Esc keeps "New group".
+- **Question and Note:** click to place, type; Enter adds (Shift+Enter is a new line in a note), Esc cancels; empty ones are not kept. A question is a thread (it shows in Threads); a note made on the canvas is not tied to a page.
+- **Store and IPC:** `trail:move`, `trail:group-move`, `trail:link`, `trail:link-label`, `trail:unlink`, `trail:group`, `trail:group-rename`, `trail:question`, `trail:note`. Each writes to the trail store (new: `moveGroup`, `labelLine`, `freeNote`), records an event with its own time (moved, linked, unlinked, grouped, renamed, asked, noted), then reads the session again (`ResearchStore.reload()`) so the sidebar, threads and later session saves see the change, and returns the new snapshot for the canvas.
+
 ## Sidebar-only chrome (B103)
 
 The sidebar is NODE's only chrome; the top bar and the layout setting are gone (`chromeLayout` is always `side`; an old `top` value is ignored). `renderer/index.html` keeps the real controls in the hidden header, and `placeSidebar()` in `app.js` moves them into the sidebar's slots at start, so each keeps its handlers.
@@ -265,7 +274,7 @@ The renderer stores hidden keywords and the Auto setting in local storage.
 | Layout | `layout:set`, `layout:sidebar`, `layout:library`, `layout:chrome` (sidebar width), `layout:side-over` (sidebar over the page) |
 | Find, zoom, history | `find:start`, `find:stop`, `tab:zoom`, `history:search`, `history:clear`, `history:remove` |
 | Site rules | `rules:edit`, `rules:reload` |
-| Trail store | `trail:get`, `trail:list`, `trail:new`, `trail:switch`, `trail:rename`, `trail:view`, `trail:timeline`, `trail:previews`, `trail:place`, `trail:remove`; `tab:engaged` (page → main) |
+| Trail store | `trail:get`, `trail:list`, `trail:new`, `trail:switch`, `trail:rename`, `trail:view`, `trail:timeline`, `trail:previews`, `trail:place`, `trail:remove`, `trail:move`, `trail:group-move`, `trail:link`, `trail:link-label`, `trail:unlink`, `trail:group`, `trail:group-rename`, `trail:question`, `trail:note`; `tab:engaged` (page → main) |
 | Research session (over the trail store) | `research:get`, `research:list`, `research:new`, `research:switch`, `research:rename`, `research:pins`, `research:visit`, `research:opened`, `research:dismiss`, `research:undismiss`, `research:export` |
 | Keywords and search | `page:extract`, `page:keywords`, `suggest:search` (legacy, used by Tauri), `suggest:for`, `suggest:preview` |
 | Sources and AI | `settings:get`, `settings:set`, `search:status`, `search:test`, `ai:test` |

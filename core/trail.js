@@ -403,6 +403,43 @@ class TrailStore {
     this.save(id);
     return g;
   }
+  // The person moved a group by its name: the group and its cards move
+  // together, and those cards are pinned.
+  moveGroup(id, groupId, x, y, { at = this.now() } = {}) {
+    const d = this.get(id);
+    const g = d?.groups.find((k) => k.id === groupId);
+    if (!g || d.trail.readonly) return null;
+    const dx = Math.round(x) - g.x, dy = Math.round(y) - g.y;
+    const inside = this.cardsIn(id, g);
+    g.x += dx;
+    g.y += dy;
+    for (const c of inside) {
+      c.x += dx;
+      c.y += dy;
+      c.pinned = true;
+    }
+    this.event(id, { type: "moved", group: groupId, at, data: { x: g.x, y: g.y, cards: inside.map((c) => c.id) } });
+    this.save(id);
+    return g;
+  }
+  // A new label on a line ("" for none). Recorded as a linked event.
+  labelLine(id, lineId, label, { at = this.now() } = {}) {
+    const l = this.get(id)?.lines.find((k) => k.id === lineId);
+    if (!l) return null;
+    const lab = LINE_LABELS.has(label) ? label : String(label || "").slice(0, 40);
+    if (l.label === lab) return l;
+    l.label = lab;
+    this.event(id, { type: "linked", line: lineId, at, data: { label: lab } });
+    this.save(id);
+    return l;
+  }
+  // A note made on the canvas, not tied to a page.
+  freeNote(id, { x, y, text, by = "", at = this.now() } = {}) {
+    const t = String(text || "").trim().slice(0, 2000);
+    if (!t) return null;
+    return this.addCard(id, { kind: "note", text: t, author: by, at, x: Math.round(x), y: Math.round(y) }, { at, event: "noted" });
+  }
+
   cardsIn(id, g) {
     return (this.get(id)?.cards || []).filter((c) => !c.removed && c.x + c.w / 2 >= g.x && c.x + c.w / 2 <= g.x + g.w && c.y + c.h / 2 >= g.y && c.y + c.h / 2 <= g.y + g.h);
   }
