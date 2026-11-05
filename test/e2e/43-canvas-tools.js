@@ -1,6 +1,9 @@
 // Canvas tools (B105, handoff spec 4; the handoff calls this 41-canvas-tools).
 // Link with a label, Group with a name, Question, Note, moving cards and
 // groups, shift-click to Mosaic; keys V H G L Q N; tools go back to Select.
+// B106: the search bar finds cards in the trail, adds search cards, asks
+// about the trail and searches in a private tab; the address bar adds search
+// cards too.
 const { _electron: electron } = require(process.env.PLAYWRIGHT_PATH || "playwright");
 const path = require("path"), fs = require("fs"), os = require("os"), http = require("http");
 const OUT = process.argv[2] || fs.mkdtempSync(path.join(os.tmpdir(), "node-e2e-"));
@@ -197,6 +200,60 @@ const server = http.createServer((req, res) => {
   await sleep(2500);
   const mos = await ui.evaluate(() => ({ layout, tiles: tabs.filter((x) => x.tile).map((x) => x.url) }));
   check("View in Mosaic shows those pages as tiles", mos.layout === "mosaic" && mos.tiles.length === 2 && mos.tiles.every((u) => /\/a$|\/b$/.test(u)), JSON.stringify(mos));
+
+  // ---- B106: the search bar ----
+  await ui.evaluate(() => window.scout.canvasShow());
+  await sleep(1200);
+  await ui.click("#canvas .cv-search input");
+  await ui.keyboard.type("127.0.0.1 /a");
+  await sleep(300);
+  let st = await ui.evaluate((id) => ({
+    rows: [...document.querySelectorAll("#canvas .cv-drop-row .nm")].map((r) => r.textContent),
+    meta: document.querySelector("#canvas .cv-drop-meta")?.textContent,
+    matchA: document.querySelector(`#canvas .cv-card[data-id="${id}"]`).classList.contains("match"),
+    dimmed: document.querySelectorAll("#canvas .cv-card.dim").length,
+    cards: document.querySelectorAll("#canvas .cv-card").length,
+  }), A.id);
+  check("typing finds cards in the trail: the match stays, the rest dims", st.matchA && st.dimmed === st.cards - 1 && st.meta === "1 card on this trail matches", JSON.stringify(st));
+  check("the list offers Search the web, Ask about this trail and Private search", st.rows.join("|") === "Search the web: 127.0.0.1 /a|Ask about this trail: 127.0.0.1 /a|Private search: 127.0.0.1 /a", st.rows.join("|"));
+  await ui.keyboard.press("Escape");
+  await sleep(300);
+  check("Esc clears the search and the dimming", await ui.evaluate(() => !document.querySelector("#canvas .cv-card.dim") && document.querySelector("#canvas .cv-drop").hidden));
+  const before6 = (await snap()).cards.length;
+  await ui.click("#canvas .cv-search input");
+  await ui.keyboard.type("rye bread history");
+  await ui.keyboard.press("Enter");
+  await sleep(2000);
+  t = await snap();
+  const sc = t.cards.find((c) => c.kind === "search");
+  check("Enter: a search card titled \"Search: rye bread history\"", sc?.title === "Search: rye bread history" && t.cards.length === before6 + 1, JSON.stringify(sc));
+  check("and the results open in a tab", await ui.evaluate(() => tabs.some((x) => /search\.brave\.com\/search\?q=rye%20bread%20history/.test(x.url))) && !(await ui.evaluate(() => canvasShown)));
+  await ui.evaluate(() => window.scout.canvasShow());
+  await sleep(1200);
+  check("the card says Open results from Brave", (await ui.evaluate((id) => document.querySelector(`#canvas .cv-card[data-id="${id}"] .cv-card-foot`)?.textContent, sc?.id)) === "Open results from Brave");
+  await ui.click("#canvas .cv-search input");
+  await ui.keyboard.type("secret starter");
+  await ui.keyboard.press("ArrowDown");
+  await ui.keyboard.press("ArrowDown");
+  await ui.keyboard.press("Enter");
+  await sleep(1800);
+  check("Private search: a private tab, no card", (await ui.evaluate(() => tabs.find((x) => x.id === activeId)?.private)) && (await snap()).cards.length === before6 + 1);
+  // The address bar on a page: a search adds a search card too.
+  const pg = await ui.evaluate(() => tabs.find((x) => !x.private)?.id);
+  await ui.evaluate((id) => window.scout.activateTab(id), pg);
+  await sleep(600);
+  await ui.fill("#omni", "levain hydration");
+  await ui.press("#omni", "Enter");
+  await sleep(1500);
+  check("a search typed in the address bar adds a search card", (await snap()).cards.some((c) => c.kind === "search" && c.query === "levain hydration"));
+  await ui.evaluate(() => window.scout.canvasShow());
+  await sleep(1000);
+  await ui.click("#canvas .cv-search input");
+  await ui.keyboard.type("hydration");
+  await ui.keyboard.press("ArrowDown");
+  await ui.keyboard.press("Enter");
+  await sleep(1200);
+  check("Ask about this trail opens Ask with the trail's pages and the question", await ui.evaluate(() => !document.getElementById("ask-pane").hidden && askScope === "session" && ask.messages.some((m) => m.role === "user" && /hydration/.test(m.content))));
 
   await app.close();
   server.close();

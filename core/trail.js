@@ -312,7 +312,8 @@ class TrailStore {
     if (have && !have.removed) return have;
     if (have) return this.restoreCard(id, have.id, { at, x, y });
     const [w, h] = SIZE.page;
-    const source = from && from !== url ? this.pageCard(id, from) : null;
+    // The source: the page (or search, B106) it was opened from.
+    const source = from && from !== url ? this.pageCard(id, from) || this.searchCardFor(id, from) : null;
     let pos = typeof x === "number" && typeof y === "number" ? { x, y, moves: [] } : null;
     if (!pos) {
       const view = { cards: d.cards.filter((c) => !c.removed), groups: d.groups };
@@ -330,6 +331,31 @@ class TrailStore {
     if (card && source && !source.removed) this.link(id, source.id, card.id, { kind: "nav", at });
     return card;
   }
+  // ---- search cards (B106) ----
+  // A web search made from the canvas or the address bar: a card titled
+  // "Search: <query>" that opens the results. Pages opened from the results go
+  // next to it, with "opened from" lines.
+  searchCard(id, { query, url, near, at = this.now() } = {}) {
+    const d = this.get(id);
+    const q = String(query || "").trim().slice(0, 200);
+    if (!d || !q || !url) return null;
+    const have = d.cards.find((c) => c.kind === "search" && c.url === url && !c.removed);
+    if (have) return have;
+    const [w, h] = SIZE.search;
+    const pos = placeNear({ cards: d.cards.filter((c) => !c.removed), groups: d.groups }, null, w, h, { near: near || this.below(id, w) });
+    return this.addCard(id, { kind: "search", query: q, title: `Search: ${q}`, url, x: pos.x, y: pos.y, placedAt: at }, { at, data: { query: q } });
+  }
+  // The search card for a results page: same address, or same query (the
+  // results page may add parameters).
+  searchCardFor(id, url) {
+    const cards = (this.get(id)?.cards || []).filter((c) => c.kind === "search");
+    let q = "";
+    try {
+      q = new URL(url).searchParams.get("q") || "";
+    } catch (_) {}
+    return cards.find((c) => c.url === url) || (q && cards.find((c) => c.query === q)) || null;
+  }
+
   // A visit that ended without the page becoming a card: kept in the timeline
   // as "timeline only" with its time on page (ms).
   bounce(id, url, dwell, { at = this.now() } = {}) {

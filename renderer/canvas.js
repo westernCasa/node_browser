@@ -106,6 +106,7 @@
     ["", "No label"],
   ];
   const LABEL_TEXT = { supports: "Supports", contradicts: "Contradicts", answers: "Answers", raises: "Raises" };
+  const looksLikeAddress = (q) => /^[a-z][a-z0-9+.-]*:\/\//i.test(q) || /^(localhost|[\w-]+(\.[\w-]+)+)(:\d+)?(\/\S*)?$/i.test(q);
   const KIND_LABEL = { page: "Page", video: "Video", capture: "Capture", report: "Report", question: "Question", note: "Note", voice: "Voice", search: "Search" };
 
   const helpers = { Z_MIN, Z_MAX, DOT_GAP, clampZ, zoomAt, worldBounds, fitView, centreOn, lineEnds, minimap, gridFor, hostOf };
@@ -225,18 +226,42 @@
       this.input.placeholder = "Search or enter an address";
       this.input.setAttribute("aria-label", "Search or enter an address");
       this.form.append(this.input);
+      // Search bar (B106): typing finds cards in the trail (matches stay, the
+      // rest dims) and lists what Enter can do: open an address, search the
+      // web (a search card plus the results in a tab), ask about the trail,
+      // or search in a private tab.
+      this.input.setAttribute("role", "combobox");
+      this.input.setAttribute("aria-expanded", "false");
+      this.input.setAttribute("aria-controls", "cv-drop");
+      this.drop = h("div", "cv-drop");
+      this.drop.id = "cv-drop";
+      this.drop.setAttribute("role", "listbox");
+      this.drop.hidden = true;
+      this.dropSel = 0;
+      this.dropRows = [];
       this.form.addEventListener("submit", (e) => {
         e.preventDefault();
-        const v = this.input.value.trim();
-        if (!v) return;
-        this.input.value = "";
-        this.hooks.search?.(v);
+        this.runDrop(this.dropSel);
+      });
+      this.input.addEventListener("input", () => {
+        this.dropSel = 0;
+        this.find(this.input.value);
       });
       this.input.addEventListener("keydown", (e) => {
+        const n = this.dropRows.length;
         if (e.key === "Escape") {
-          this.input.value = "";
+          this.clearSearch();
           this.vp.focus({ preventScroll: true });
+        } else if ((e.key === "ArrowDown" || e.key === "ArrowUp") && n) {
+          e.preventDefault();
+          this.dropSel = (this.dropSel + (e.key === "ArrowDown" ? 1 : -1) + n) % n;
+          this.paintDrop();
         }
+      });
+      this.drop.addEventListener("mousedown", (e) => e.preventDefault());
+      this.drop.addEventListener("click", (e) => {
+        const row = e.target.closest("[data-i]");
+        if (row) this.runDrop(Number(row.dataset.i));
       });
       this.survey = this.surveyEl();
       this.resume = h("section", "cv-resume");
@@ -246,7 +271,7 @@
       rt.id = "cv-resume-title";
       this.resumeList = h("div", "cv-resume-list");
       this.resume.append(rt, this.resumeList);
-      this.top.append(this.heading, this.form, this.survey, this.resume);
+      this.top.append(this.heading, this.form, this.drop, this.survey, this.resume);
       // The selected card's actions (B104), drawn at screen size above it.
       this.selBar = h("div", "cv-selbar");
       this.selBar.hidden = true;
@@ -496,6 +521,7 @@
       const d = this.data || { cards: [], groups: [], lines: [] };
       const byId = new Map(d.cards.map((c) => [c.id, c]));
       this.paintEmpty();
+      if (this.matches) queueMicrotask(() => this.find(this.input.value));
 
       // Groups.
       const gFrag = document.createDocumentFragment();
@@ -849,7 +875,65 @@
       return "";
     }
 
+    // ---- search bar (B106) ----
+    find(q) {
+      const words = String(q || "").toLowerCase().split(/\s+/).filter(Boolean);
+      const text = (c) => [c.title, c.text, c.quote, c.excerpt, c.url, c.query, ...(c.keywords || []), c.conclusion].filter(Boolean).join(" ").toLowerCase();
+      this.matches = words.length ? new Set((this.data?.cards || []).filter((c) => words.every((w) => text(c).includes(w))).map((c) => c.id)) : null;
+      for (const el of this.cardsEl.querySelectorAll(".cv-card")) {
+        el.classList.toggle("dim", Boolean(this.matches) && !this.matches.has(el.dataset.id));
+        el.classList.toggle("match", Boolean(this.matches?.has(el.dataset.id)));
+      }
+      this.el.classList.toggle("finding", Boolean(this.matches));
+      const v = String(q || "").trim();
+      this.dropRows = [];
+      if (v) {
+        if (looksLikeAddress(v)) this.dropRows.push({ act: "open", text: `Open ${v}` });
+        else {
+          this.dropRows.push({ act: "search", text: `Search the web: ${v}`, meta: "Adds a search card" });
+          this.dropRows.push({ act: "ask", text: `Ask about this trail: ${v}` });
+          this.dropRows.push({ act: "private", text: `Private search: ${v}`, meta: "Not in any trail" });
+        }
+      }
+      this.paintDrop();
+    }
+    paintDrop() {
+      const n = this.matches ? this.matches.size : null;
+      this.drop.replaceChildren(
+        ...this.dropRows.map((r, i) => {
+          const row = h("div", "cv-drop-row" + (i === this.dropSel ? " sel" : ""));
+          row.setAttribute("role", "option");
+          row.setAttribute("aria-selected", String(i === this.dropSel));
+          row.dataset.i = i;
+          row.id = `cv-drop-${i}`;
+          row.append(h("span", "nm", r.text), h("span", "k", i === this.dropSel ? "↵" : r.meta || ""));
+          return row;
+        }),
+      );
+      if (n !== null) this.drop.append(h("div", "cv-drop-meta", n === 1 ? "1 card on this trail matches" : `${n} cards on this trail match`));
+      this.drop.hidden = !this.dropRows.length;
+      this.input.setAttribute("aria-expanded", String(!this.drop.hidden));
+      if (this.dropRows.length) this.input.setAttribute("aria-activedescendant", `cv-drop-${this.dropSel}`);
+      else this.input.removeAttribute("aria-activedescendant");
+    }
+    runDrop(i) {
+      const v = this.input.value.trim();
+      const r = this.dropRows?.[i];
+      if (!v || !r) return;
+      this.clearSearch();
+      if (r.act === "open") this.hooks.search?.(v);
+      else if (r.act === "search") this.hooks.webSearch?.(v);
+      else if (r.act === "ask") this.hooks.ask?.(v);
+      else if (r.act === "private") this.hooks.privateSearch?.(v);
+    }
+    clearSearch() {
+      this.input.value = "";
+      this.dropRows = [];
+      this.find("");
+    }
+
     cardFoot(c) {
+      if (c.kind === "search") return "Open results from Brave";
       if (c.kind === "page" || c.kind === "video") return (c.keywords || []).slice(0, 4).join(" · ");
       if (c.kind === "note" && c.author) return `— ${c.author}`;
       if (c.kind === "question" && c.by) return c.by;

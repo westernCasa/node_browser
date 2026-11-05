@@ -71,6 +71,7 @@ contextBridge.exposeInMainWorld("scout", {
   trailGroupRename: (group, label) => ipcRenderer.invoke("trail:group-rename", group, label),
   trailQuestion: (o) => ipcRenderer.invoke("trail:question", o),
   trailNote: (o) => ipcRenderer.invoke("trail:note", o),
+  trailSearch: (q, opts) => ipcRenderer.invoke("trail:search", q, opts),
   canvasShow: () => ipcRenderer.invoke("canvas:show"),
   surveyCard: () => ipcRenderer.invoke("survey:card"),
   surveyCardAnswer: (act) => ipcRenderer.invoke("survey:card-answer", act),

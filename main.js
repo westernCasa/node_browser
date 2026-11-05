@@ -3824,6 +3824,25 @@ ipcMain.handle("trail:question", (_e, { x, y, title } = {}) =>
   }),
 );
 ipcMain.handle("trail:note", (_e, { x, y, text } = {}) => canvasEdit((id) => trailStore.freeNote(id, { x: Number(x), y: Number(y), text, by: loadSettings().displayName || "" })));
+// A web search (B106): a search card on the trail and the results in a tab.
+// opts.tab: show the results in that tab (a search typed in a page's address
+// bar) instead of a new one. opts.private: a private tab, no card.
+ipcMain.handle("trail:search", (_e, query, opts = {}) => {
+  const q = String(query || "").trim();
+  if (!q) return null;
+  const url = SEARCH_URL + encodeURIComponent(q);
+  if (opts.private) return void createTab(url, { private: true });
+  const id = currentTrail();
+  research.saveNow();
+  const card = trailStore.searchCard(id, { query: q, url, near: canvasMiddle(id) });
+  if (card) sendUi("trail-changed", { trail: id, card: card.id });
+  const tab = opts.tab && tabs.get(String(opts.tab));
+  if (tab && !tab.private) {
+    tab.view.webContents.loadURL(url);
+    if (canvasOn) activateTab(tab.id);
+  } else createTab(url);
+  return card ? trailSnapshot(id) : null;
+});
 ipcMain.handle("trail:new", (_e, name) => {
   changeTrail(() => research.create(name));
   usage().count("sessions");

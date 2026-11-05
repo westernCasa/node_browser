@@ -228,6 +228,14 @@ Each tab stores its resolved rule (`tab.rule`), recomputed on every navigation:
 - **Question and Note:** click to place, type; Enter adds (Shift+Enter is a new line in a note), Esc cancels; empty ones are not kept. A question is a thread (it shows in Threads); a note made on the canvas is not tied to a page.
 - **Store and IPC:** `trail:move`, `trail:group-move`, `trail:link`, `trail:link-label`, `trail:unlink`, `trail:group`, `trail:group-rename`, `trail:question`, `trail:note`. Each writes to the trail store (new: `moveGroup`, `labelLine`, `freeNote`), records an event with its own time (moved, linked, unlinked, grouped, renamed, asked, noted), then reads the session again (`ResearchStore.reload()`) so the sidebar, threads and later session saves see the change, and returns the new snapshot for the canvas.
 
+## Canvas search bar (B106)
+
+- **Find in trail:** typing in the canvas search bar keeps the cards whose title, text, address, keywords or query contain every word, outlined, and dims the rest; the list under the bar says how many match. Esc clears it.
+- **What Enter does,** listed under the bar (↑↓ to choose): an address opens in a new tab; otherwise Search the web (default), Ask about this trail, or Private search.
+- **Search the web** (`trail:search`): adds a search card titled "Search: <query>" (kind `search`, with the Brave Search address; its foot says "Open results from Brave"), placed near the middle of the canvas, and opens the results in a tab. Pages opened from the results go next to the search card with "opened from" lines (`TrailStore.searchCardFor` matches the results page by address or query). A search typed in the sidebar's address bar adds a search card too, and shows the results in that tab (or a new one on the canvas).
+- **Ask about this trail:** the Ask pane with the "Research session" scope (the trail's pages) and the question sent.
+- **Private search:** the results in a private tab; no card.
+
 ## Sidebar-only chrome (B103)
 
 The sidebar is NODE's only chrome; the top bar and the layout setting are gone (`chromeLayout` is always `side`; an old `top` value is ignored). `renderer/index.html` keeps the real controls in the hidden header, and `placeSidebar()` in `app.js` moves them into the sidebar's slots at start, so each keeps its handlers.
@@ -274,7 +282,7 @@ The renderer stores hidden keywords and the Auto setting in local storage.
 | Layout | `layout:set`, `layout:sidebar`, `layout:library`, `layout:chrome` (sidebar width), `layout:side-over` (sidebar over the page) |
 | Find, zoom, history | `find:start`, `find:stop`, `tab:zoom`, `history:search`, `history:clear`, `history:remove` |
 | Site rules | `rules:edit`, `rules:reload` |
-| Trail store | `trail:get`, `trail:list`, `trail:new`, `trail:switch`, `trail:rename`, `trail:view`, `trail:timeline`, `trail:previews`, `trail:place`, `trail:remove`, `trail:move`, `trail:group-move`, `trail:link`, `trail:link-label`, `trail:unlink`, `trail:group`, `trail:group-rename`, `trail:question`, `trail:note`; `tab:engaged` (page → main) |
+| Trail store | `trail:get`, `trail:list`, `trail:new`, `trail:switch`, `trail:rename`, `trail:view`, `trail:timeline`, `trail:previews`, `trail:place`, `trail:remove`, `trail:move`, `trail:group-move`, `trail:link`, `trail:link-label`, `trail:unlink`, `trail:group`, `trail:group-rename`, `trail:question`, `trail:note`, `trail:search`; `tab:engaged` (page → main) |
 | Research session (over the trail store) | `research:get`, `research:list`, `research:new`, `research:switch`, `research:rename`, `research:pins`, `research:visit`, `research:opened`, `research:dismiss`, `research:undismiss`, `research:export` |
 | Keywords and search | `page:extract`, `page:keywords`, `suggest:search` (legacy, used by Tauri), `suggest:for`, `suggest:preview` |
 | Sources and AI | `settings:get`, `settings:set`, `search:status`, `search:test`, `ai:test` |

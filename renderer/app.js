@@ -964,8 +964,12 @@ omniForm.addEventListener("submit", (e) => {
   e.preventDefault();
   omniTyping = false;
   omni.blur();
-  if (api && canvasShown) api.createTab(omni.value); // on the canvas: a new tab
-  else if (api && activeId) api.navigate(activeId, omni.value);
+  const typed = omni.value.trim();
+  // A search typed in the address bar adds a search card (B106); an address opens.
+  const isSearch = typed && !/^[a-z][a-z0-9+.-]*:\/\//i.test(typed) && !/^localhost(:\d+)?(\/|$)/i.test(typed) && (typed.includes(" ") || !typed.includes("."));
+  if (api?.trailSearch && isSearch && !tabs.find((t) => t.id === activeId)?.private) api.trailSearch(typed, { tab: canvasShown ? "" : activeId });
+  else if (api && canvasShown) api.createTab(typed); // on the canvas: a new tab
+  else if (api && activeId) api.navigate(activeId, typed);
   else demoNavigate(omni.value);
 });
 
@@ -3831,6 +3835,10 @@ async function openCanvas({ focus = false, select = "" } = {}) {
     note: (o) => api.trailNote(o),
     // "n selected · View in Mosaic": the pages of the chosen cards, as tiles.
     mosaic: (ids) => viewInMosaic(ids),
+    // B106: the search bar's choices.
+    webSearch: (q) => api.trailSearch(q),
+    privateSearch: (q) => api.trailSearch(q, { private: true }),
+    ask: (q) => askAboutTrail(q),
   });
   const wasShown = canvasShown;
   canvasShown = true;
@@ -3871,6 +3879,13 @@ async function viewInMosaic(ids) {
   for (const id of chosen) if (id) await api.setTabTile(id, true);
   layout = await api.setLayout("mosaic");
   paintLayout(true);
+}
+// Ask about this trail (B106): the Ask pane, reading the trail's pages.
+async function askAboutTrail(q) {
+  askScope = "session";
+  if (!panelOpen) setPanelOpen(true, { animate: true });
+  await openAsk();
+  sendAsk(q);
 }
 var canvasSeenAt = 0;
 var canvasSeenTrail = "";
