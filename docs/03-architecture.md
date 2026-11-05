@@ -174,6 +174,26 @@ Each tab stores its resolved rule (`tab.rule`), recomputed on every navigation:
 | `adblock` | `adblock.js` request listener skips blocking for tabs whose rule says `false` |
 | `extract.include` / `extract.skip` | Passed into the extraction script; include text is scored with weight 3 (`focus` field), skip selectors are added to the ignored areas. Invalid selectors are dropped |
 
+## Trail store (B100)
+
+`core/trail.js` holds trails for the trail canvas (phase 4.T, engineering handoff). A trail is one line of research and one tab group. `TrailStore` takes a storage object like the other core modules; on desktop it is `userData/trails/`:
+
+| File | Contents |
+| --- | --- |
+| `trails/index.json` | Trail ids, most recently used first; the current trail; when sessions were migrated |
+| `trails/<id>/trail.json` | The trail (`id`, `name`, `mono`, `createdAt`, `lastAt`, `readonly`, `from`, `file`, `note`, `startHere`), its cards, groups and lines, and the data the suggestions sidebar keeps (`research`: pins, opened and hidden results, reports, captures, share history, agent calls) |
+| `trails/<id>/events.jsonl` | Append-only event log, one JSON object per line: `id`, `at`, `device`, `actor`, `type`, and `card`, `line`, `group` or `data`. Types: opened, bounced, captured, asked, reported, noted, placed, removed, linked, unlinked, grouped, renamed, resolved, moved. A half-written last line (a crash) is skipped |
+| `trails/<id>/view.json` | Where the canvas was left: `x`, `y`, `z` (20%–250%), `selected`, `openTabs`, `mosaic`. Not shared |
+| `trails/<id>/files/` | Screenshots and audio. They never leave the computer |
+
+- **Cards:** `id`, `kind` (page, video, capture, report, question, note, voice, search), `x`, `y`, `w`, `h` (world coordinates at 100% zoom), `pinned` (moved by the person; auto-layout never moves it again), and fields by kind. A removed card keeps `removed: true`, its events and its lines; putting it back restores them. Sign-in, account and payment pages never become cards (B66).
+- **Groups and lines:** a card belongs to the group its centre sits in (no stored membership). Lines have `kind` nav, auto, you or suggested and a label (supports, contradicts, answers, raises or none). Link, group, rename and resolve are recorded as events with their own times; Replay (B110) depends on it.
+- **Timeline:** built from the log. Sessions are events grouped by device, with a new session after a 30-minute gap; newest first. A page with no card is "timeline only".
+- **Migration:** on the first start, each file in `sessions/` becomes a trail with the same id (the old files stay). Each page read becomes an opened event. Sessions did not record time on page, so a page becomes a card when the recorded signals show engagement: 20 s or more between the first and last time NODE read it (NODE reads a page again only after scrolling, selecting or coming back), read twice or more, a note on it, a thread that links it, or its tab still open in that trail. Other pages stay timeline-only, marked as having no recorded time on page. Threads become question cards, page notes note cards (linked to their page), reports report cards and captures capture cards, laid out in rows of four. NODE opens on the session that was current.
+- **research:\* on top:** `sessionStorageOver(store)` is a storage object for `ResearchStore`: `<id>.json` is a session view of a trail, `current.txt` is the current trail. Every research:\* channel (suggestions sidebar, threads, notes, share files, MCP sessions) keeps working, and its writes land in the trail store as events and cards. This stays until the old sidebar is gone.
+- **IPC:** `trail:get` (cards, groups, lines, timeline, view of a trail), `trail:list`, `trail:new`, `trail:switch`, `trail:rename`, `trail:view` (save position, zoom, selection), `trail:timeline`.
+- **Storage:** `fs-storage.js` makes folders for names with "/", writes through a temporary file and rename, and has `append()` for the event log.
+
 ## Research sessions
 
 `core/research.js` keeps one current session and saves each as `<id>.json` (plus `current.txt`) through a storage object; on desktop that is the `sessions/` folder. The renderer records a page in the trail each time NODE actually searches for it (not on every 5-second check), with its top 5 keywords. Start pages and search-results pages are skipped. Pins are saved with the session after it has loaded at startup. "Recurring keywords" are keywords that appear on more than one page in the session. Export writes Markdown to `library/saves/` and adds it to the Library index.
@@ -194,7 +214,8 @@ All in Electron's `userData` folder:
 | `permissions.json` | Remembered permission answers per site |
 | `rules.json` | Site rules (created with examples on first run) |
 | `history.json` | Visited pages |
-| `sessions/` | Research sessions, one JSON file each, and `current.txt` |
+| `trails/` | Trails (B100): one folder per trail; see Trail store |
+| `sessions/` | Research sessions from before 0.10, one JSON file each, and `current.txt`. Copied into `trails/` on the first start and kept |
 | `library/` | `screenshots/`, `saves/`, `media/` and `index.json` |
 
 The renderer stores hidden keywords and the Auto setting in local storage.
@@ -208,7 +229,8 @@ The renderer stores hidden keywords and the Auto setting in local storage.
 | Layout | `layout:set`, `layout:sidebar`, `layout:library` |
 | Find, zoom, history | `find:start`, `find:stop`, `tab:zoom`, `history:search`, `history:clear`, `history:remove` |
 | Site rules | `rules:edit`, `rules:reload` |
-| Research session | `research:get`, `research:list`, `research:new`, `research:switch`, `research:rename`, `research:pins`, `research:visit`, `research:opened`, `research:dismiss`, `research:undismiss`, `research:export` |
+| Trail store | `trail:get`, `trail:list`, `trail:new`, `trail:switch`, `trail:rename`, `trail:view`, `trail:timeline` |
+| Research session (over the trail store) | `research:get`, `research:list`, `research:new`, `research:switch`, `research:rename`, `research:pins`, `research:visit`, `research:opened`, `research:dismiss`, `research:undismiss`, `research:export` |
 | Keywords and search | `page:extract`, `page:keywords`, `suggest:search` (legacy, used by Tauri), `suggest:for`, `suggest:preview` |
 | Sources and AI | `settings:get`, `settings:set`, `search:status`, `search:test`, `ai:test` |
 | Library | `library:root`, `library:list`, `library:remove`, `library:open-folder`, `library:reveal`, `library:shot`, `library:save`, `library:grab` |

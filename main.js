@@ -35,6 +35,7 @@ const Rules = require("./core/rules");
 const AI = require("./core/ai");
 const Chat = require("./core/chat");
 const { ResearchStore } = require("./core/research");
+const { TrailStore, migrateSessions, sessionStorageOver } = require("./core/trail");
 const { Usage } = require("./core/usage");
 const { HistoryStore } = require("./core/history");
 const { BookmarkStore } = require("./core/bookmarks");
@@ -480,6 +481,40 @@ const MOSAIC_MAX_CHOICES = [4, 6, 9, 0];
 function mosaicMax() {
   return loadSettings().mosaicMax;
 }
+// ---- Trail store (B100, core/trail.js) ----
+// Each trail lives in userData/trails/<id>/: trail.json, events.jsonl,
+// view.json and files/. On the first start with this version, the research
+// sessions in userData/sessions/ are copied in (the old files stay). The
+// ResearchStore the rest of main.js uses reads and writes through the trail
+// store, so the research:* channels keep working as wrappers over it.
+let trailStore = null;
+function openTrails() {
+  const userData = app.getPath("userData");
+  trailStore = new TrailStore(fsStorage(path.join(userData, "trails")), { device: "desktop" });
+  const sessionsDir = path.join(userData, "sessions");
+  if (!trailStore.index.migratedAt && fs.existsSync(sessionsDir)) {
+    // Tabs still open in a trail count as engaged pages (B100 migration rule).
+    const openTabsByTrail = {};
+    try {
+      const saved = JSON.parse(fs.readFileSync(sessionFile(), "utf8"));
+      for (const t of saved?.tabs || []) if (t.trail && t.url) (openTabsByTrail[t.trail] = openTabsByTrail[t.trail] || []).push(t.url);
+    } catch (_) {}
+    try {
+      const res = migrateSessions(fsStorage(sessionsDir), trailStore, { openTabsByTrail });
+      log().info(`trails: migrated ${res.trails} sessions (${res.cards} cards, ${res.timelineOnly} timeline-only pages)${res.skipped.length ? `, skipped ${res.skipped.join(", ")}` : ""}`);
+    } catch (err) {
+      log().error(`trails: migration failed: ${err.message}`);
+    }
+  }
+  trailStore.current();
+  return new ResearchStore(sessionStorageOver(trailStore));
+}
+// The trail the canvas shows, with research changes saved first.
+function trailSnapshot(id) {
+  research.saveNow();
+  return trailStore.snapshot(id || research.current.id);
+}
+
 // ---- Trails keep their own tabs (B80, docs/18-sidebar-chrome.md) ----
 // Each tab belongs to the trail (research session) that was current when it
 // opened. Only the current trail's tabs show: in the tab list, Mosaic, the
@@ -2626,7 +2661,7 @@ app.whenReady().then(() => {
   updater = createUpdater({ app, log: log(), notify: (m) => sendUi("update-ready", m), isEnabled: () => loadSettings().autoUpdate !== false });
   updater.start();
   log().info(`NODE ${app.getVersion()} started (Electron ${process.versions.electron}, ${process.platform} ${process.arch})`);
-  research = new ResearchStore(fsStorage(path.join(app.getPath("userData"), "sessions")));
+  research = openTrails();
   historyStore = new HistoryStore(fsStorage(app.getPath("userData")));
   companion = createCompanion({
     userData: app.getPath("userData"),
@@ -3541,6 +3576,33 @@ function extensionFor(contentType, url, kind) {
 }
 
 // ---- Research session IPC (B17) ----
+// trail:* channels (B100). research:* stays as a wrapper over the same store
+// until the old sidebar is gone.
+ipcMain.handle("trail:get", (_e, id) => trailSnapshot(id ? String(id) : ""));
+ipcMain.handle("trail:list", () => {
+  research.saveNow();
+  return trailStore.list().map((t) => ({ ...t, tabs: [...tabs.values()].filter((x) => x.trail === t.id && /^https?:/i.test(tabState(x).url)).length }));
+});
+ipcMain.handle("trail:new", (_e, name) => {
+  changeTrail(() => research.create(name));
+  usage().count("sessions");
+  return trailSnapshot();
+});
+ipcMain.handle("trail:switch", (_e, id) => {
+  if (!trailStore.has(String(id))) return null;
+  changeTrail(() => research.switchTo(String(id)));
+  return trailSnapshot();
+});
+ipcMain.handle("trail:rename", (_e, name) => {
+  research.rename(name);
+  research.saveNow();
+  return trailSnapshot();
+});
+ipcMain.handle("trail:view", (_e, patch = {}) => trailStore.setView(research.current.id, patch || {}));
+ipcMain.handle("trail:timeline", (_e, id) => {
+  research.saveNow();
+  return trailStore.timeline(id ? String(id) : research.current.id);
+});
 ipcMain.handle("research:get", () => research.snapshot());
 ipcMain.handle("research:list", () => research.list().map((s) => ({ ...s, tabs: [...tabs.values()].filter((t) => t.trail === s.id && /^https?:/i.test(tabState(t).url)).length })));
 ipcMain.handle("research:new", (_e, name) => {

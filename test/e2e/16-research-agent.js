@@ -97,9 +97,9 @@ const log = (...a) => console.log("•", ...a);
   const lib = JSON.parse(fs.readFileSync(path.join(userData, "library", "index.json"), "utf8"));
   const rep = lib.find((x) => /^report-/.test(x.name));
   log("library record:", rep?.note, "| file starts:", fs.readFileSync(rep.file, "utf8").split("\n")[0]);
-  const sessionFile = fs.readdirSync(path.join(userData, "sessions")).find((f) => f.endsWith(".json"));
+  // Sessions live in the trail store since B100; research:get reads the current one.
   await sleep(1200);
-  const session = JSON.parse(fs.readFileSync(path.join(userData, "sessions", sessionFile), "utf8"));
+  const session = await ui.evaluate(() => window.scout.researchGet());
   log("session reports:", session.reports?.length, "| agent activity rows:", session.agent?.length);
 
   // Follow-up: keeps the earlier sources and their numbers, reads only new pages.
