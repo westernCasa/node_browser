@@ -194,6 +194,22 @@ Each tab stores its resolved rule (`tab.rule`), recomputed on every navigation:
 - **IPC:** `trail:get` (cards, groups, lines, timeline, view of a trail), `trail:list`, `trail:new`, `trail:switch`, `trail:rename`, `trail:view` (save position, zoom, selection), `trail:timeline`.
 - **Storage:** `fs-storage.js` makes folders for names with "/", writes through a temporary file and rename, and has `append()` for the event log.
 
+## Trail canvas (B101)
+
+`renderer/canvas.js` draws one trail from `trail:get`. It is the renderer side only: it reads the trail and saves the view; it does not change cards (that comes with B104 and B105).
+
+- **Layers:** the viewport holds a dot grid layer and one world layer. The world layer holds groups, lines (one SVG), line labels and cards, each placed by `transform` in world pixels (100% zoom). The view is `{ x, y, z }`; a world point shows at `x + wx * z`. Pan and zoom change only the two layers' transforms, so they stay on the compositor. The world layer gets `will-change: transform` while it moves and loses it 160 ms after, so text is drawn sharp at the new zoom.
+- **Input:** two-finger scroll pans; pinch (ctrl-wheel) and ⌘-wheel zoom at the pointer, 20% to 250%; dragging the background pans; arrow keys pan; ⌘+ ⌘− zoom; ⌘0 fits. Click selects a card, double-click or Enter opens its page (the open tab if there is one).
+- **Fit and the zoom buttons** fly to the new view in 320 ms (ease-out, transform only); with reduced motion they jump. Fit never zooms past 100%.
+- **Dot grid:** 1.25 px dots in `--canvas-dot`, 24 px apart at 100%; below 50% every other dot is left out.
+- **Lines:** opened from (1.5 px grey with an arrow), captured or reported from (1 px dotted grey), drawn (2 px white with end dots), suggested (2 px dashed violet). Each leaves its cards 6 px from the edge. A line key sits bottom left.
+- **Minimap:** 180 × 116, bottom right, with groups, cards and the visible area; click or drag to move there.
+- **Previews:** `trail:previews` gives `{ url: { thumb, tabId } }` for the current trail's open tabs, using the same pictures as the tab overview (`thumbOf`). Kept in memory only. Those cards show the picture and a Tab mark.
+- **Saving:** the position, zoom and selection go to `trail:view` 400 ms after the last change.
+- **Opening:** for now View > Trail Canvas (⌘E) opens the canvas over the window, using `layout:library` to hide the page views; Esc or ⌘E goes back. B102 makes it the start page and every new tab; B103 puts it beside the sidebar.
+- **Tokens:** `--canvas-group`, `--canvas-group-line`, `--canvas-dot` in `renderer/styles.css`, with light values under `:root[data-theme="light"]` for when NODE has a light theme. No other colour values.
+- **Tests:** `test/canvas-demo.js` (`npm run test:canvas`) checks the view maths; `test/e2e/42-trail-canvas.js` checks the drawing, pan, zoom, Fit, saving and frame times with 220 cards.
+
 ## Research sessions
 
 `core/research.js` keeps one current session and saves each as `<id>.json` (plus `current.txt`) through a storage object; on desktop that is the `sessions/` folder. The renderer records a page in the trail each time NODE actually searches for it (not on every 5-second check), with its top 5 keywords. Start pages and search-results pages are skipped. Pins are saved with the session after it has loaded at startup. "Recurring keywords" are keywords that appear on more than one page in the session. Export writes Markdown to `library/saves/` and adds it to the Library index.
@@ -229,7 +245,7 @@ The renderer stores hidden keywords and the Auto setting in local storage.
 | Layout | `layout:set`, `layout:sidebar`, `layout:library` |
 | Find, zoom, history | `find:start`, `find:stop`, `tab:zoom`, `history:search`, `history:clear`, `history:remove` |
 | Site rules | `rules:edit`, `rules:reload` |
-| Trail store | `trail:get`, `trail:list`, `trail:new`, `trail:switch`, `trail:rename`, `trail:view`, `trail:timeline` |
+| Trail store | `trail:get`, `trail:list`, `trail:new`, `trail:switch`, `trail:rename`, `trail:view`, `trail:timeline`, `trail:previews` |
 | Research session (over the trail store) | `research:get`, `research:list`, `research:new`, `research:switch`, `research:rename`, `research:pins`, `research:visit`, `research:opened`, `research:dismiss`, `research:undismiss`, `research:export` |
 | Keywords and search | `page:extract`, `page:keywords`, `suggest:search` (legacy, used by Tauri), `suggest:for`, `suggest:preview` |
 | Sources and AI | `settings:get`, `settings:set`, `search:status`, `search:test`, `ai:test` |

@@ -2,8 +2,12 @@
 // B100: research sessions move into the trail store on the first start;
 // trail:* channels; research:* still works on top of it; NODE opens on the
 // trail that was current.
+// B101: the canvas draws the trail (cards, lines, minimap, line key) at its
+// saved position; pan, zoom 20%-250%, Fit; the position is saved; an open
+// tab's card shows its picture and the Tab mark; 200 cards pan and zoom
+// (frame times are printed; the 60 fps check is on an M1 Mac).
 const { _electron: electron } = require(process.env.PLAYWRIGHT_PATH || "playwright");
-const path = require("path"), fs = require("fs"), os = require("os");
+const path = require("path"), fs = require("fs"), os = require("os"), http = require("http");
 const OUT = process.argv[2] || fs.mkdtempSync(path.join(os.tmpdir(), "node-e2e-"));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let failed = 0;
@@ -11,6 +15,10 @@ const check = (name, ok, detail = "") => {
   if (!ok) failed++;
   console.log(ok ? "✓" : "✗", name, detail ? `(${detail})` : "");
 };
+const server = http.createServer((req, res) => {
+  res.setHeader("content-type", "text/html");
+  res.end("<title>Proofing box temperatures</title><body style='background:#fff'><h1>Proofing box temperatures</h1><p>Most bakers keep a proofing box between 24 and 27 C.</p></body>");
+});
 const userData = fs.mkdtempSync(path.join(OUT, "ud-"));
 fs.writeFileSync(path.join(userData, "settings.json"), JSON.stringify({ firstRunDone: true }));
 const day = (s) => Date.parse(s);
@@ -30,14 +38,14 @@ fs.writeFileSync(
     ],
     opened: [],
     dismissed: [],
-    threadList: [{ id: "q1", title: "Why do starters fail in winter?", status: "open", conclusion: "", tags: [], pages: [], by: "Sven", at: day("2026-10-27T14:02:00Z"), replies: [] }],
+    threadList: [{ id: "q1", title: "Why do starters fail in winter?", status: "open", conclusion: "", tags: [], pages: ["https://kingarthurbaking.com/cold"], by: "Sven", at: day("2026-10-27T14:02:00Z"), replies: [] }],
   }),
 );
 fs.writeFileSync(path.join(sessions, "s-curie.json"), JSON.stringify({ id: "s-curie", name: "Curie / radium", started: day("2026-10-21T19:00:00Z"), updated: day("2026-10-22T21:00:00Z"), pins: [], trail: [{ url: "https://en.wikipedia.org/wiki/Marie_Curie", title: "Marie Curie", firstAt: day("2026-10-21T19:41:00Z"), lastAt: day("2026-10-21T19:45:00Z"), visits: 1, keywords: ["radium"] }], opened: [], dismissed: [] }));
 fs.writeFileSync(path.join(sessions, "current.txt"), "s-sour");
 
-async function launch() {
-  const app = await electron.launch({ executablePath: require("electron"), args: ["--no-sandbox", `--user-data-dir=${userData}`, path.join(__dirname, "..", "..")] });
+async function launch(dir = userData) {
+  const app = await electron.launch({ executablePath: require("electron"), args: ["--no-sandbox", `--user-data-dir=${dir}`, path.join(__dirname, "..", "..")] });
   await app.evaluate(() => {
     const o = globalThis.fetch;
     globalThis.fetch = async (u, opt) => (/wikipedia|duckduckgo|brave\.com/.test(String(u)) ? new Response("{}", { status: 200 }) : o(u, opt));
@@ -45,6 +53,22 @@ async function launch() {
   const ui = await app.firstWindow();
   await sleep(1800);
   return { app, ui };
+}
+
+// View > Trail Canvas, as a person would choose it.
+async function openCanvas(app, ui) {
+  await app.evaluate(({ Menu, BrowserWindow }) => {
+    const find = (items) => {
+      for (const it of items) {
+        if (it.label === "Trail Canvas") return it;
+        const sub = it.submenu && find(it.submenu.items);
+        if (sub) return sub;
+      }
+    };
+    find(Menu.getApplicationMenu().items).click(undefined, BrowserWindow.getAllWindows()[0]);
+  });
+  await ui.waitForSelector("#canvas:not([hidden]) .cv-card", { timeout: 5000 });
+  await sleep(300);
 }
 
 (async () => {
@@ -78,7 +102,114 @@ async function launch() {
   check("after a restart NODE opens on the last trail at its saved position", t.trail.id === "s-sour" && t.view.x === -120 && t.view.z === 0.6 && t.view.selected === "q1", JSON.stringify(t.view));
   const evCount = fs.readFileSync(path.join(trails, "s-sour", "events.jsonl"), "utf8").trim().split("\n").length;
   check("the migration does not run twice", (await ui.evaluate(() => window.scout.trailList())).length === 2 && evCount < 12, String(evCount));
+
+  // ---- B101: the canvas ----
+  await openCanvas(app, ui);
+  const cv = await ui.evaluate(() => {
+    const el = document.getElementById("canvas");
+    return {
+      shown: !el.hidden,
+      cards: el.querySelectorAll(".cv-card").length,
+      kinds: [...el.querySelectorAll(".cv-card")].map((c) => c.className.match(/k-(\w+)/)[1]).sort().join(),
+      you: el.querySelectorAll(".cv-ln.you line").length,
+      ends: el.querySelectorAll(".cv-ln.you .cv-end").length,
+      key: el.querySelectorAll(".cv-key-row").length,
+      mini: el.querySelectorAll(".cv-mini-card").length,
+      layer: el.querySelector(".cv-layer").style.transform,
+      zoom: el.dataset.zoom,
+      selected: el.querySelector(".cv-card.selected")?.dataset.id,
+      dot: getComputedStyle(el.querySelector(".cv-grid")).backgroundImage,
+    };
+  });
+  const cardsNow = (await ui.evaluate(() => window.scout.trailGet())).cards.length;
+  check("View > Trail Canvas shows the trail's cards", cv.shown && cv.cards === cardsNow && cv.kinds === "page,question", JSON.stringify(cv));
+  check("a thread's page is joined to its question by a drawn line with end dots", cv.you === 1 && cv.ends === 2);
+  check("the canvas opens at the trail's saved position, zoom and selection", cv.layer === "translate(-120px, 60px) scale(0.6)" && cv.zoom === "60" && cv.selected === "q1", cv.layer);
+  check("line key with four line types, minimap with every card, dot grid in the canvas-dot token", cv.key === 4 && cv.mini === cv.cards && /rgb\(35, 35, 38\)/.test(cv.dot), cv.dot);
+
+  const box = await ui.locator("#canvas .cv-vp").boundingBox();
+  await ui.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await ui.mouse.wheel(40, 100);
+  await sleep(100);
+  const panned = await ui.evaluate(() => document.querySelector("#canvas .cv-layer").style.transform);
+  check("two-finger scroll pans", panned === "translate(-160px, -40px) scale(0.6)", panned);
+  const zoomBy = (dy) =>
+    ui.evaluate((dy) => {
+      const vp = document.querySelector("#canvas .cv-vp");
+      const r = vp.getBoundingClientRect();
+      vp.dispatchEvent(new WheelEvent("wheel", { deltaY: dy, ctrlKey: true, clientX: r.left + 300, clientY: r.top + 200, bubbles: true, cancelable: true }));
+      return document.getElementById("canvas").dataset.zoom;
+    }, dy);
+  const zIn = await zoomBy(-1000), zOut = await zoomBy(1000);
+  check("pinch zooms and stops at 250% and 20%", zIn === "250" && zOut === "20", `${zIn} ${zOut}`);
+  await ui.click("#canvas .cv-fit");
+  await sleep(500);
+  const fitted = await ui.evaluate(() => {
+    const vp = document.querySelector("#canvas .cv-vp").getBoundingClientRect();
+    const inside = [...document.querySelectorAll("#canvas .cv-card")].every((c) => {
+      const r = c.getBoundingClientRect();
+      return r.left >= vp.left && r.top >= vp.top && r.right <= vp.right && r.bottom <= vp.bottom;
+    });
+    return { inside, zoom: Number(document.getElementById("canvas").dataset.zoom) };
+  });
+  check("Fit puts every card on screen at 100% or less", fitted.inside && fitted.zoom <= 100 && fitted.zoom >= 20, JSON.stringify(fitted));
+  await ui.click("#canvas .cv-zin");
+  await sleep(900);
+  const saved = (await ui.evaluate(() => window.scout.trailGet())).view;
+  check("the new position and zoom are saved to the trail", Math.round(saved.z * 100) === Math.min(250, Math.round(fitted.zoom * 1.25)), JSON.stringify(saved));
+  await ui.keyboard.press("Escape");
+  await sleep(200);
+  check("Esc closes the canvas", await ui.evaluate(() => document.getElementById("canvas").hidden));
   await app.close();
+
+  // An open tab's card: its picture and the Tab mark.
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  const pageUrl = `http://127.0.0.1:${server.address().port}/proofing`;
+  const ud2 = fs.mkdtempSync(path.join(OUT, "ud-"));
+  fs.writeFileSync(path.join(ud2, "settings.json"), JSON.stringify({ firstRunDone: true }));
+  fs.mkdirSync(path.join(ud2, "sessions"));
+  const pages = Array.from({ length: 200 }, (_, i) => ({ url: i ? `https://example.com/p${i}` : pageUrl, title: i ? `Page ${i} about sourdough starters and how they behave` : "Proofing box temperatures", firstAt: day("2026-10-27T14:00:00Z") + i * 60000, lastAt: day("2026-10-27T14:00:00Z") + i * 60000 + 30000, visits: 2, keywords: ["starter", "levain", "hydration"] }));
+  const threads = Array.from({ length: 20 }, (_, i) => ({ id: `t${i}`, title: `Question ${i}`, status: i % 4 ? "open" : "resolved", conclusion: "", tags: [], pages: pages.slice(i * 9, i * 9 + 3).map((p) => p.url), by: "Sven", at: day("2026-10-27T14:00:00Z"), replies: [{ by: "Sven", text: "Still reading.", at: day("2026-10-27T15:00:00Z") }] }));
+  fs.writeFileSync(path.join(ud2, "sessions", "s-big.json"), JSON.stringify({ id: "s-big", name: "Big trail", started: day("2026-10-27T14:00:00Z"), updated: day("2026-10-28T14:00:00Z"), pins: [], trail: pages, opened: [], dismissed: [], threadList: threads }));
+  fs.writeFileSync(path.join(ud2, "sessions", "current.txt"), "s-big");
+  ({ app, ui } = await launch(ud2));
+  await ui.evaluate((u) => window.scout.createTab(u), pageUrl);
+  await sleep(2000);
+  await openCanvas(app, ui);
+  const tabCard = await ui.evaluate((u) => {
+    const cards = [...document.querySelectorAll("#canvas .cv-card")];
+    const open = cards.filter((c) => c.classList.contains("open"));
+    return { total: cards.length, open: open.length, mark: open[0]?.querySelector(".cv-tab-mark")?.textContent, shot: (open[0]?.querySelector(".cv-shot")?.src || "").slice(0, 22) };
+  }, pageUrl);
+  check("200 page cards and 20 questions are drawn", tabCard.total === 220, String(tabCard.total));
+  check("the card of a page open in a tab shows its picture and the Tab mark", tabCard.open === 1 && tabCard.mark === "Tab" && tabCard.shot === "data:image/jpeg;base64", JSON.stringify(tabCard));
+
+  // Frame times while panning and zooming 220 cards, one wheel event a frame.
+  const perf = await ui.evaluate(
+    () =>
+      new Promise((done) => {
+        const vp = document.querySelector("#canvas .cv-vp");
+        const r = vp.getBoundingClientRect();
+        const times = [];
+        let last = performance.now(), i = 0;
+        const frame = (now) => {
+          times.push(now - last);
+          last = now;
+          const zoom = i % 120 >= 60;
+          vp.dispatchEvent(new WheelEvent("wheel", zoom ? { deltaY: i % 120 < 90 ? -4 : 4, ctrlKey: true, clientX: r.left + 400, clientY: r.top + 300 } : { deltaX: 6, deltaY: 4 }));
+          if (++i < 240) requestAnimationFrame(frame);
+          else {
+            const t = times.slice(2).sort((a, b) => a - b);
+            done({ avg: t.reduce((a, b) => a + b, 0) / t.length, p95: t[Math.floor(t.length * 0.95)], frames: t.length });
+          }
+        };
+        requestAnimationFrame(frame);
+      }),
+  );
+  console.log(`  frame times with 220 cards: average ${perf.avg.toFixed(1)} ms, 95th percentile ${perf.p95.toFixed(1)} ms over ${perf.frames} frames`);
+  check("panning and zooming 220 cards keeps frames under 50 ms here (60 fps is checked on an M1 Mac)", perf.p95 < 50, `${perf.p95.toFixed(1)} ms`);
+  await app.close();
+  server.close();
   console.log(failed ? `\n${failed} failed` : "\nall passed");
   process.exit(failed ? 1 : 0);
 })().catch((e) => {

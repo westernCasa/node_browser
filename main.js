@@ -2358,6 +2358,7 @@ function buildMenu() {
           accelerator: "CmdOrCtrl+]",
           click: () => activeWc()?.canGoForward() && activeWc().goForward(),
         },
+        { label: "Trail Canvas", accelerator: "CmdOrCtrl+E", click: () => sendUi("canvas") },
         { label: "Toggle Mosaic", accelerator: "CmdOrCtrl+Shift+M", click: () => sendUi("toggle-layout") },
         { label: "Choose Tabs for Mosaic…", accelerator: "CmdOrCtrl+Shift+\\", click: () => sendUi("overview") },
         {
@@ -3579,6 +3580,19 @@ function extensionFor(contentType, url, kind) {
 // trail:* channels (B100). research:* stays as a wrapper over the same store
 // until the old sidebar is gone.
 ipcMain.handle("trail:get", (_e, id) => trailSnapshot(id ? String(id) : ""));
+// Pictures of the current trail's open tabs for their cards (B101), by
+// address: { url: { thumb, tabId } }. Taken now for tabs on screen; other
+// tabs use the picture from when they left the screen. Kept in memory only.
+ipcMain.handle("trail:previews", async () => {
+  const out = {};
+  for (const tab of shownTabs()) {
+    const url = tabState(tab).url;
+    if (!/^https?:/i.test(url || "")) continue;
+    const thumb = tab.attached && !tab.sleeping && !libraryOpen ? await thumbOf(tab) : tab.thumb || "";
+    out[url] = { thumb, tabId: tab.id };
+  }
+  return out;
+});
 ipcMain.handle("trail:list", () => {
   research.saveNow();
   return trailStore.list().map((t) => ({ ...t, tabs: [...tabs.values()].filter((x) => x.trail === t.id && /^https?:/i.test(tabState(x).url)).length }));

@@ -3780,6 +3780,43 @@ api?.onCommand?.((msg) => {
   else if (msg.cmd === "sidebar-rail") chromeLayout === "side" && setSideState(sideState === "rail" ? "full" : "rail");
   else if (msg.cmd === "chrome-layout") applyChromeLayout(msg.mode);
   else if (msg.cmd === "tour") startTour();
+  else if (msg.cmd === "canvas") (canvasEl.hidden ? openCanvas() : closeCanvas());
+});
+
+// ---- Trail canvas (B101) ----
+// The current trail's cards, groups and lines (renderer/canvas.js). Until the
+// canvas becomes the start page (B102) it opens from View > Trail Canvas (⌘E)
+// and covers the window like the tab overview; Esc or ⌘E goes back to the page.
+const canvasEl = document.getElementById("canvas");
+let trailCanvas = null;
+async function openCanvas() {
+  if (!api?.trailGet) return;
+  trailCanvas ||= new TrailCanvas(canvasEl, api, {
+    open: (card, tab) => {
+      closeCanvas();
+      if (tab?.tabId) api.activateTab(tab.tabId);
+      else api.createTab(card.url);
+    },
+  });
+  const previews = (await api.trailPreviews?.().catch(() => ({}))) || {};
+  const snap = await api.trailGet();
+  await api.setLibraryOpen(true);
+  holdChrome("canvas", true);
+  canvasEl.hidden = false;
+  trailCanvas.show(snap, previews);
+  trailCanvas.vp.focus({ preventScroll: true });
+}
+function closeCanvas() {
+  if (canvasEl.hidden) return;
+  canvasEl.hidden = true;
+  holdChrome("canvas", false);
+  api.setLibraryOpen(false);
+}
+canvasEl.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    e.preventDefault();
+    closeCanvas();
+  }
 });
 
 // ---- Tab overview (B71) ----

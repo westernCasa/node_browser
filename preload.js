@@ -57,6 +57,7 @@ contextBridge.exposeInMainWorld("scout", {
   trailRename: (name) => ipcRenderer.invoke("trail:rename", name),
   trailView: (patch) => ipcRenderer.invoke("trail:view", patch),
   trailTimeline: (id) => ipcRenderer.invoke("trail:timeline", id),
+  trailPreviews: () => ipcRenderer.invoke("trail:previews"),
   threadAdd: (d) => ipcRenderer.invoke("threads:add", d),
   threadReply: (threadId, parentId, text) => ipcRenderer.invoke("threads:reply", threadId, parentId, text),
   threadResolve: (id, conclusion) => ipcRenderer.invoke("threads:resolve", id, conclusion),
