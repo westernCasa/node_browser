@@ -27,6 +27,7 @@
 // (no AI). ctx: { byId, lines, groups, seen } where seen is the set of card
 // ids reached so far (this step included).
 
+const Prov = require("./provenance");
 const SESSION_GAP_MS = 30 * 60 * 1000;
 const CARD_EVENTS = new Set(["opened", "placed", "captured", "asked", "reported", "noted"]);
 
@@ -83,7 +84,7 @@ function replaySteps(snapshot, events) {
     for (const it of s.items || []) {
       if (it.type !== "opened" || !it.timelineOnly) continue;
       const e = visitEvent.get(it.event) || {};
-      steps.push({ kind: "visit", at: it.at, device: s.device, actor: e.actor, url: it.url || "", visitTitle: it.title || it.url || "a page", dwell: it.dwell, o: order++ });
+      steps.push({ kind: "visit", at: it.at, device: s.device, actor: e.actor, url: it.url || "", visitTitle: it.title || it.url || "a page", dwell: it.dwell, via: it.via, played: it.played, o: order++ });
     }
   }
 
@@ -141,13 +142,33 @@ function stepTitle(st, byId, lineById, groupById) {
   return groupById.get(st.group)?.label || "New group";
 }
 
+// A page card's caption says how the page was reached (B83). An "opened
+// from" line on the canvas names the page or search card instead.
+function pageCaption(w, c, title, fromTitle) {
+  const on = site(c.url) ? ` on ${site(c.url)}` : "";
+  const v = Prov.clean(c.via);
+  const qq = v?.query ? ` for “${v.query}”` : "";
+  let t;
+  if (v?.how === "suggested") t = `NODE suggested ${q(title)}${on}${qq}, and ${w === "You" ? "you" : w} opened it.`;
+  else if (v?.how === "agent") t = `The research agent found ${q(title)}${on}.`;
+  else if (v?.how === "next") t = `${site(c.url) || "The site"} played ${q(title)} next by itself.`;
+  else if (fromTitle) t = `${w} opened ${q(title)}${on}, from ${q(fromTitle)}.`;
+  else if (v?.how === "search") t = `${w} opened ${q(title)}${on}, from a search${qq}.`;
+  else if (v?.how === "link") t = `${w} opened ${q(title)}${on}, from a link on ${v.host || "another page"}.`;
+  else if (v?.how === "typed") t = `${w} typed the address of ${q(title)}${on}.`;
+  else t = `${w} opened ${q(title)}${on}.`;
+  if (c.played) t += " NODE started its video or audio.";
+  return t;
+}
+
 function stepCaption(st, ctx) {
   const { byId, lines = [], groups = new Map(), lineById = new Map(lines.map((l) => [l.id, l])), seen = new Set() } = ctx || {};
   const w = st.who || who(st.actor);
   if (st.kind === "visit") {
     if (/^voice note\b/i.test(st.visitTitle || "")) return `${w} recorded a voice note. It is not on the canvas.`;
     const d = dwellText(st.dwell);
-    return tidy(`${w} visited ${q(st.visitTitle || "a page")}${d ? ` for ${d}` : ""}. It stayed in the timeline only.`);
+    const via = Prov.viaText(st.via, st.played);
+    return tidy(`${w} visited ${q(st.visitTitle || "a page")}${d ? ` for ${d}` : ""}${via ? ` (${via})` : ""}. It stayed in the timeline only.`);
   }
   if (st.kind === "link") {
     const l = lineById.get(st.line);
@@ -173,7 +194,7 @@ function stepCaption(st, ctx) {
   const title = cardTitle(c);
   let t;
   const nav = lines.find((l) => l.to === c.id && l.kind === "nav" && seen.has(l.from));
-  if (c.kind === "page") t = `${w} opened ${q(title)}${site(c.url) ? ` on ${site(c.url)}` : ""}${nav ? `, from ${q(cardTitle(byId.get(nav.from)))}` : ""}.`;
+  if (c.kind === "page") t = pageCaption(w, c, title, nav && cardTitle(byId.get(nav.from)));
   else if (c.kind === "video") t = `${w} watched ${q(title)}${site(c.url) ? ` on ${site(c.url)}` : ""}.`;
   else if (c.kind === "capture") t = c.quote ? `${w} captured a line from ${c.source || site(c.url) || "a page"}: “${c.quote}”.` : `${w} captured ${c.source || site(c.url) || "a page"}.`;
   else if (c.kind === "report") t = `${w} asked NODE for a report: ${q(title)}.`;

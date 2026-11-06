@@ -860,6 +860,13 @@
       el.append(h("div", "cv-card-title", title || ""));
       const sub = md ? "" : this.cardSub(c);
       if (sub && !pv?.thumb) el.append(h("div", "cv-card-sub", sub));
+      // How the page was reached (B83). NODE's own picks are marked.
+      const via = c.kind === "page" && root.NodeProvenance ? root.NodeProvenance.viaText(c.via, c.played) : "";
+      if (via) {
+        const line = h("div", "cv-card-via", root.NodeProvenance.cap(via));
+        if (root.NodeProvenance.CHOSEN_BY_NODE.has(c.via?.how) || (!c.via && c.played)) line.classList.add("node");
+        el.append(line);
+      }
       const foot = this.cardFoot(c);
       if (foot) el.append(h("div", "cv-card-foot", foot));
       el.setAttribute("aria-label", `${KIND_LABEL[c.kind] || "Card"}: ${title || ""}${pv ? ", open in a tab" : ""}`);

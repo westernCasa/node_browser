@@ -16,6 +16,7 @@
 // Names may contain "/" (for example "t1/trail.json").
 
 const { isSensitiveUrl, hostOf } = require("./urls");
+const Prov = require("./provenance");
 const { placeNear } = require("./placement");
 
 const FORMAT = 1;
@@ -228,7 +229,7 @@ class TrailStore {
       for (const it of sess.items || []) {
         const t = when(sess.label, it.time);
         if (t === null) continue;
-        steps.push({ at: t, card: it.card || null, title: it.title, device: sess.device || "desktop" });
+        steps.push({ at: t, card: it.card || null, title: it.title, device: sess.device || "desktop", via: it.via, played: it.played });
       }
     }
     steps.sort((a, b) => a.at - b.at);
@@ -247,7 +248,12 @@ class TrailStore {
       if (c && !seen.has(c.id)) {
         seen.set(c.id, st.at);
         this.event(id, { type: cardEvent[c.kind] || "placed", card: c.id, at: st.at, device: st.device, actor, data: { url: c.url, title: c.title } });
-      } else if (!c) this.event(id, { type: "opened", at: st.at, device: st.device, actor, data: { title: st.title, fromFile: true } });
+      } else if (!c) {
+        const data = { title: st.title, fromFile: true };
+        if (st.via) data.via = st.via;
+        if (st.played) data.played = true;
+        this.event(id, { type: "opened", at: st.at, device: st.device, actor, data });
+      }
     }
     for (const l of data.lines) this.event(id, { type: "linked", line: l.id, actor, at: Math.max(seen.get(l.from) ?? first, seen.get(l.to) ?? first) + 1, data: { from: l.from, to: l.to, kind: l.kind, label: l.label } });
     for (const g of data.groups) {
@@ -469,7 +475,7 @@ class TrailStore {
   // with its lines. near: the middle of the screen, in world units, used when
   // there is no source card. reason: what made it a card (dwell, scroll,
   // capture, link, ask, tab-open, put). Returns the card, or null.
-  placePage(id, url, { title = "", keywords = [], from = "", near, reason = "", at = this.now(), x, y } = {}) {
+  placePage(id, url, { title = "", keywords = [], from = "", via = null, played = false, near, reason = "", at = this.now(), x, y } = {}) {
     const d = this.get(id);
     if (!d || d.trail.readonly || !url || isSensitiveUrl(url) || !isReading(url)) return null;
     const have = this.pageCard(id, url);
@@ -491,7 +497,15 @@ class TrailStore {
     }
     const rows = this.pageRows(id);
     const row = rows.find((r) => r.url === url);
-    const card = this.addCard(id, { kind: "page", url, title: String(title || row?.title || url).slice(0, 300), keywords: (keywords.length ? keywords : row?.keywords || []).slice(0, 6), placedAt: at, x: pos.x, y: pos.y }, { at, data: { url, reason } });
+    // How the page was reached (B83).
+    const v = Prov.clean(via);
+    const fields = { kind: "page", url, title: String(title || row?.title || url).slice(0, 300), keywords: (keywords.length ? keywords : row?.keywords || []).slice(0, 6), placedAt: at, x: pos.x, y: pos.y };
+    if (v) fields.via = v;
+    if (played) fields.played = true;
+    const data = { url, reason };
+    if (v) data.via = v;
+    if (played) data.played = true;
+    const card = this.addCard(id, fields, { at, data });
     if (card && source && !source.removed) this.link(id, source.id, card.id, { kind: "nav", at });
     return card;
   }
@@ -555,9 +569,21 @@ class TrailStore {
 
   // A visit that ended without the page becoming a card: kept in the timeline
   // as "timeline only" with its time on page (ms).
-  bounce(id, url, dwell, { at = this.now() } = {}) {
+  bounce(id, url, dwell, { at = this.now(), via = null, played = false } = {}) {
     if (!url || !isReading(url) || !this.get(id) || this.get(id).trail.readonly || this.pageCard(id, url)) return null;
-    return this.event(id, { type: "bounced", at, data: { url, dwell: Math.round(dwell) } });
+    const data = { url, dwell: Math.round(dwell) };
+    const v = Prov.clean(via);
+    if (v) data.via = v;
+    if (played) data.played = true;
+    return this.event(id, { type: "bounced", at, data });
+  }
+  // NODE's autoplay started the page after its card was made (B83).
+  markPlayed(id, url) {
+    const c = this.pageCard(id, url);
+    if (!c || c.played || this.get(id)?.trail.readonly) return null;
+    c.played = true;
+    this.save(id);
+    return c;
   }
 
   deleteCard(id, cardId, { at = this.now() } = {}) {
@@ -755,6 +781,8 @@ class TrailStore {
       if (e.type === "bounced") {
         const it = s.items.findLast((i) => i.type === "opened" && i.url === e.data?.url);
         if (it && typeof e.data?.dwell === "number") it.dwell = e.data.dwell;
+        if (it && e.data?.via) it.via = e.data.via;
+        if (it && e.data?.played) it.played = true;
         continue;
       }
       s.endAt = Math.max(s.endAt, e.at);
@@ -772,6 +800,8 @@ class TrailStore {
         if (card?.removed) item.removedFromCanvas = true;
         item.dwell = typeof e.data?.dwell === "number" ? e.data.dwell : prev?.dwell ?? null;
         if (e.data?.migrated) item.dwellUnknown = item.dwell === null;
+        if (e.data?.via) item.via = e.data.via;
+        if (e.data?.played) item.played = true;
       }
       s.items.push(item);
     }

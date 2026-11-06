@@ -1,0 +1,7 @@
+<!doctype html><html><head><title>First video</title></head><body><h1>First video</h1>
+<p>A page that plays and then moves on to the next item by itself, as YouTube's autoplay does (B83).</p>
+<audio id="a" src="/tone.wav" loop controls></audio>
+<script>
+  // Like a single-page player: after a while, the next item without a click.
+  if (!/v=2/.test(location.search)) setTimeout(() => { history.pushState({}, "", "/next.html?v=2"); document.title = "Second video"; document.querySelector("h1").textContent = "Second video"; }, 6000);
+</script></body></html>

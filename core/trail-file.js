@@ -13,6 +13,7 @@
 //   Reply: { id, by, at, text, replies: [Reply] }
 
 const { isSensitiveUrl } = require("./urls");
+const Prov = require("./provenance");
 
 const FORMAT = 1;
 const ADDED_IN_FILE = "Added in the file";
@@ -584,10 +585,14 @@ function lastReply(list) {
 function cardBody(c) {
   const out = [];
   switch (c.kind) {
-    case "page":
+    case "page": {
       if (c.excerpt) out.push(oneLine(c.excerpt));
       if (c.keywords?.length) out.push(`Keywords: ${c.keywords.map(oneLine).join(", ")}`);
+      // How the page was reached (B83).
+      const via = Prov.viaText(c.via, c.played);
+      if (via) out.push(`Reached: ${via}`);
       break;
+    }
     case "video":
       if (c.savedText) out.push(c.savedText);
       else if (c.savedAt || c.duration) out.push(`Saved at ${c.savedAt || "0:00"} of ${c.duration || "?"}`);
@@ -666,7 +671,8 @@ function timelineLine(sess, byId) {
       const c = it.card && byId.get(it.card);
       const title = c ? cardTitle(c) : oneLine(it.title);
       if (!title || (it.url && isSensitiveUrl(it.url))) return null;
-      return `${hhmm(it.at)} ${title}${c ? "" : " (timeline only)"}`;
+      const via = c ? "" : Prov.viaText(it.via, it.played);
+      return `${hhmm(it.at)} ${title}${c ? "" : ` (timeline only${via ? ` · ${via}` : ""})`}`;
     })
     .filter(Boolean);
   if (!parts.length) return null;
@@ -868,9 +874,15 @@ function readCard(raw) {
   switch (kind) {
     case "page": {
       const kw = b.find((l) => /^Keywords:/.test(l));
-      const ex = b.filter((l) => l !== kw);
+      const reached = b.find((l) => /^Reached: /.test(l));
+      const ex = b.filter((l) => l !== kw && l !== reached);
       if (ex.length) c.excerpt = ex.join(" ");
       c.keywords = kw ? kw.replace(/^Keywords:\s*/, "").split(/,\s*/).filter(Boolean) : [];
+      if (reached) {
+        const r = Prov.parseViaText(reached.replace(/^Reached: /, ""));
+        if (r.via) c.via = r.via;
+        if (r.played) c.played = true;
+      }
       break;
     }
     case "video":
@@ -946,8 +958,15 @@ function readTimelineLine(line) {
     .map((it) => {
       const m = it.match(/^(\d{1,2}:\d{2})\s+(.*)$/);
       if (!m) return null;
-      const only = /\s*\(timeline only\)\s*$/.test(m[2]);
-      return { time: m[1], title: m[2].replace(/\s*\(timeline only\)\s*$/, ""), timelineOnly: only };
+      // "(timeline only · suggested by NODE …)": how it was reached (B83).
+      const tm = m[2].match(/\s*\(timeline only(?: · (.*))?\)\s*$/);
+      const item = { time: m[1], title: tm ? m[2].slice(0, tm.index) : m[2], timelineOnly: Boolean(tm) };
+      if (tm?.[1]) {
+        const r = Prov.parseViaText(tm[1]);
+        if (r.via) item.via = r.via;
+        if (r.played) item.played = true;
+      }
+      return item;
     })
     .filter(Boolean);
   return { raw: line, label, device, items };
