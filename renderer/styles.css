@@ -1361,6 +1361,10 @@ body.side #canvas { grid-column: 2; grid-row: 1; border: 1px solid var(--line); 
 #canvas .cv-card.k-note .cv-card-title { font-weight: 400; -webkit-line-clamp: 5; }
 #canvas .cv-card.k-capture .cv-card-title { font-weight: 400; font-style: italic; }
 #canvas .cv-card-sub { font-size: 13px; line-height: 18px; color: var(--ink-muted); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; }
+/* How the page was reached (B83); violet when NODE or the site chose it. */
+#canvas .cv-card-via { margin-top: auto; font: 11px/14px var(--mono); color: var(--ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: none; }
+#canvas .cv-card-via.node { color: var(--signal); }
+#canvas .cv-card-via + .cv-card-foot { margin-top: 0; }
 #canvas .cv-card-foot { margin-top: auto; font: 11px/14px var(--mono); color: var(--ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: none; }
 
 #canvas .cv-key { position: absolute; left: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm); font-size: 12px; color: var(--ink-muted); }

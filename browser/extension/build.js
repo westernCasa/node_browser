@@ -139,6 +139,7 @@ for (const entry of ["background.js", "sidepanel.js", "canvas-page.js"]) {
 for (const f of ["sidepanel.html", "panel.css", "menu.html", "menu.js", "toolbar-icon.js", "canvas.html", "canvas-page.css"]) fs.copyFileSync(path.join(SRC, f), path.join(OUT, f));
 // The trail canvas (B112): the Electron build's renderer, unchanged.
 fs.copyFileSync(path.join(ROOT, "renderer", "canvas.js"), path.join(OUT, "canvas.js"));
+fs.copyFileSync(path.join(ROOT, "core", "provenance.js"), path.join(OUT, "provenance.js")); // the card line on page cards (B83)
 // NODE UI kit: node-ui.css, node-ui.js, icons/ (SVG, sprite, toolbar PNGs), fonts/.
 fs.cpSync(path.join(SRC, "ui"), path.join(OUT, "ui"), { recursive: true });
 fs.copyFileSync(path.join(ROOT, "renderer", "styles.css"), path.join(OUT, "styles.css"));

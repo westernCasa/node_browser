@@ -639,11 +639,11 @@ function buildCard(item) {
   card.__item = item;
   card.querySelector('[data-act="open"]').addEventListener("click", (e) => {
     e.stopPropagation();
-    openUrl(item.url, true);
+    openUrl(item.url, true, { how: "suggested", query: item.query || "" });
   });
   card.querySelector('[data-act="here"]').addEventListener("click", (e) => {
     e.stopPropagation();
-    openUrl(item.url, false);
+    openUrl(item.url, false, { how: "suggested", query: item.query || "" });
   });
   return card;
 }
@@ -739,11 +739,11 @@ function slotNoPreview(card) {
   if (slot) slot.innerHTML = `<div class="media-fallback">No preview</div>`;
 }
 
-function openUrl(url, newTab) {
+function openUrl(url, newTab, via) {
   if (api) {
-    if (newTab) api.createTab(url);
-    else if (activeId) api.navigate(activeId, url);
-    else api.createTab(url);
+    if (newTab) api.createTab(url, via);
+    else if (activeId) api.navigate(activeId, url, via);
+    else api.createTab(url, via);
     return;
   }
   if (newTab) demoCreate(url);
@@ -968,8 +968,8 @@ omniForm.addEventListener("submit", (e) => {
   // A search typed in the address bar adds a search card (B106); an address opens.
   const isSearch = typed && !/^[a-z][a-z0-9+.-]*:\/\//i.test(typed) && !/^localhost(:\d+)?(\/|$)/i.test(typed) && (typed.includes(" ") || !typed.includes("."));
   if (api?.trailSearch && isSearch && !tabs.find((t) => t.id === activeId)?.private) api.trailSearch(typed, { tab: canvasShown ? "" : activeId });
-  else if (api && canvasShown) api.createTab(typed); // on the canvas: a new tab
-  else if (api && activeId) api.navigate(activeId, typed);
+  else if (api && canvasShown) api.createTab(typed, { how: "typed" }); // on the canvas: a new tab
+  else if (api && activeId) api.navigate(activeId, typed, { how: "typed" });
   else demoNavigate(omni.value);
 });
 
@@ -2289,10 +2289,10 @@ document.getElementById("agent-report").addEventListener("click", (e) => {
   const turn = a?.closest(".agent-turn");
   const idx = turn ? [...turn.parentElement.querySelectorAll(".agent-turn")].indexOf(turn) : -1;
   const src = a && agentRun.thread[idx]?.sources?.find((s) => s.n === Number(a.dataset.n));
-  if (src) api.createTab(src.url);
+  if (src) api.createTab(src.url, { how: "agent" });
 });
 document.getElementById("agent-mosaic").addEventListener("click", async () => {
-  for (const s of (agentRun.thread.at(-1)?.sources || []).slice(0, 4)) await api.createTab(s.url);
+  for (const s of (agentRun.thread.at(-1)?.sources || []).slice(0, 4)) await api.createTab(s.url, { how: "agent" });
   if (layout !== "mosaic") layoutBtn.click();
 });
 document.getElementById("agent-library").addEventListener("click", () => document.getElementById("library-btn").click());
@@ -3881,7 +3881,7 @@ async function openCanvas({ focus = false, select = "" } = {}) {
   const seq = ++canvasSeq;
   trailCanvas ||= new TrailCanvas(canvasEl, api, {
     open: (card, tab) => (tab?.tabId ? api.activateTab(tab.tabId) : api.createTab(card.url)),
-    search: (text) => api.createTab(text),
+    search: (text) => api.createTab(text, { how: "typed" }),
     pickTrail: (id) => api.trailSwitch(id),
     // B104: Put on canvas (a timeline row dropped on it) and Remove from canvas.
     put: async (o) => (await api.trailPlace(o)) && refreshCanvasData(),
@@ -5123,7 +5123,7 @@ async function renderCommands() {
   // Search and go
   if (q) {
     const addr = looksLikeAddress(q);
-    add("Search", { id: "go", icon: addr ? "go" : "search", html: addr ? `Go to ${escapeHtml(q)}` : `Search for “${escapeHtml(q)}”`, key: addr ? "Open ↵" : "Brave", run: (newTab) => cmdGo(q, newTab), primary: true });
+    add("Search", { id: "go", icon: addr ? "go" : "search", html: addr ? `Go to ${escapeHtml(q)}` : `Search for “${escapeHtml(q)}”`, key: addr ? "Open ↵" : "Brave", run: (newTab) => cmdGo(q, newTab, addr ? { how: "typed" } : null), primary: true });
   }
   if (q && api.historySearch) {
     const marks = api.bookmarkSearch ? await api.bookmarkSearch(q, 3) : [];
@@ -5196,9 +5196,9 @@ async function runCommand(i, { newTab = false } = {}) {
   await closeCommandBar();
   await r.run(newTab || cmdNewTab);
 }
-async function cmdGo(q, newTab) {
-  if (newTab || !activeId) await api.createTab(q);
-  else await api.navigate(activeId, q);
+async function cmdGo(q, newTab, via) {
+  if (newTab || !activeId) await api.createTab(q, via);
+  else await api.navigate(activeId, q, via);
 }
 async function cmdAsk(q) {
   setPanelOpen(true, { animate: true });

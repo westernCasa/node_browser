@@ -36,6 +36,7 @@ const AI = require("./core/ai");
 const Chat = require("./core/chat");
 const { ResearchStore } = require("./core/research");
 const { TrailStore, migrateSessions, sessionStorageOver, mediaKindOf } = require("./core/trail");
+const Prov = require("./core/provenance");
 const Replay = require("./core/replay");
 const { Usage } = require("./core/usage");
 const { HistoryStore } = require("./core/history");
@@ -587,19 +588,34 @@ function openTrails() {
 // page it was opened from (core/placement.js) with an "opened from" line.
 // Private tabs never count. Sign-in and payment pages never become cards (B66).
 const ENGAGE_MS = 20000;
+// How the page was reached (B83, core/provenance.js): what the window said
+// (typed, suggested, agent), else the page before it in the tab. With no
+// click or key press in the tab for 5 s while the page before was playing
+// media, the site went on to the next item by itself ("next").
+const GESTURE_MS = 5000;
+function pageVia(tab, prev, from) {
+  if (tab.nextVia) return tab.nextVia;
+  if (prev?.media && Date.now() - tab.lastGesture > GESTURE_MS) return { how: "next", host: Prov.hostOf(prev.url) };
+  return Prov.fromPage(from);
+}
 function pageStarted(tab, url) {
+  const prev = tab.page;
   pageEnded(tab);
-  if (!/^https?:/i.test(url || "") || tab.private) return void (tab.page = null);
+  if (!/^https?:/i.test(url || "") || tab.private) {
+    tab.nextVia = null;
+    return void (tab.page = null);
+  }
   // Opened from: the page before it in this tab, or the page that opened the tab.
-  const from = tab.page?.url || tab.lastPageUrl || tab.openedFrom || "";
-  tab.page = { url, from, shownMs: 0, engaged: false, trail: tab.trail };
+  const from = prev?.url || tab.lastPageUrl || tab.openedFrom || "";
+  tab.page = { url, from, via: pageVia(tab, prev, from), played: false, media: false, startedAt: Date.now(), shownMs: 0, engaged: false, trail: tab.trail };
+  tab.nextVia = null;
   tab.openedFrom = "";
 }
 function pageEnded(tab) {
   const p = tab.page;
   if (!p) return;
   tab.lastPageUrl = p.url;
-  if (!p.engaged && p.shownMs > 0) trailStore?.bounce(p.trail, p.url, p.shownMs);
+  if (!p.engaged && p.shownMs > 0) trailStore?.bounce(p.trail, p.url, p.shownMs, { via: p.via, played: p.played });
   tab.page = null;
 }
 function onScreen(tab) {
@@ -620,7 +636,7 @@ function engagePage(tab, reason) {
   const p = tab?.page;
   if (!p || p.engaged || tab.private || !trailStore) return null;
   p.engaged = true;
-  return placeCard(p.trail || currentTrail(), p.url, { title: tab.view.webContents.getTitle(), from: p.from, reason });
+  return placeCard(p.trail || currentTrail(), p.url, { title: tab.view.webContents.getTitle(), from: p.from, via: p.via, played: p.played, reason });
 }
 function engageUrl(url, reason) {
   const tab = [...tabs.values()].find((t) => t.page?.url === url);
@@ -948,6 +964,9 @@ function attachListeners(tab) {
     if (isMainFrame) {
       refreshRule(tab, url);
       if (tab.loop && tab.loop.url !== String(url).split("#")[0]) tab.loop = null; // another video on the same page
+      // Single-page sites (YouTube and similar) move to another video or
+      // track without loading: that is a new page for the trail (B83).
+      if (tab.page && String(url).split("#")[0] !== String(tab.page.url).split("#")[0]) pageStarted(tab, url);
       // Single-page sites (YouTube and similar) change address without loading.
       tryAutoplay(wc, tab.rule?.autoplay);
     }
@@ -969,6 +988,16 @@ function attachListeners(tab) {
   });
   on("audio-state-changed", ping);
   on("media-started-playing", () => {
+    // B83: media on this page; started by NODE's autoplay when nobody
+    // clicked or typed in the tab just before.
+    const p = tab.page;
+    if (p) {
+      p.media = true;
+      if (!p.played && p.via?.how !== "next" && tab.rule?.autoplay !== "off" && Date.now() - tab.lastGesture > 3000 && Date.now() - p.startedAt < 30000) {
+        p.played = true;
+        if (p.engaged && trailStore?.markPlayed(p.trail, p.url)) sendUi("trail-changed", { trail: p.trail });
+      }
+    }
     for (const id of playback.started(tab.id, activeId)) pauseForLimit(id);
     ping();
   });
@@ -1749,7 +1778,7 @@ function createTab(url, opts = {}) {
   });
   view.setBackgroundColor("#ffffff"); // pages without their own background expect white
   view.webContents.setUserAgent(USER_AGENT);
-  const tab = { id, view, audio: "auto", audioByUser: false, lastGesture: 0, lastActive: Date.now(), idleMs: 0, tile: Boolean(opts.tile), trail: opts.private ? null : opts.trail || currentTrail(), private: Boolean(opts.private), openedFrom: opts.from || "" };
+  const tab = { id, view, audio: "auto", audioByUser: false, lastGesture: 0, lastActive: Date.now(), idleMs: 0, tile: Boolean(opts.tile), trail: opts.private ? null : opts.trail || currentTrail(), private: Boolean(opts.private), openedFrom: opts.from || "", nextVia: Prov.clean(opts.via) };
   refreshRule(tab, normalizeUrl(url));
   tabs.set(id, tab);
   win.contentView.addChildView(view);
@@ -2843,23 +2872,24 @@ app.on("will-quit", () => {
 
 // No address (the + button, double-click on the tab bar): the trail's canvas
 // with its search bar ready, as ⌘T (B102).
-ipcMain.handle("tab:create", (_e, url) => {
+ipcMain.handle("tab:create", (_e, url, via) => {
   if (url && isShareLink(url)) return void openShareLink(url);
   if (!url) return void showCanvas({ focus: true });
-  const id = createTab(url);
+  const id = createTab(url, { via });
   if (canvasOn) activateTab(id);
   return id;
 });
 ipcMain.handle("tab:private", () => createTab("", { private: true }));
 ipcMain.handle("tab:close", (_e, id) => closeTab(id));
 ipcMain.handle("tab:activate", (_e, id) => activateTab(id));
-ipcMain.handle("tab:navigate", (_e, id, url) => {
+ipcMain.handle("tab:navigate", (_e, id, url, via) => {
   const tab = tabs.get(id);
   if (isShareLink(url)) return void openShareLink(url);
   // No such tab (an address typed on the canvas, or the tab closed): a new tab.
-  if (!tab) return url ? createTab(url) : undefined;
+  if (!tab) return url ? createTab(url, { via }) : undefined;
   if (canvasOn && id === activeId) activateTab(id);
   tab.sleeping = null;
+  tab.nextVia = Prov.clean(via); // B83: typed, or opened from a suggestion
   tab.view.webContents.loadURL(loadTarget(url, id));
 });
 ipcMain.handle("tab:back", (_e, id) => {
@@ -3839,6 +3869,7 @@ ipcMain.handle("trail:search", (_e, query, opts = {}) => {
   if (card) sendUi("trail-changed", { trail: id, card: card.id });
   const tab = opts.tab && tabs.get(String(opts.tab));
   if (tab && !tab.private) {
+    tab.nextVia = { how: "search", query: q };
     tab.view.webContents.loadURL(url);
     if (canvasOn) activateTab(tab.id);
   } else createTab(url);
