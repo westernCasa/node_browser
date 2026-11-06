@@ -1643,3 +1643,24 @@ body.sb-replaying .sb-timeline { display: none; }
    through to the canvas. */
 #menu-overlay.drag-out { pointer-events: none; }
 #menu-overlay.drag-out .menu-scrim, #menu-overlay.drag-out .menu-panel { opacity: 0; transition: opacity var(--motion-fast) var(--ease-exit); }
+
+/* Rename and delete trails from the switcher (B115). Tokens only. */
+.sb-menu-row { display: flex; align-items: center; gap: 2px; }
+.sb-menu-row .sb-menu-item { flex: 1 1 auto; min-width: 0; }
+.sb-menu-more { all: unset; box-sizing: border-box; flex: none; width: 28px; height: 40px; display: grid; place-items: center; border-radius: var(--radius-sm); color: var(--ink-muted); cursor: pointer; font-size: 16px; line-height: 1; }
+.sb-menu-more:hover, .sb-menu-more[aria-expanded="true"] { background: var(--surface); color: var(--ink); }
+.sb-menu-more:focus-visible { outline: 2px solid var(--signal); outline-offset: -2px; }
+.sb-menu-more[hidden] { display: none; }
+.sb-menu-rename { flex: 1 1 auto; min-width: 0; height: 40px; box-sizing: border-box; padding: 0 8px; background: var(--surface); color: var(--ink); border: 1px solid var(--signal); border-radius: var(--radius-sm); font: 14px var(--sans); }
+.sb-menu-rename:focus-visible { outline: none; }
+.sb-menu-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 8px 8px 42px; }
+.sb-menu-acts .chip { height: 28px; padding: 0 10px; font-size: 11px; }
+.sb-menu-acts .chip.danger { color: var(--alert); border-color: var(--alert); }
+.sb-menu-acts .chip:disabled { color: var(--ink-muted); cursor: default; }
+.sb-menu-confirm { flex: 1 0 100%; margin: 0; font-size: 13px; line-height: 18px; color: var(--ink); }
+.sb-undo { display: flex; align-items: center; gap: 8px; padding: 6px 8px; margin-top: 6px; border: 1px solid var(--line); border-radius: var(--radius-sm); font-size: 13px; animation: sb-undo-in var(--motion-base) var(--ease-enter); }
+.sb-undo[hidden] { display: none; }
+.sb-undo span { flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.sb-undo .chip { height: 26px; padding: 0 10px; font-size: 11px; }
+@keyframes sb-undo-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .sb-undo { animation: none; } }

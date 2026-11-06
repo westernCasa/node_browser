@@ -55,6 +55,10 @@ contextBridge.exposeInMainWorld("scout", {
   trailGet: (id) => ipcRenderer.invoke("trail:get", id),
   trailList: () => ipcRenderer.invoke("trail:list"),
   trailSaveAsNew: () => ipcRenderer.invoke("trail:save-as-new"),
+  // B115: rename and delete from the switcher.
+  trailRenameId: (id, name) => ipcRenderer.invoke("trail:rename-id", id, name),
+  trailDelete: (id) => ipcRenderer.invoke("trail:delete", id),
+  trailRestore: (id) => ipcRenderer.invoke("trail:restore", id),
   trailReplay: (id) => ipcRenderer.invoke("trail:replay", id),
   trailNew: (name) => ipcRenderer.invoke("trail:new", name),
   trailSwitch: (id) => ipcRenderer.invoke("trail:switch", id),

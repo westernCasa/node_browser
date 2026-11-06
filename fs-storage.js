@@ -1,7 +1,8 @@
 // Desktop storage for core/ modules: one file per name in a folder.
 // Names may contain "/" (the trail store keeps one folder per trail); the
 // folders are made as needed. append() adds to the end of a file, for
-// append-only logs such as a trail's events.jsonl.
+// append-only logs such as a trail's events.jsonl. remove() deletes a file
+// or a folder.
 const fs = require("fs");
 const path = require("path");
 
@@ -34,6 +35,12 @@ function fsStorage(dir) {
       fs.appendFileSync(p, text);
     },
     list: () => fs.readdirSync(dir),
+    // A file, or a folder with everything in it (a deleted trail, B115).
+    remove: (name) => {
+      const p = full(name);
+      if (p === dir) throw new Error("Storage can't remove its own folder");
+      fs.rmSync(p, { recursive: true, force: true });
+    },
   };
 }
 

@@ -4631,7 +4631,23 @@ function openSwitchMenu() {
   };
   sideTrails.forEach((t, i) => {
     const nt = t.tabs ?? 0;
-    item(t.name, `${nt} ${nt === 1 ? "tab" : "tabs"}`, () => (t.current ? closeSwitchMenu() : goTrail(t.id)), { mono: t.mono || monogram(t.name), current: t.current });
+    const b = item(t.name, `${nt} ${nt === 1 ? "tab" : "tabs"}`, () => (t.current ? closeSwitchMenu() : goTrail(t.id)), { mono: t.mono || monogram(t.name), current: t.current });
+    // B115: Rename and Delete for each trail, behind the "…" button.
+    const row = document.createElement("div");
+    row.className = "sb-menu-row";
+    b.replaceWith(row);
+    const more = document.createElement("button");
+    more.type = "button";
+    more.className = "sb-menu-more";
+    more.textContent = "…";
+    more.setAttribute("aria-label", `Rename or delete ${t.name}`);
+    more.setAttribute("aria-expanded", "false");
+    more.title = "Rename or delete";
+    more.addEventListener("click", (e) => {
+      e.stopPropagation();
+      trailActions(row, t, more);
+    });
+    row.append(b, more);
   });
   switchMenu.appendChild(Object.assign(document.createElement("div"), { className: "sb-menu-line" }));
   item("New trail", "", async () => {
@@ -4656,9 +4672,159 @@ function openSwitchMenu() {
   switchMenu.querySelector(".sb-menu-item:not([disabled])")?.focus();
 }
 switchName.addEventListener("click", () => (switchMenu.hidden ? openSwitchMenu() : closeSwitchMenu()));
+// Double-click the switcher's name: rename the current trail (B115).
+switchName.addEventListener("dblclick", (e) => {
+  e.preventDefault();
+  openSwitchMenu();
+  const t = sideTrails.find((x) => x.current);
+  const row = t && [...switchMenu.querySelectorAll(".sb-menu-row")][sideTrails.indexOf(t)];
+  if (row) renameRow(row, t);
+});
+
+// ---- B115: rename and delete trails from the switcher ----
+const plainName = (t) => `“${t.name}”`;
+function trailActions(row, t, more) {
+  const open = row.nextElementSibling?.classList.contains("sb-menu-acts");
+  for (const x of switchMenu.querySelectorAll(".sb-menu-acts")) x.remove();
+  for (const x of switchMenu.querySelectorAll(".sb-menu-more")) x.setAttribute("aria-expanded", "false");
+  if (open) return;
+  more.setAttribute("aria-expanded", "true");
+  const acts = document.createElement("div");
+  acts.className = "sb-menu-acts";
+  const btn = (label, cls, run, disabled, title) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = `chip ${cls || ""}`;
+    b.textContent = label;
+    if (disabled) b.disabled = true;
+    if (title) b.title = title;
+    b.addEventListener("click", (e) => {
+      e.stopPropagation();
+      run();
+    });
+    acts.append(b);
+    return b;
+  };
+  const first = btn("Rename", "", () => {
+    acts.remove();
+    renameRow(row, t);
+  }, t.readonly, t.readonly ? "Read only. Save as new trail to change it." : "");
+  const del = btn("Delete…", "", () => confirmDelete(acts, t));
+  row.after(acts);
+  (t.readonly ? del : first).focus();
+}
+function renameRow(row, t) {
+  if (t.readonly) return;
+  const item = row.querySelector(".sb-menu-item");
+  const input = document.createElement("input");
+  input.className = "sb-menu-rename";
+  input.value = t.name;
+  input.maxLength = 120;
+  input.setAttribute("aria-label", `New name for ${t.name}`);
+  item.hidden = true;
+  row.querySelector(".sb-menu-more").hidden = true;
+  row.prepend(input);
+  input.focus();
+  input.select();
+  let done = false;
+  const finish = async (save) => {
+    if (done) return;
+    done = true;
+    const name = input.value.trim();
+    if (save && name && name !== t.name) {
+      await api.trailRenameId(t.id, name);
+      await refreshSideTrails(true);
+      if (t.current) refreshCanvasData?.();
+      openSwitchMenu();
+    } else {
+      input.remove();
+      item.hidden = false;
+      row.querySelector(".sb-menu-more").hidden = false;
+      item.focus();
+    }
+  };
+  input.addEventListener("keydown", (e) => {
+    e.stopPropagation();
+    if (e.key === "Enter") finish(true);
+    else if (e.key === "Escape") finish(false);
+  });
+  // Over a page the field is typed in the sidebar's copy (chrome-overlay),
+  // and this one loses focus at once; Enter and Esc still come here.
+  input.addEventListener("blur", () => (canvasShown || !api?.focusOverlayField) && finish(true));
+}
+function confirmDelete(acts, t) {
+  acts.textContent = "";
+  acts.classList.add("confirm");
+  const msg = document.createElement("p");
+  msg.className = "sb-menu-confirm";
+  msg.textContent = `Delete ${plainName(t)}? Its canvas, timeline and Replay go${t.tabs ? `, and its ${t.tabs} ${t.tabs === 1 ? "tab closes" : "tabs close"}` : ""}. Library files stay.`;
+  const yes = document.createElement("button");
+  yes.type = "button";
+  yes.className = "chip danger";
+  yes.textContent = "Delete trail";
+  const no = document.createElement("button");
+  no.type = "button";
+  no.className = "chip";
+  no.textContent = "Keep";
+  yes.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    closeSwitchMenu();
+    const r = await api.trailDelete(t.id);
+    if (!r) return;
+    if (api.researchGet) adoptSession(await api.researchGet());
+    await refreshSideTrails(true);
+    refreshTimeline(true);
+    if (!canvasEl.hidden) openCanvas();
+    showUndo(r);
+  });
+  no.addEventListener("click", (e) => {
+    e.stopPropagation();
+    acts.remove();
+  });
+  acts.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      e.stopPropagation();
+      acts.remove();
+    }
+  });
+  acts.append(msg, yes, no);
+  no.focus();
+}
+// "Deleted “X”. Undo" in the sidebar for 10 s. Undo brings the trail back,
+// with its canvas and timeline; its tabs stay closed.
+let undoTimer = null;
+function showUndo(r) {
+  const bar = document.getElementById("sb-undo");
+  if (!bar) return;
+  clearTimeout(undoTimer);
+  document.getElementById("sb-undo-text").textContent = `Deleted “${r.name}”.`;
+  bar.hidden = false;
+  const undo = document.getElementById("sb-undo-btn");
+  undo.onclick = async () => {
+    bar.hidden = true;
+    await api.trailRestore(r.deleted);
+    if (api.researchGet) adoptSession(await api.researchGet());
+    await refreshSideTrails(true);
+    refreshTimeline(true);
+    if (!canvasEl.hidden) openCanvas();
+  };
+  undoTimer = setTimeout(() => (bar.hidden = true), 10000);
+}
 switchMenu.addEventListener("keydown", (e) => {
   const items = [...switchMenu.querySelectorAll(".sb-menu-item:not([disabled])")];
   const at = items.indexOf(document.activeElement);
+  // B115: on a trail, F2 renames, Delete asks to delete, → reaches its "…".
+  const row = document.activeElement?.closest?.(".sb-menu-row");
+  if (row && document.activeElement.classList.contains("sb-menu-item") && ["F2", "Delete", "Backspace", "ArrowRight"].includes(e.key)) {
+    e.preventDefault();
+    const t = sideTrails[[...switchMenu.querySelectorAll(".sb-menu-row")].indexOf(row)];
+    const more = row.querySelector(".sb-menu-more");
+    if (!t) return;
+    if (e.key === "F2") return renameRow(row, t);
+    if (e.key === "ArrowRight") return more.focus();
+    trailActions(row, t, more);
+    return confirmDelete(row.nextElementSibling, t);
+  }
   if (e.key === "Escape") {
     closeSwitchMenu();
     switchName.focus();

@@ -286,6 +286,68 @@ const session = (id, extra) => ({
   ok("in a trail file, media cards link to where they came from; nothing from the computer goes in; the file reads back the same");
 }
 
+// ---- Rename and delete trails from the switcher (B115) ----
+{
+  const files = memoryStorage();
+  const store = new TrailStore(files, { now });
+  const a = store.current().trail.id;
+  tick(1000);
+  const b = store.create("Rye breads").trail.id;
+  tick(1000);
+  const c = store.create("Starters").trail.id;
+  store.visit(c, "https://example.com/levain", { title: "Levain" });
+  store.rename(b, "Rye and spelt");
+  assert.strictEqual(new TrailStore(files, { now }).get(b).trail.name, "Rye and spelt");
+  assert.ok(store.events(b).some((e) => e.type === "renamed"), "a rename is an event");
+  ok("renaming a trail that isn't current saves it and records a renamed event");
+
+  // Deleting the current trail makes the most recently used other one current.
+  const r = store.remove(c, { at: now() });
+  assert.deepStrictEqual(r, { deleted: c, current: b });
+  assert.ok(!store.list().some((t) => t.id === c) && store.list().length === 2);
+  assert.ok(files.read(`${c}/trail.json`), "files stay until purge, for Undo");
+  assert.deepStrictEqual(new TrailStore(files, { now }).deletedIds(), [c]);
+  ok("delete takes the trail out of the list and keeps its files; the next trail becomes current");
+
+  // Undo brings it back, current and first, with its pages.
+  assert.ok(store.restore(c));
+  assert.strictEqual(store.index.current, c);
+  assert.strictEqual(store.list()[0].id, c);
+  assert.ok(store.pageRows(c).some((x) => x.url === "https://example.com/levain"));
+  assert.deepStrictEqual(store.deletedIds(), []);
+  assert.strictEqual(store.restore(c), null, "a trail that isn't deleted can't be restored");
+  ok("Undo puts the trail back as it was and makes it current");
+
+  // Purge deletes the files of deleted trails only.
+  store.remove(b, { at: now() });
+  const fresh = new TrailStore(files, { now });
+  assert.deepStrictEqual(fresh.purge(), [b]);
+  assert.ok(!files.list().some((k) => k.startsWith(`${b}/`)), "every file of the trail is gone");
+  assert.ok(files.read(`${a}/trail.json`) && files.read(`${c}/trail.json`), "other trails are untouched");
+  assert.deepStrictEqual(fresh.deletedIds(), []);
+  assert.deepStrictEqual(fresh.purge(), []);
+  ok("purge at start-up deletes only the deleted trails' files");
+
+  // Deleting the last trail starts a new, empty one.
+  fresh.remove(a);
+  const last = fresh.remove(c);
+  assert.ok(last.current && last.current !== a && last.current !== c);
+  assert.strictEqual(fresh.list().length, 1);
+  assert.strictEqual(fresh.current().trail.id, last.current);
+  ok("deleting the only trail starts a new one");
+
+  // An opened file deleted and opened again is kept by purge.
+  const TF = require("../core/trail-file");
+  const text = require("fs").readFileSync(require("path").join(__dirname, "..", "docs", "sourdough-starters.trail.md"), "utf8").replace(/\r\n/g, "\n");
+  const f = fresh.importFile(TF.parseTrailMd(text)).trail.id;
+  fresh.remove(f);
+  fresh.importFile(TF.parseTrailMd(text));
+  assert.deepStrictEqual(fresh.deletedIds().includes(f), false);
+  fresh.purge();
+  assert.ok(fresh.list().some((t) => t.id === f) && files.read(`${f}/trail.json`));
+  ok("a trail file opened again after its trail was deleted survives purge");
+}
+
 // ---- 200 cards stay fast ----
 {
   const store = new TrailStore(memoryStorage(), { now });
