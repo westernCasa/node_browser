@@ -571,6 +571,9 @@ function openTrails() {
       log().error(`trails: migration failed: ${err.message}`);
     }
   }
+  // Trails deleted last time (B115) are gone for good now.
+  const purged = trailStore.purge();
+  if (purged.length) log().info(`trails: deleted ${purged.length}`);
   trailStore.current();
   return new ResearchStore(sessionStorageOver(trailStore));
 }
@@ -3862,6 +3865,45 @@ ipcMain.handle("trail:rename", (_e, name) => {
   research.rename(name);
   research.saveNow();
   return trailSnapshot();
+});
+// B115: rename or delete any trail from the switcher. A read-only trail (an
+// opened file) can be deleted but not renamed.
+ipcMain.handle("trail:rename-id", (_e, id, name) => {
+  const tid = String(id || "");
+  if (!trailStore.has(tid) || trailStore.get(tid).trail.readonly || !String(name || "").trim()) return null;
+  if (tid === currentTrail()) {
+    research.rename(name);
+    research.saveNow();
+  } else trailStore.rename(tid, name);
+  sendUi("trail-changed", { trail: tid });
+  return trailStore.list();
+});
+// Delete: its tabs close (they are not made cards), and its files stay until
+// NODE next starts, so Undo can bring it back.
+ipcMain.handle("trail:delete", (_e, id) => {
+  const tid = String(id || "");
+  if (!trailStore.has(tid)) return null;
+  const name = trailStore.get(tid).trail.name;
+  const closing = [...tabs.values()].filter((t) => t.trail === tid).map((t) => t.id);
+  for (const t of closing) closeTab(t);
+  if (tid === currentTrail()) {
+    research.saveNow();
+    changeTrail(() => {
+      trailStore.remove(tid);
+      return research.switchTo(trailStore.index.current);
+    });
+  } else trailStore.remove(tid);
+  saveSessionSoon();
+  return { deleted: tid, name, tabs: closing.length, current: currentTrail() };
+});
+ipcMain.handle("trail:restore", (_e, id) => {
+  const tid = String(id || "");
+  if (!trailStore.deletedIds().includes(tid)) return null;
+  changeTrail(() => {
+    trailStore.restore(tid);
+    return research.switchTo(tid);
+  });
+  return trailSnapshot(tid);
 });
 ipcMain.handle("trail:view", (_e, patch = {}) => trailStore.setView(research.current.id, patch || {}));
 ipcMain.handle("trail:timeline", (_e, id) => {

@@ -175,6 +175,9 @@ class TrailStore {
     this.storage.write(`${tid}/events.jsonl`, "");
     this.writeJson(`${tid}/view.json`, blankView());
     if (!this.index.order.includes(tid)) this.index.order.unshift(tid);
+    // A file opened again after its trail was deleted is a new trail: purge
+    // must not take it.
+    if (this.index.deleted) this.index.deleted = this.index.deleted.filter((d) => d.id !== tid);
     if (current) this.index.current = tid;
     this.saveIndex();
     return data;
@@ -293,6 +296,50 @@ class TrailStore {
     this.index.order = [id, ...this.index.order.filter((x) => x !== id)];
     this.saveIndex();
     return this.get(id);
+  }
+  // ---- deleting trails (B115) ----
+  // Delete takes a trail out of the list at once and keeps its files until
+  // purge() (NODE purges at its next start), so Undo can bring it back. If it
+  // was the current trail, the most recently used other trail becomes
+  // current; deleting the only trail starts a new one.
+  remove(id, { at = this.now() } = {}) {
+    if (!this.has(id)) return null;
+    this.index.order = this.index.order.filter((x) => x !== id);
+    this.index.deleted = [...(this.index.deleted || []).filter((d) => d.id !== id), { id, at }];
+    if (this.index.current === id) {
+      const next = this.index.order.find((x) => this.get(x));
+      if (next) this.index.current = next;
+      else {
+        this.index.current = "";
+        this.create();
+      }
+    }
+    this.saveIndex();
+    return { deleted: id, current: this.index.current };
+  }
+  // Undo: back in the list, and current again.
+  restore(id) {
+    if (!(this.index.deleted || []).some((d) => d.id === id) || !this.get(id)) return null;
+    this.index.deleted = this.index.deleted.filter((d) => d.id !== id);
+    this.index.order = [id, ...this.index.order.filter((x) => x !== id)];
+    this.index.current = id;
+    this.saveIndex();
+    return this.get(id);
+  }
+  deletedIds() {
+    return (this.index.deleted || []).map((d) => d.id);
+  }
+  // Deletes the files of trails deleted before now (all of them by default).
+  purge({ before = Infinity } = {}) {
+    const gone = (this.index.deleted || []).filter((d) => d.at < before);
+    if (!gone.length) return [];
+    for (const d of gone) {
+      this.cache.delete(d.id);
+      if (typeof this.storage.remove === "function") this.storage.remove(d.id);
+    }
+    this.index.deleted = this.index.deleted.filter((d) => !gone.includes(d));
+    this.saveIndex();
+    return gone.map((d) => d.id);
   }
   rename(id, name) {
     const d = this.get(id);
@@ -806,9 +853,12 @@ class TrailStore {
     // it is shown are not written into it.
     if (d.trail.readonly) return d;
     const now = this.now();
-    if (session.name && session.name !== d.trail.name) {
-      d.trail.name = String(session.name).slice(0, 120);
-      d.trail.mono = monogram(d.trail.name);
+    // A rename made through research:* is an event too, like rename().
+    const nm = session.name ? String(session.name).trim().slice(0, 120) : "";
+    if (nm && nm !== d.trail.name) {
+      d.trail.name = nm;
+      d.trail.mono = monogram(nm);
+      this.event(id, { type: "renamed", data: { trail: nm } });
     }
     if (session.started && session.started < d.trail.createdAt) d.trail.createdAt = session.started;
     const r = d.research;
