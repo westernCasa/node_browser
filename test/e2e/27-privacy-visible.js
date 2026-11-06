@@ -66,6 +66,20 @@ const check = (name, ok, detail = "") => {
   check("blocking off in Settings shows a crossed-out shield", s.muted && /blocking is off/.test(s.tip), JSON.stringify(s));
   await ui.evaluate(() => window.scout.setSettings({ adblock: true }));
 
+  // PR #42: the window that holds NODE's own bridge never leaves NODE's
+  // pages and opens no windows; permissions NODE doesn't know are refused.
+  const before = await ui.evaluate(() => location.href);
+  await ui.evaluate(() => {
+    try {
+      location.href = "https://example.com/";
+    } catch (_) {}
+  });
+  await sleep(800);
+  check("the NODE window can't be sent to a web page", (await ui.evaluate(() => location.href)) === before && before.startsWith("file:"));
+  check("the NODE window opens no new windows", (await ui.evaluate(() => window.open("https://example.com/") === null)) && (await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length)) === 1);
+  const state = await ui.evaluate(async () => (await navigator.permissions.query({ name: "persistent-storage" })).state);
+  check("permissions NODE doesn't list (here: persistent storage) are refused when checked", state !== "granted", state);
+
   const welcome = fs.readFileSync(path.join(__dirname, "..", "..", "renderer", "index.html"), "utf8");
   check("the welcome screen says NODE blocks ads and trackers", /NODE blocks ads and trackers on every page/.test(welcome));
 

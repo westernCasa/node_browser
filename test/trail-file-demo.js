@@ -114,4 +114,8 @@ check("merging A into B or B into A gives the same items", ids(T.merge(back, ale
 const roundTrip = T.fromMarkdown(T.toMarkdown(m, { by: "Alex" }));
 check("a merged trail survives the file and back", ids(roundTrip) === ids(m));
 
+// PR #42: a file's open tabs are only web addresses, without private tokens.
+const evil = T.fromMarkdown("---\nnode-trail: 1\nname: Tabs\nopen-tabs: [\"file:///etc/passwd\", \"javascript:alert(1)\", \"https://example.com/a?token=SECRET&id=2\"]\n---\n# Tabs\n");
+check("a file's open tabs keep only web addresses, cleaned", JSON.stringify(evil.tabs) === JSON.stringify(["https://example.com/a?id=2"]), JSON.stringify(evil.tabs));
+
 process.exit(failed ? 1 : 0);

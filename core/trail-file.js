@@ -201,7 +201,7 @@ function fromMarkdown(text) {
     exportedAt: Date.parse(front["exported-at"] || "") || 0,
     pins: Array.isArray(front.pins) ? front.pins.map(String) : [],
     tags: Array.isArray(front.tags) ? front.tags.map(String) : [],
-    tabs: Array.isArray(front["open-tabs"]) ? front["open-tabs"].map(String) : [],
+    tabs: Array.isArray(front["open-tabs"]) ? front["open-tabs"].map(String).map(cleanUrl).filter(Boolean) : [],
     about: "",
     threads: [],
     pages: [],
