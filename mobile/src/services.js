@@ -4,6 +4,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
 
 const core = require("../../core");
+const appConfig = require("../app.json");
 
 const PREFIX = "scout:";
 const SECRET_KEYS = { brave: "scout.brave.key", grok: "scout.grok.key" };
@@ -37,7 +38,10 @@ export async function createServices() {
   settings.providers.brave.key = (await SecureStore.getItemAsync(SECRET_KEYS.brave)) || "";
   settings.ai.grok.key = (await SecureStore.getItemAsync(SECRET_KEYS.grok)) || "";
 
-  const net = core.createNet({ fetch: (...args) => fetch(...args) });
+  // Identify NODE to the sites it calls in the background (Wikipedia limits
+  // unidentified apps to 10 requests a minute). Same contact URL as desktop.
+  const userAgent = `NODE/${appConfig.expo.version} (research browser; mobile; +https://github.com/westernCasa/node_browser)`;
+  const net = core.createNet({ fetch: (...args) => fetch(...args), userAgent });
   const registry = new core.Registry({ getText: net.getText, getConfig: (id) => settings.providers[id] || {} });
   const flow = core.createSuggest({ registry, getAISettings: () => settings.ai, ttl: net.ttl });
   const { preview } = core.createPreview({ getText: net.getText });
