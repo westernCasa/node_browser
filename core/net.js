@@ -8,6 +8,21 @@ const { timeoutSignal } = require("./compat");
 
 const DEFAULT_GAPS = { "html.duckduckgo.com": 2500, "api.search.brave.com": 1100, default: 400 };
 
+// Wikimedia sites (Wikipedia, Wikidata, Commons...) limit clients that don't
+// identify themselves to 10 requests a minute across all their sites; clients
+// that send a name and a contact URL get 200. Some platforms (React Native on
+// iOS, for example) may not let an app replace its User-Agent, so for these
+// hosts the same text is also sent as Api-User-Agent, which Wikimedia accepts
+// for the same purpose.
+const WIKIMEDIA_HOST = /(^|\.)(wikipedia|wikimedia|wikidata|wiktionary|wikiquote|wikibooks|wikisource|wikinews|wikiversity|wikivoyage|mediawiki)\.org$/;
+
+function identityHeaders(userAgent, host) {
+  if (!userAgent) return {};
+  const out = { "User-Agent": userAgent };
+  if (WIKIMEDIA_HOST.test(host)) out["Api-User-Agent"] = userAgent;
+  return out;
+}
+
 function createNet({ fetch: doFetch, userAgent = "", ttl = 30 * 60 * 1000, max = 500, gaps = DEFAULT_GAPS, maxParallel = 4 } = {}) {
   const cache = new Map();
   const inflight = new Map();
@@ -68,9 +83,10 @@ function createNet({ fetch: doFetch, userAgent = "", ttl = 30 * 60 * 1000, max =
     const job = (async () => {
       await slot();
       try {
-        await hostTurn(hostOf(url));
+        const host = hostOf(url);
+        await hostTurn(host);
         const res = await doFetch(url, {
-          headers: userAgent ? { "User-Agent": userAgent, ...headers } : headers,
+          headers: { ...identityHeaders(userAgent, host), ...headers },
           redirect: "follow",
           signal: timeoutSignal(timeout),
         });
@@ -93,4 +109,4 @@ function createNet({ fetch: doFetch, userAgent = "", ttl = 30 * 60 * 1000, max =
   return { getText, clear: () => cache.clear(), ttl };
 }
 
-module.exports = { createNet, DEFAULT_GAPS };
+module.exports = { createNet, DEFAULT_GAPS, identityHeaders };
