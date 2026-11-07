@@ -1,7 +1,8 @@
 const { contextBridge, ipcRenderer, webUtils } = require("electron");
 
 contextBridge.exposeInMainWorld("scout", {
-  createTab: (url) => ipcRenderer.invoke("tab:create", url),
+  // via (B83): how the page is reached, e.g. { how: "typed" } (core/provenance.js).
+  createTab: (url, via) => ipcRenderer.invoke("tab:create", url, via),
   closeTab: (id) => ipcRenderer.invoke("tab:close", id),
   privateTab: () => ipcRenderer.invoke("tab:private"),
   setSideOver: (on) => ipcRenderer.invoke("layout:side-over", on),
@@ -18,7 +19,7 @@ contextBridge.exposeInMainWorld("scout", {
   tourEnd: () => ipcRenderer.invoke("tour:end"),
   tourAuto: () => ipcRenderer.invoke("tour:auto"),
   setCoach: (h) => ipcRenderer.invoke("layout:coach", h),
-  navigate: (id, url) => ipcRenderer.invoke("tab:navigate", id, url),
+  navigate: (id, url, via) => ipcRenderer.invoke("tab:navigate", id, url, via),
   goBack: (id) => ipcRenderer.invoke("tab:back", id),
   goForward: (id) => ipcRenderer.invoke("tab:forward", id),
   reload: (id) => ipcRenderer.invoke("tab:reload", id),

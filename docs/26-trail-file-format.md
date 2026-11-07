@@ -47,6 +47,21 @@ Status: draft, Nov 5 2026 (media cards added the same day, B114). Replaces the v
 
 Media cards (B114, added 2026-11-05) keep `node-trail: 2`: the layout comment adds `media:image`, `media:screenshot`, `media:video` or `media:audio`. The file never carries the media itself or the sender's Library id. Media saved from the web links to where it came from (`src`), without tracking codes, so the reader's NODE shows a large preview from there (the image, or a video or audio player). A screenshot links only to its page. Readers that don't know media cards see a normal Markdown image or link.
 
+### How a page was reached (B83)
+
+A page card can end with `Reached: <how>`, and a timeline-only item with `(timeline only · <how>)`. Added 2026-11-06; the format stays `node-trail: 2`, and files without it open as before.
+
+| how | Text |
+| --- | --- |
+| a link on another page | `link from reddit.com` (the site only, never the address) |
+| web search results, or a search typed in NODE | `search “levain”` |
+| an address typed in the address bar, CommandBar or canvas | `typed address` |
+| NODE's suggestions | `suggested by NODE for “rye flour”` (the keyword or search it came from) |
+| the research agent | `found by agent` |
+| the site went on to the next video or track by itself | `auto-played next on youtube.com` |
+
+` · played by NODE` is added when NODE's autoplay started the page's video or audio. Pages opened another way (bookmarks, history, restored tabs, older trails) have no line.
+
 ## Links
 
 `- [From title](#from-id) → [To title](#to-id) · <label> <!-- from:p1 to:c1 kind:auto -->`
