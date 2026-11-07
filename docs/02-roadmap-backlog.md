@@ -110,7 +110,7 @@ Effort: XS under 1 hour, S half a day, M 1-2 days, L 3+ days. Finding IDs (C1, K
 | B86 | 4 | Check before creating a share link: warn when a trail has pages naming private people or showing social posts; trails private by default. Add a shared trail file with a prompt injection to the B58 red-team set | P1 | S | Not started |
 | B87 | 4 | Save a copy of each trail page (offered, not forced) with a SHA-256 hash and the time; kept on the computer, sent only through share links | P1 | M | Not started |
 | B88 | 4 | Media moments: one key saves start and end time, transcript text if available, and the link, then pauses playback; reuses the B70 loop range. "ID at 41:12" requests in threads | P1 | M | Not started |
-| B89 | 4 | Search past trails by what the person remembers: order ("after the Discogs page"), time, thread, keyword | P1 | M | Not started |
+| B89 | 4 | Search past trails by what the person remembers: order ("after the Discogs page"), time, thread, keyword | P1 | M | Built 2026-11-07 (PR #67): an "In your trails" group in the CommandBar and the canvas search bar's list; local rules only, no AI; picking a result goes to its card, or its timeline row (Sven, 2026-11-07). Electron build only. Tests `test:recall`, e2e `51-trail-recall` |
 | B90 | 4 | Close tabs into a trail with a reason (to read, reference, reminder). Possible answer to B75 | P2 | S | Not started |
 | B91 | 4 | Export citations as CSL-JSON and BibTeX (Zotero, Overleaf); README states trails always export to open formats | P2 | S | Not started |
 | B92 | 4 | Trail sharing phase 3: viewer and editor roles; owner's edits apply at once, others' wait for approval | P2 | M | Not started; with B82 phase 3 |

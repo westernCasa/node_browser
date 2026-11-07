@@ -1543,6 +1543,15 @@ body.chrome-overlay.side.shown #bar { transform: none; transition: transform var
 #canvas .cv-drop-row.sel { background: var(--surface); box-shadow: inset 2px 0 0 var(--ink); }
 #canvas .cv-drop-row .nm { flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 #canvas .cv-drop-row .k { font: 11px var(--mono); color: var(--ink-muted); }
+/* B89: results from past trails, under a heading. */
+#canvas .cv-drop-head { padding: 8px 10px 4px; font: 11px var(--mono); color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+#canvas .cv-drop-row.recall .k { flex: 0 1 auto; max-width: 55%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+/* A card that was looked for: a ring that fades (opacity only). */
+#canvas .cv-card.found::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 2px var(--signal); pointer-events: none; animation: cv-found 2000ms var(--ease-enter) both; }
+@keyframes cv-found { 0% { opacity: 0; } 15% { opacity: 1; } 70% { opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { #canvas .cv-card.found::after { animation: none; opacity: 1; } }
+/* B89: a timeline row that was looked for. */
+.sb-tl-row.found { background: var(--surface-raised); box-shadow: inset 2px 0 0 var(--signal); }
 #canvas .cv-drop-meta { padding: 6px 10px 2px; font: 11px var(--mono); text-transform: uppercase; color: var(--ink-muted); border-top: 1px solid var(--line); margin-top: 4px; }
 #canvas .cv-card { transition: opacity var(--motion-base) var(--ease-move); }
 #canvas .cv-card.dim { opacity: 0.3; }
