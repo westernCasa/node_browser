@@ -1,5 +1,6 @@
-// Scout mobile: walking skeleton (Phase 5 groundwork).
-// Tabs of WebViews, address bar, and the shared suggestion engine from core/.
+// NODE mobile. Opens on the trail (CM1: timeline list, CM2: canvas); the
+// browser behind it keeps its tabs of WebViews, address bar, and the shared
+// suggestion engine from core/.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, BackHandler, Keyboard, PanResponder, Platform, Pressable, Text, TextInput, View, useWindowDimensions } from "react-native";
 import { StatusBar } from "expo-status-bar";
@@ -14,7 +15,7 @@ import SuggestionsSheet from "./src/components/SuggestionsSheet";
 import TabsSheet from "./src/components/TabsSheet";
 import AddressSuggestions from "./src/components/AddressSuggestions";
 import AskSheet from "./src/components/AskSheet";
-import TrailSheet from "./src/components/TrailSheet";
+import TrailHome from "./src/components/TrailHome";
 import SettingsSheet from "./src/components/SettingsSheet";
 
 const { SuggestController } = require("../core/controller");
@@ -72,13 +73,21 @@ function Browser({ services }) {
       view.injectJavaScript(on ? UNMUTE : MUTE_ALL);
     }
   };
-  const [sheet, setSheet] = useState(null); // "suggest" | "tabs" | "trail" | "settings"
+  const [sheet, setSheet] = useState(null); // "suggest" | "tabs" | "ask" | "settings"
   const [address, setAddress] = useState("");
   const [editing, setEditing] = useState(false);
   const [typed, setTyped] = useState(false); // typed since focusing the address bar
   const [bookmarkVersion, setBookmarkVersion] = useState(0); // re-render after bookmark changes
   const [ctrlState, setCtrlState] = useState(null);
   const [trailVersion, setTrailVersion] = useState(0);
+  // The phone opens on the trail (doc 23, entry points: "Phone app → timeline list").
+  const [home, setHomeState] = useState(true);
+  const homeRef = useRef(true);
+  const setHome = (on) => {
+    homeRef.current = on;
+    setHomeState(on);
+    if (on) setTrailVersion((v) => v + 1); // pages read since are shown
+  };
 
   const refs = useRef(new Map()); // tab id -> WebView ref
   const playback = useRef(new PlaybackLimiter()).current; // up to 4 tabs playing at once
@@ -241,15 +250,18 @@ function Browser({ services }) {
     })
   ).current;
 
-  // Android back button: go back in the page; at the first page, let the system handle it.
+  // Android back button: go back in the page; at the first page, back to the
+  // trail; on the trail, let the system handle it.
   useEffect(() => {
     const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (homeRef.current) return false;
       const tab = tabsRef.current.find((t) => t.id === activeRef.current);
       if (tab?.canGoBack) {
         refs.current.get(tab.id)?.goBack();
         return true;
       }
-      return false;
+      setHome(true);
+      return true;
     });
     return () => sub.remove();
   }, []);
@@ -407,7 +419,7 @@ function Browser({ services }) {
       <View style={{ flexDirection: "row", gap: 6, padding: 8, borderTopWidth: 1, borderColor: colors.line, alignItems: "center" }}>
         <Button label={`Suggestions${state.results.length ? ` (${state.results.length})` : ""}`} active={state.busy} onPress={() => setSheet("suggest")} />
         <Button label="Mosaic" active={mosaic} onPress={() => setMosaic(!mosaic)} />
-        <Button label="Trail" onPress={() => setSheet("trail")} />
+        <Button label="Trail" onPress={() => setHome(true)} />
         <Button label="Settings" onPress={() => setSheet("settings")} />
         <Text style={[ui.help, { flex: 1 }]} numberOfLines={1}>
           {state.busy ? "Searching…" : ""}
@@ -447,19 +459,32 @@ function Browser({ services }) {
         onToggleSoundAll={() => setSoundAll(!soundAll)}
         canMosaic={canMosaic}
       />
-      <TrailSheet
-        visible={sheet === "trail"}
-        onClose={() => setSheet(null)}
-        research={services.research}
-        controller={controller}
-        version={trailVersion}
-        bump={() => setTrailVersion((v) => v + 1)}
-        onOpenUrl={(url) => {
-          setSheet(null);
-          navigate(url);
-        }}
-      />
       <SettingsSheet visible={sheet === "settings"} onClose={() => setSheet(null)} services={services} />
+
+      {/* The trail, over the browser. The WebViews stay mounted underneath so
+          tabs keep their pages (and media) while the trail is shown. */}
+      {home ? (
+        <View style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0, zIndex: 50, elevation: 50 }}>
+          <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg2 }} edges={["top", "bottom"]}>
+            <TrailHome
+              services={services}
+              controller={controller}
+              version={trailVersion}
+              bump={() => setTrailVersion((v) => v + 1)}
+              tabCount={tabs.length}
+              onBrowse={() => setHome(false)}
+              onOpenUrl={(url) => {
+                setHome(false);
+                addTab(url);
+              }}
+              onSearch={(q) => {
+                setHome(false);
+                addTab(normalizeUrl(q));
+              }}
+            />
+          </SafeAreaView>
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 }

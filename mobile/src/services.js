@@ -4,6 +4,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
 
 const core = require("../../core");
+const { TrailStore, migrateSessions, sessionStorageOver } = require("../../core/trail");
 const appConfig = require("../app.json");
 
 const PREFIX = "scout:";
@@ -16,9 +17,43 @@ async function loadStorage() {
   const pairs = keys.length ? await AsyncStorage.multiGet(keys) : [];
   const files = {};
   for (const [k, v] of pairs) if (v != null) files[k.slice(PREFIX.length)] = v;
-  return core.memoryStorage(files, (name, text) => {
-    AsyncStorage.setItem(PREFIX + name, text).catch(() => {});
-  });
+  return core.memoryStorage(
+    files,
+    (name, text) => {
+      AsyncStorage.setItem(PREFIX + name, text).catch(() => {});
+    },
+    (name) => {
+      AsyncStorage.removeItem(PREFIX + name).catch(() => {});
+    }
+  );
+}
+
+// A view of storage under "trails/" that can also remove a trail's files.
+function trailFiles(storage) {
+  const prefix = "trails/";
+  return {
+    read: (name) => storage.read(prefix + name),
+    write: (name, text) => storage.write(prefix + name, text),
+    list: () => storage.list().filter((n) => n.startsWith(prefix)).map((n) => n.slice(prefix.length)),
+    remove: (name) => storage.remove(prefix + name),
+  };
+}
+
+// Trails, as on desktop (main.js openTrails): the old research sessions are
+// copied in once, trails deleted last time are purged, and the research
+// store reads and writes through the trail store. Phone visits go to the
+// timeline only; the canvas is built on desktop.
+function openTrails(storage) {
+  const trails = new TrailStore(trailFiles(storage), { device: "phone" });
+  const sessions = core.prefixedStorage(storage, "sessions/");
+  if (!trails.index.migratedAt && sessions.list().some((n) => n.endsWith(".json"))) {
+    try {
+      migrateSessions(sessions, trails);
+    } catch (_) {} // the old files stay; the next start tries again
+  }
+  trails.purge();
+  trails.current();
+  return { trails, research: new core.ResearchStore(sessionStorageOver(trails)) };
 }
 
 function defaultSettings() {
@@ -45,7 +80,7 @@ export async function createServices() {
   const registry = new core.Registry({ getText: net.getText, getConfig: (id) => settings.providers[id] || {} });
   const flow = core.createSuggest({ registry, getAISettings: () => settings.ai, ttl: net.ttl });
   const { preview } = core.createPreview({ getText: net.getText });
-  const research = new core.ResearchStore(core.prefixedStorage(storage, "sessions/"));
+  const { trails, research } = openTrails(storage);
   const history = new core.HistoryStore(storage);
   const bookmarks = new core.BookmarkStore(storage);
   const rules = core.validate(core.DEFAULT_FILE).rules; // default rules for now; editing comes later (M-backlog)
@@ -76,6 +111,8 @@ export async function createServices() {
     preview,
     net,
     research,
+    trails,
+    storage,
     history,
     bookmarks,
     ruleFor: (url) => core.resolve(rules, url),

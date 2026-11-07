@@ -5,7 +5,10 @@
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
     "expo": "~58.0.23",
+    "expo-document-picker": "~58.0.4",
+    "expo-file-system": "~58.0.13",
     "expo-secure-store": "~58.0.2",
+    "expo-sharing": "~58.0.22",
     "expo-status-bar": "~58.0.4",
     "react": "19.3.0",
     "react-native": "0.88.1",
@@ -18,7 +21,8 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "bundle:check": "expo export --platform android --platform ios --output-dir dist-check"
+    "bundle:check": "expo export --platform android --platform ios --output-dir dist-check",
+    "test": "node test/trail-flow.test.js"
   },
   "private": true
 }
