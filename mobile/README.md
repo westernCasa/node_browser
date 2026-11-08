@@ -4,6 +4,11 @@ Phase 5 groundwork. A React Native (Expo SDK 58, React Native 0.88) app that reu
 
 ## What works in this skeleton
 
+- **Opens on the trail** (CM1): the trail switcher at the top (initials, name, last visit, a dot per trail; swipe it or tap a dot to switch, tap the name for the trail list, New trail, Rename, Open file), Share next to it, a search field, and the trail's timeline, sessions newest first, with card previews. "Browse" goes to the open tabs; "Trail" in the browser's bottom bar comes back
+- **Canvas tab** (CM2): the trail's canvas to look around in: drag, pinch, Fit, + and −, a minimap you can tap. Tap a card for its full preview and "Open page". Nothing is moved or edited on the phone
+- **Open a `.trail.md`** (CM3): Open file → the file opens read only, on Replay: the sender's note, Start here, the steps with captions (Back, Next, tap a step); the Canvas tab dims cards not reached yet and follows the step. Save as new trail makes an editable copy, "<name> · <sender>", and goes to its timeline. Open on desktop hands the file to the share sheet (AirDrop it to your Mac)
+- **Share** (CM4, CM5): a note, Start here, the timeline on or off, your name; file name and size; "Share file…" opens the phone's share sheet with the `.trail.md`. Sign-in and payment pages are never put in the file
+- Pages you read on the phone go into the current trail's timeline as phone visits (timeline only, as decided in doc 25); cards are placed on desktop. Old research sessions are copied into trails on the first start
 - Tabs, each a WebView kept loaded; address bar with back and forward; tab switcher
 - Mosaic on every screen (Mosaic button in the bottom bar): all tabs in a grid on tablets and phones in landscape; up to 4 tiles on a phone in portrait (the active tab plus the 3 most recent others)
 - Autoplay per site rule, also after in-page navigation (m.youtube.com); background tabs keep playing muted, and the tab you switch to gets its sound back
@@ -17,7 +22,7 @@ Phase 5 groundwork. A React Native (Expo SDK 58, React Native 0.88) app that reu
 - Links that open a new window open a new NODE tab (unless the site rule blocks popups)
 - Suggestions sheet: keywords from the page (tap to pin, hold to hide), Wikipedia results first, then web results, AI query ideas
 - Re-search when a page loads, when you select text, or after scrolling to different content (same rules as desktop: 20 s minimum, 3 s for selections)
-- Trail sheet: research session, recurring keywords, pages read, new session, export through the share sheet
+- Recurring keywords of the current trail at the top of its timeline (tap to pin)
 - Settings sheet: search sources, Brave key, SearXNG, AI (local model on your network, or Grok). Keys are stored in the device keychain (expo-secure-store)
 - History is recorded (no history screen yet)
 
@@ -55,14 +60,16 @@ npm run bundle:check   # bundles for Android and iOS and compiles to Hermes byte
 | `index.js` | Entry; loads the URL polyfill (core/ needs a complete `URL`) |
 | `metro.config.js` | Lets the bundler include `../core` |
 | `App.js` | Tabs, address bar, bottom bar, wiring to the controller |
-| `src/services.js` | Storage (AsyncStorage), keys (SecureStore), search registry, search flow, sessions, history, site rules |
+| `src/services.js` | Storage (AsyncStorage), keys (SecureStore), search registry, search flow, trails (`core/trail.js`, device "phone") with the research store on top, history, site rules |
+| `src/trailModel.js` | The trail screens' logic with no React Native imports: timeline rows, card faces, canvas view maths, opening files, Replay, Save as new, the share file. Tested with `npm test` (in `mobile/`) |
 | `src/bridge.js` | Scripts injected into pages: selection and scroll reports, page extraction, autoplay, mute |
-| `src/components/` | TabView (WebView), Suggestions, Tabs, Trail and Settings sheets |
+| `src/components/` | TabView (WebView); TrailHome (start screen), TrailTimeline, TrailCanvas, ReplayPanel, CardPreview, ShareTrailSheet; Suggestions, Tabs and Settings sheets |
 | `../core/controller.js` | Shared "when to search again" logic, pins, hides, results (tested with `npm run test:controller` at the repo root) |
 
 ## Status and known gaps
 
 - Bundles for iOS and Android compile (Metro + Hermes). Not yet run on a device or simulator.
+- Opening a `.trail.md` from Files, Mail or AirDrop straight into NODE (file association) needs a development build and an app.json document type; for now use Open file.
 - Site rules use the built-in defaults; no rules editor yet.
 - No Library (Shot, Save, Media), find in page, zoom, or history screen yet.
 - "Local model" on a phone means a model server on your network (for example Ollama on your computer, started with `OLLAMA_HOST=0.0.0.0`). Plain `http://` addresses need platform settings that are not added yet (iOS App Transport Security, Android cleartext traffic).
