@@ -124,6 +124,8 @@ export default function TrailCanvas({ snap, onCard, shown = null, focus = null }
                 <Pressable
                   key={c.id}
                   onPress={() => onCard?.(c)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${start ? "Start here. " : ""}${f.kicker}: ${f.title}${f.text ? `. ${f.text}` : ""}`}
                   style={{ position: "absolute", left: c.x, top: c.y, width: c.w, height: c.h, borderRadius: 10, borderWidth: focus === c.id || start ? 3 : 1, borderColor: focus === c.id ? colors.accent : start ? colors.ok : colors.line, backgroundColor: colors.bg3, padding: 14, opacity: dim(c.id) ? 0.2 : 1, overflow: "hidden" }}
                 >
                   <Text style={{ color: colors.accent, fontSize: 13, letterSpacing: 1, textTransform: "uppercase" }} numberOfLines={1}>
@@ -152,9 +154,9 @@ export default function TrailCanvas({ snap, onCard, shown = null, focus = null }
       {view && size && !empty ? <Minimap snap={snap} bounds={bounds} view={view} size={size} onJump={(wx, wy) => setView(M.centreOn(view, wx, wy, size.w, size.h))} /> : null}
       {view && size && !empty ? (
         <View style={{ position: "absolute", left: 10, bottom: 10, flexDirection: "row", gap: 6 }}>
-          <Button label="Fit" small onPress={fit} />
-          <Button label="−" small onPress={() => setView(M.zoomAt(view, 1 / 1.4, size.w / 2, size.h / 2))} />
-          <Button label="+" small onPress={() => setView(M.zoomAt(view, 1.4, size.w / 2, size.h / 2))} />
+          <Button label="Fit" a11yLabel="Fit the whole trail" small onPress={fit} />
+          <Button label="−" a11yLabel="Zoom out" small onPress={() => setView(M.zoomAt(view, 1 / 1.4, size.w / 2, size.h / 2))} />
+          <Button label="+" a11yLabel="Zoom in" small onPress={() => setView(M.zoomAt(view, 1.4, size.w / 2, size.h / 2))} />
         </View>
       ) : null}
     </View>
@@ -172,6 +174,9 @@ function Minimap({ snap, bounds, view, size, onJump }) {
   const vp = at(vx, vy);
   return (
     <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Minimap"
+      accessibilityHint="Moves the canvas to where you tap. The Timeline tab lists every card."
       onPress={(e) => onJump(bounds.x + (e.nativeEvent.locationX - ox) / k, bounds.y + (e.nativeEvent.locationY - oy) / k)}
       style={{ position: "absolute", right: 10, bottom: 10, width: MINI_W, height: MINI_H, backgroundColor: "rgba(26,26,26,0.92)", borderRadius: 8, borderWidth: 1, borderColor: colors.line, overflow: "hidden" }}
     >

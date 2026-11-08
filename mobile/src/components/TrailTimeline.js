@@ -21,11 +21,14 @@ export default function TrailTimeline({ snap, header, onItem }) {
         </View>
       }
       renderItem={({ item }) => {
-        if (item.head) return <Text style={ui.kicker}>{item.head}</Text>;
+        if (item.head) return <Text style={ui.kicker} accessibilityRole="header">{item.head}</Text>;
         const face = item.card ? M.cardFace(item.card) : null;
         return (
           <Pressable
             onPress={() => onItem(item)}
+            accessibilityRole="button"
+            accessibilityLabel={[item.time, face ? `${face.kicker}: ${face.title}` : item.title, face?.text || item.sub].filter(Boolean).join(". ")}
+            accessibilityHint={item.card ? "Opens the card's preview" : "Opens the page"}
             style={({ pressed }) => ({ flexDirection: "row", gap: 10, paddingVertical: 10, borderTopWidth: 1, borderColor: colors.line, opacity: pressed ? 0.6 : 1 })}
           >
             <Text style={[ui.help, { width: 42 }]}>{item.time}</Text>

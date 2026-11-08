@@ -2,7 +2,7 @@
 // browser behind it keeps its tabs of WebViews, address bar, and the shared
 // suggestion engine from core/.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, BackHandler, Keyboard, PanResponder, Platform, Pressable, Text, TextInput, View, useWindowDimensions } from "react-native";
+import { AccessibilityInfo, ActivityIndicator, BackHandler, Keyboard, PanResponder, Platform, Pressable, Text, TextInput, View, useWindowDimensions } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
@@ -217,6 +217,7 @@ function Browser({ services }) {
   // recorded as a capture card. No screen change; a note with Undo shows.
   const showToast = (t) => {
     clearTimeout(toastTimer.current);
+    AccessibilityInfo.announceForAccessibility?.(t.text); // VoiceOver reads the note; TalkBack uses the live region
     setToast(t);
     toastTimer.current = setTimeout(() => setToast(null), 6000);
   };
@@ -397,8 +398,8 @@ function Browser({ services }) {
       {/* Address bar, with suggestions from history and Wikipedia while typing */}
       <View style={{ zIndex: 20, elevation: 20 }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 6, padding: 8, borderBottomWidth: 1, borderColor: colors.line }} {...addressPan.panHandlers}>
-        <Button label="‹" small onPress={() => refs.current.get(activeId)?.goBack()} style={!active?.canGoBack && { opacity: 0.4 }} />
-        <Button label="›" small onPress={() => refs.current.get(activeId)?.goForward()} style={!active?.canGoForward && { opacity: 0.4 }} />
+        <Button label="‹" a11yLabel="Back" small onPress={() => refs.current.get(activeId)?.goBack()} style={!active?.canGoBack && { opacity: 0.4 }} />
+        <Button label="›" a11yLabel="Forward" small onPress={() => refs.current.get(activeId)?.goForward()} style={!active?.canGoForward && { opacity: 0.4 }} />
         <TextInput
           style={[ui.input, { flex: 1, paddingVertical: 6 }]}
           value={editing ? address : active?.url || ""}
@@ -432,7 +433,7 @@ function Browser({ services }) {
           }}
         />
         {/* Tap: tab list. Press and hold: new tab. */}
-        <Button label={String(tabs.length)} small onPress={() => setSheet("tabs")} onLongPress={() => addTab(HOME_URL)} />
+        <Button label={String(tabs.length)} a11yLabel={`${tabs.length} ${tabs.length === 1 ? "tab" : "tabs"}, open the tab list`} a11yHint="Press and hold for a new tab" small onPress={() => setSheet("tabs")} onLongPress={() => addTab(HOME_URL)} />
       </View>
       {editing ? (
         <AddressSuggestions
@@ -484,7 +485,13 @@ function Browser({ services }) {
               />
               {showMosaic && !isActive ? (
                 // Tap an inactive tile to make it the active tab; then it takes touches.
-                <Pressable style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0 }} onPress={() => switchTo(t.id)} />
+                <Pressable
+                  style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0 }}
+                  onPress={() => switchTo(t.id)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Mosaic tile ${tile + 1}: ${t.title || t.url || "new tab"}`}
+                  accessibilityHint="Makes this the active tab"
+                />
               ) : null}
             </View>
           );
@@ -494,10 +501,10 @@ function Browser({ services }) {
       {/* Bottom bar */}
       <View style={{ flexDirection: "row", gap: 6, padding: 8, borderTopWidth: 1, borderColor: colors.line, alignItems: "center" }}>
         <Button label={`Suggest${state.results.length ? ` (${state.results.length})` : ""}`} active={state.busy} onPress={() => setSheet("suggest")} />
-        <Button label="Capture" onPress={capture} />
+        <Button label="Capture" a11yHint="Saves this page, the selected text and a thumbnail into the trail" onPress={capture} />
         <Button label="Mosaic" active={mosaic} onPress={() => setMosaic(!mosaic)} />
         <Button label="Trail" onPress={() => setHome(true)} />
-        <Button label="⚙︎" onPress={() => setSheet("settings")} />
+        <Button label="⚙︎" a11yLabel="Settings" onPress={() => setSheet("settings")} />
         <Text style={[ui.help, { flex: 1 }]} numberOfLines={1}>
           {state.busy ? "Searching…" : ""}
         </Text>
@@ -539,7 +546,7 @@ function Browser({ services }) {
       <SettingsSheet visible={sheet === "settings"} onClose={() => setSheet(null)} services={services} />
 
       {toast && !home ? (
-        <View style={{ position: "absolute", left: 12, right: 12, bottom: 70, zIndex: 40, elevation: 40, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.bg3, borderWidth: 1, borderColor: colors.line, borderRadius: 10, padding: 10 }}>
+        <View accessibilityLiveRegion="polite" style={{ position: "absolute", left: 12, right: 12, bottom: 70, zIndex: 40, elevation: 40, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.bg3, borderWidth: 1, borderColor: colors.line, borderRadius: 10, padding: 10 }}>
           <Text style={{ color: colors.text, flex: 1 }} numberOfLines={2}>
             {toast.text}
           </Text>

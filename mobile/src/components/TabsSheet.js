@@ -18,6 +18,10 @@ export default function TabsSheet({ visible, onClose, tabs, activeId, onActivate
         <SwipeRow key={t.id} onSwipe={() => onCloseTab(t.id)}>
           <Pressable
             onPress={() => onActivate(t.id)}
+            accessibilityRole="button"
+            accessibilityLabel={`${t.title || "New tab"}${t.id === activeId ? ", current tab" : ""}`}
+            accessibilityActions={[{ name: "close", label: "Close tab" }]}
+            onAccessibilityAction={(e) => e.nativeEvent.actionName === "close" && onCloseTab(t.id)}
             style={{ flexDirection: "row", alignItems: "center", borderTopWidth: 1, borderColor: colors.line, paddingVertical: 10 }}
           >
             <View style={{ flex: 1 }}>
@@ -26,7 +30,7 @@ export default function TabsSheet({ visible, onClose, tabs, activeId, onActivate
               </Text>
               <Text style={ui.help} numberOfLines={1}>{t.pausedByLimit ? "⏸ Paused (4 tabs already playing) · " : ""}{t.sysPauses ? `Paused by the system ${t.sysPauses}× and restarted · ` : ""}{t.url}</Text>
             </View>
-            <Pressable onPress={() => onCloseTab(t.id)} hitSlop={10} style={{ paddingHorizontal: 8 }}>
+            <Pressable onPress={() => onCloseTab(t.id)} hitSlop={10} style={{ paddingHorizontal: 8 }} accessibilityRole="button" accessibilityLabel={`Close ${t.title || "tab"}`}>
               <Text style={{ color: colors.mute, fontSize: 18 }}>×</Text>
             </Pressable>
           </Pressable>
@@ -38,7 +42,7 @@ export default function TabsSheet({ visible, onClose, tabs, activeId, onActivate
           {bookmarks.search("", 100).length === 0 ? <Text style={ui.help}>No bookmarks yet. Tap ☆ next to the address bar to add the page you are on.</Text> : null}
           {bookmarks.search("", 100).map((b) => (
             <SwipeRow key={"b" + b.url} label="Remove" onSwipe={() => onRemoveBookmark(b.url)}>
-              <Pressable onPress={() => onOpenBookmark(b.url)} style={{ borderTopWidth: 1, borderColor: colors.line, paddingVertical: 10 }}>
+              <Pressable onPress={() => onOpenBookmark(b.url)} accessibilityRole="link" style={{ borderTopWidth: 1, borderColor: colors.line, paddingVertical: 10 }}>
                 <Text style={{ color: colors.text, fontWeight: "600" }} numberOfLines={1}>★ {b.title || b.url}</Text>
                 <Text style={ui.help} numberOfLines={1}>{b.url}</Text>
               </Pressable>
