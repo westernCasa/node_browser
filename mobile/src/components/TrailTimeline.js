@@ -1,5 +1,5 @@
 // CM1: the trail as a list, sessions newest first, with card previews.
-import { FlatList, Pressable, Text, View } from "react-native";
+import { FlatList, Image, Pressable, Text, View } from "react-native";
 import { colors, ui } from "../theme";
 
 const M = require("../trailModel");
@@ -32,7 +32,9 @@ export default function TrailTimeline({ snap, header, onItem }) {
             <View style={{ flex: 1 }}>
               {face ? (
                 // A card preview: the same face as on the canvas.
-                <View style={{ borderWidth: 1, borderColor: colors.line, backgroundColor: colors.bg3, borderRadius: 8, padding: 10 }}>
+                <View style={{ flexDirection: "row", gap: 10, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.bg3, borderRadius: 8, padding: 10 }}>
+                  {item.card.shot && /^file:/.test(item.card.shot) ? <Image source={{ uri: item.card.shot }} style={{ width: 48, height: 64, borderRadius: 4 }} /> : null}
+                  <View style={{ flex: 1 }}>
                   <Text style={{ color: colors.accent, fontSize: 10, letterSpacing: 1, textTransform: "uppercase" }} numberOfLines={1}>
                     {face.kicker}
                   </Text>
@@ -44,6 +46,7 @@ export default function TrailTimeline({ snap, header, onItem }) {
                       {face.text}
                     </Text>
                   ) : null}
+                  </View>
                 </View>
               ) : (
                 <>

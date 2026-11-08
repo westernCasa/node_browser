@@ -7,6 +7,7 @@ import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
 import { createServices } from "./src/services";
+const Capture = require("./src/capture");
 import { autoplayCall, CENTER_ON_TAP, extractCall, MUTE_ALL, PAUSE_FOR_LIMIT, readCall, RESUME, UNMUTE } from "./src/bridge";
 import { colors, ui } from "./src/theme";
 import TabView from "./src/components/TabView";
@@ -16,6 +17,8 @@ import TabsSheet from "./src/components/TabsSheet";
 import AddressSuggestions from "./src/components/AddressSuggestions";
 import AskSheet from "./src/components/AskSheet";
 import TrailHome from "./src/components/TrailHome";
+import { captureRef } from "react-native-view-shot";
+import { Directory, File, Paths } from "expo-file-system";
 import SettingsSheet from "./src/components/SettingsSheet";
 
 const { SuggestController } = require("../core/controller");
@@ -92,6 +95,10 @@ function Browser({ services }) {
   const refs = useRef(new Map()); // tab id -> WebView ref
   const playback = useRef(new PlaybackLimiter()).current; // up to 4 tabs playing at once
   const pending = useRef(new Map()); // extract request id -> { resolve, reject, timer }
+  const tileRefs = useRef(new Map()); // tab id -> the View around its WebView (for capture thumbnails)
+  const lastSelection = useRef({ tabId: null, url: "", text: "" }); // the last text selected, for Capture
+  const [toast, setToast] = useState(null); // { text, saved, trailId }
+  const toastTimer = useRef(null);
   const tabsRef = useRef(tabs);
   tabsRef.current = tabs;
   const activeRef = useRef(activeId);
@@ -148,6 +155,14 @@ function Browser({ services }) {
       } catch {
         return;
       }
+      if (msg.type === "capinfo") {
+        const p = pending.current.get(msg.id);
+        if (!p) return;
+        clearTimeout(p.timer);
+        pending.current.delete(msg.id);
+        p.resolve(msg);
+        return;
+      }
       if (msg.type === "extract") {
         const p = pending.current.get(msg.id);
         if (!p) return;
@@ -175,7 +190,10 @@ function Browser({ services }) {
       }
       if (tabId !== activeRef.current) return;
       const tab = withRule(tabById(tabId));
-      if (msg.type === "selection") controller.onPage(tab, "selection", msg.text);
+      if (msg.type === "selection") {
+        lastSelection.current = { tabId, url: tab?.url || "", text: msg.text };
+        controller.onPage(tab, "selection", msg.text);
+      }
       if (msg.type === "scroll") controller.onPage(tab, "scroll");
     },
     [controller]
@@ -187,11 +205,69 @@ function Browser({ services }) {
     // Single-page sites (m.youtube.com and similar) change address without a
     // new load, so onLoadEnd does not run: start the new page's media here.
     if (before && !nav.loading && before.url && nav.url !== before.url) {
+      if (lastSelection.current.tabId === tabId) lastSelection.current = { tabId: null, url: "", text: "" };
       services.history.record(nav.url, nav.title);
       const tab = withRule({ ...before, url: nav.url });
       refs.current.get(tabId)?.injectJavaScript(autoplayCall(tab.rule.autoplay));
     }
   }, []);
+
+  // M18 smart capture: the page's address, title, DOI or PMID, the time with
+  // the time zone, the selected text and a thumbnail go into the trail being
+  // recorded as a capture card. No screen change; a note with Undo shows.
+  const showToast = (t) => {
+    clearTimeout(toastTimer.current);
+    setToast(t);
+    toastTimer.current = setTimeout(() => setToast(null), 6000);
+  };
+  const capture = async () => {
+    const id = activeRef.current;
+    const tab = tabById(id);
+    const view = refs.current.get(id);
+    if (!tab || !view) return;
+    const reqId = `cap${Date.now()}`;
+    const info = await new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        pending.current.delete(reqId);
+        resolve({ error: "timeout" });
+      }, 3000);
+      pending.current.set(reqId, { resolve, reject: (e) => resolve({ error: String(e) }), timer });
+      view.injectJavaScript(Capture.captureInfoCall(reqId));
+    });
+    const at = Date.now();
+    const sel = lastSelection.current;
+    const built = Capture.buildCapture(info, { at, selection: sel.tabId === id && sel.url === info.url ? sel.text : "" });
+    if (built.error) return showToast({ text: built.error });
+    const card = built.card;
+    card.id = `c${at.toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+    try {
+      const tmp = await captureRef(tileRefs.current.get(id), { format: "jpg", quality: 0.6, width: 480, result: "tmpfile" });
+      const dir = new Directory(Paths.document, "captures");
+      if (!dir.exists) dir.create();
+      const dest = new File(dir, `${card.id}.jpg`);
+      await new File(tmp).move(dest);
+      Object.assign(card, { shot: dest.uri, captureKind: "shot" });
+    } catch (_) {
+      // No thumbnail (the page may not allow it); the capture still saves.
+    }
+    services.research.saveNow();
+    const trailId = services.research.current.id;
+    const saved = Capture.saveCapture(services.trails, trailId, card, { pageTitle: tab.title });
+    if (!saved.card) return showToast({ text: "Couldn't save the capture." });
+    setTrailVersion((v) => v + 1);
+    showToast({ text: Capture.capturedText(card, services.trails.get(trailId)?.trail.name), saved, trailId });
+  };
+  const undoCapture = () => {
+    if (!toast?.saved) return;
+    Capture.undoCapture(services.trails, toast.trailId, toast.saved);
+    if (toast.saved.card?.shot) {
+      try {
+        new File(toast.saved.card.shot).delete();
+      } catch (_) {}
+    }
+    setTrailVersion((v) => v + 1);
+    showToast({ text: "Capture removed." });
+  };
 
   const onLoadEnd = useCallback(
     (tabId) => {
@@ -396,7 +472,7 @@ function Browser({ services }) {
                 }
               : { position: "absolute", left: 0, top: 0, right: 0, bottom: 0, zIndex: onScreen ? 2 : 0 };
           return (
-            <View key={t.id} style={style} pointerEvents={onScreen ? "auto" : "none"}>
+            <View key={t.id} ref={(r) => (r ? tileRefs.current.set(t.id, r) : tileRefs.current.delete(t.id))} collapsable={false} style={style} pointerEvents={onScreen ? "auto" : "none"}>
               <TabView
                 ref={(r) => (r ? refs.current.set(t.id, r) : null)}
                 tab={t}
@@ -417,10 +493,11 @@ function Browser({ services }) {
 
       {/* Bottom bar */}
       <View style={{ flexDirection: "row", gap: 6, padding: 8, borderTopWidth: 1, borderColor: colors.line, alignItems: "center" }}>
-        <Button label={`Suggestions${state.results.length ? ` (${state.results.length})` : ""}`} active={state.busy} onPress={() => setSheet("suggest")} />
+        <Button label={`Suggest${state.results.length ? ` (${state.results.length})` : ""}`} active={state.busy} onPress={() => setSheet("suggest")} />
+        <Button label="Capture" onPress={capture} />
         <Button label="Mosaic" active={mosaic} onPress={() => setMosaic(!mosaic)} />
         <Button label="Trail" onPress={() => setHome(true)} />
-        <Button label="Settings" onPress={() => setSheet("settings")} />
+        <Button label="⚙︎" onPress={() => setSheet("settings")} />
         <Text style={[ui.help, { flex: 1 }]} numberOfLines={1}>
           {state.busy ? "Searching…" : ""}
         </Text>
@@ -460,6 +537,15 @@ function Browser({ services }) {
         canMosaic={canMosaic}
       />
       <SettingsSheet visible={sheet === "settings"} onClose={() => setSheet(null)} services={services} />
+
+      {toast && !home ? (
+        <View style={{ position: "absolute", left: 12, right: 12, bottom: 70, zIndex: 40, elevation: 40, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.bg3, borderWidth: 1, borderColor: colors.line, borderRadius: 10, padding: 10 }}>
+          <Text style={{ color: colors.text, flex: 1 }} numberOfLines={2}>
+            {toast.text}
+          </Text>
+          {toast.saved ? <Button label="Undo" small onPress={undoCapture} /> : null}
+        </View>
+      ) : null}
 
       {/* The trail, over the browser. The WebViews stay mounted underneath so
           tabs keep their pages (and media) while the trail is shown. */}
