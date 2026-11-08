@@ -3902,6 +3902,10 @@ async function openCanvas({ focus = false, select = "" } = {}) {
     webSearch: (q) => api.trailSearch(q),
     privateSearch: (q) => api.trailSearch(q, { private: true }),
     ask: (q) => askAboutTrail(q),
+    // B89: results from past trails in the search bar's list. Cards on this
+    // trail are left out: the search bar already marks them.
+    recall: async (q) => ((await api.trailRecall?.(q, 6)) || []).filter((r) => !(r.card && r.trail === trailCanvas?.data?.trail?.id)).slice(0, 4),
+    goRecall: (r) => goRecall(r),
     // B110: Replay and Share, top right.
     replay: () => startTrailReplay(0),
     // B114: Library media on the canvas.
@@ -3941,6 +3945,10 @@ async function openCanvas({ focus = false, select = "" } = {}) {
   trailCanvas.setSurvey(days || 0);
   trailCanvas.setResume((list || []).filter((t) => t.id !== snap?.trail.id && t.cards > 0));
   if (select) trailCanvas.selectUrl(select);
+  if (recallPending?.card && recallPending.trail === snap?.trail.id) {
+    trailCanvas.showFound(recallPending.card);
+    recallPending = null;
+  }
   if (focus) trailCanvas.focusSearch();
   else if (!canvasEl.contains(document.activeElement)) trailCanvas.vp.focus({ preventScroll: true });
 }
@@ -4593,6 +4601,33 @@ async function refreshTimeline(force = false) {
 // ---- Trail switcher: name and menu, dots, swipe ----
 const switchName = document.getElementById("sb-switch-name");
 const switchMenu = document.getElementById("sb-switch-menu");
+// B89: go to a result from past trails: its trail, then its card on the
+// canvas, or its row in the timeline when it is not on the canvas.
+let recallPending = null;
+async function goRecall(r) {
+  if (!r) return;
+  recallPending = r;
+  // goTrail redraws a canvas that is showing; it picks up recallPending.
+  const switching = r.trail !== sideTrails.find((t) => t.current)?.id;
+  if (switching) await goTrail(r.trail);
+  if (r.card) {
+    if (canvasEl.hidden) await api.canvasShow(); // opens the canvas, which picks up recallPending
+    else if (!switching) openCanvas();
+  } else {
+    recallPending = null;
+    showFoundInTimeline(r);
+  }
+}
+let timelineFound = null;
+async function showFoundInTimeline(r) {
+  timelineFound = { url: r.url, at: r.at, until: Date.now() + 4000 };
+  // The sidebar shows beside the canvas; over a page it is hidden.
+  if (canvasEl.hidden) await api.canvasShow();
+  await refreshTimeline(true);
+  const row = document.querySelector("#sb-timeline-list .sb-tl-row.found");
+  row?.scrollIntoView({ block: "center", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  row?.focus({ preventScroll: true });
+}
 async function goTrail(id) {
   if (!id) return;
   closeSwitchMenu();
@@ -4879,17 +4914,19 @@ function paintTimeline() {
   const list = document.getElementById("sb-timeline-list");
   list.innerHTML = "";
   let n = 0;
-  for (const sess of sideTimeline.slice(0, 6)) {
+  const found = timelineFound && timelineFound.until > Date.now() ? timelineFound : null;
+  const isFound = (it) => found && it.url === found.url && it.at === found.at;
+  for (const sess of sideTimeline.filter((s, i) => i < 6 || (found && (s.items || []).some(isFound)))) {
     const head = document.createElement("div");
     head.className = "sb-tl-session";
     const when = new Date(sess.start || sess.items?.[0]?.at || Date.now());
     head.textContent = `${when.toLocaleDateString(undefined, { month: "short", day: "numeric" })} · ${sess.device || "This computer"}`;
     list.appendChild(head);
-    for (const it of (sess.items || []).slice(0, 12)) {
+    for (const it of (sess.items || []).filter((x, i) => i < 12 || isFound(x))) {
       n++;
       const row = document.createElement("button");
       row.type = "button";
-      row.className = "sb-tl-row" + (it.timelineOnly ? " only" : "");
+      row.className = "sb-tl-row" + (it.timelineOnly ? " only" : "") + (isFound(it) ? " found" : "");
       const time = new Date(it.at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
       row.innerHTML = `<span class="t"></span><span class="nm"></span><span class="k"></span>`;
       // Timeline-only pages: drag onto the canvas, or the + button, puts them on it (B104).
@@ -5115,6 +5152,20 @@ async function renderCommands() {
       key: "⌥↵",
       run: () => cmdNewTrail(q),
     });
+  // B89: things in past trails that match what was typed ("after the
+  // Discogs page", "rye yesterday").
+  if (q && !looksLikeAddress(q) && api.trailRecall) {
+    const found = await api.trailRecall(q, 4);
+    if (seq !== cmdSeq) return; // typed again meanwhile
+    for (const r of found)
+      add("In your trails", {
+        id: `recall-${r.trail}-${r.card || r.url}`,
+        icon: r.kind === "question" ? "ask" : "trail",
+        html: `${cmdBold(r.title || r.url || "Untitled", words)}<span class="u">${escapeHtml(r.why)}</span>`,
+        key: "Show",
+        run: () => goRecall(r),
+      });
+  }
   // Ask
   if (q && !looksLikeAddress(q)) {
     add("Ask", { id: "ask", icon: "ask", html: `Ask about this page: ${escapeHtml(q)}`, key: "Tab", run: () => cmdAsk(q) });

@@ -37,6 +37,7 @@ const Chat = require("./core/chat");
 const { ResearchStore } = require("./core/research");
 const { TrailStore, migrateSessions, sessionStorageOver, mediaKindOf } = require("./core/trail");
 const Prov = require("./core/provenance");
+const { recall, recallIndex } = require("./core/recall");
 const Replay = require("./core/replay");
 const { Usage } = require("./core/usage");
 const { HistoryStore } = require("./core/history");
@@ -3538,6 +3539,11 @@ ipcMain.handle("find:start", (_e, id, text, opts = {}) => {
 ipcMain.handle("find:stop", (_e, id) => tabs.get(id)?.view.webContents.stopFindInPage("keepSelection"));
 ipcMain.handle("tab:zoom", (_e, id, step) => zoomTab(tabs.get(id), Number(step) || 0));
 ipcMain.handle("history:search", (_e, q, limit) => historyStore.search(q, limit));
+// B89: find things in past trails by what the person remembers (core/recall.js).
+ipcMain.handle("trail:recall", (_e, q, limit = 6) => {
+  if (!trailStore || typeof q !== "string" || q.trim().length < 2) return [];
+  return recall(recallIndex(trailStore), q.slice(0, 200), { trails: trailStore.list(), limit: Math.min(Number(limit) || 6, 20) });
+});
 // Bookmarks (core/bookmarks.js).
 ipcMain.handle("bookmarks:search", (_e, q, limit) => bookmarkStore.search(q, limit));
 ipcMain.handle("bookmarks:has", (_e, url) => bookmarkStore.has(url));

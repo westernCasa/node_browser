@@ -615,6 +615,21 @@
       const v = snap?.view;
       if (v && typeof v.z === "number" && (v.x || v.y || v.z !== 1)) this.setView({ x: v.x, y: v.y, z: v.z }, { save: false });
       else this.fit(false, { save: false });
+      this.applyFound();
+    }
+    // B89: a card looked for from past trails. It stays selected through
+    // the redraws that follow a trail switch (for 2 s).
+    showFound(id) {
+      this.found = { id, until: Date.now() + 2000 };
+      this.applyFound();
+    }
+    applyFound() {
+      const f = this.found;
+      if (!f || f.until < Date.now() || !this.data?.cards.some((c) => c.id === f.id)) return;
+      this.selected = null;
+      this.select(f.id, { reveal: true });
+      // A redraw makes new card elements: the ring goes back on.
+      if (!this.cardsEl.querySelector(`.cv-card.found[data-id="${CSS.escape(f.id)}"]`)) this.flashCard(f.id);
     }
 
     render() {
@@ -1296,9 +1311,31 @@
           this.dropRows.push({ act: "search", text: `Search the web: ${v}`, meta: "Adds a search card" });
           this.dropRows.push({ act: "ask", text: `Ask about this trail: ${v}` });
           this.dropRows.push({ act: "private", text: `Private search: ${v}`, meta: "Not in any trail" });
+          this.findInTrails(v);
         }
       }
       this.paintDrop();
+    }
+    // B89: things in past trails that match, under the other choices.
+    async findInTrails(v) {
+      if (!this.hooks.recall || v.length < 2) return;
+      const seq = (this.recallSeq = (this.recallSeq || 0) + 1);
+      let found = [];
+      try {
+        found = (await this.hooks.recall(v)) || [];
+      } catch (_) {}
+      if (seq !== this.recallSeq || this.input.value.trim() !== v) return;
+      for (const r of found) this.dropRows.push({ act: "recall", text: r.title || r.url || "Untitled", meta: r.why, item: r, head: !this.dropRows.some((x) => x.act === "recall") });
+      this.paintDrop();
+    }
+    // A short ring around a card that was looked for (B89).
+    flashCard(id) {
+      const el = this.cardsEl.querySelector(`.cv-card[data-id="${CSS.escape(id)}"]`);
+      if (!el) return;
+      el.classList.remove("found");
+      void el.offsetWidth;
+      el.classList.add("found");
+      setTimeout(() => el.classList.remove("found"), 2200);
     }
     paintDrop() {
       const n = this.matches ? this.matches.size : null;
@@ -1309,8 +1346,13 @@
           row.setAttribute("aria-selected", String(i === this.dropSel));
           row.dataset.i = i;
           row.id = `cv-drop-${i}`;
-          row.append(h("span", "nm", r.text), h("span", "k", i === this.dropSel ? "↵" : r.meta || ""));
-          return row;
+          row.append(h("span", "nm", r.text), h("span", "k", i === this.dropSel && r.act !== "recall" ? "↵" : r.meta || ""));
+          if (r.act === "recall") row.classList.add("recall");
+          if (!r.head) return row;
+          // The first result from past trails comes under a heading.
+          const wrap = document.createDocumentFragment();
+          wrap.append(h("div", "cv-drop-head", "In your trails"), row);
+          return wrap;
         }),
       );
       if (n !== null) this.drop.append(h("div", "cv-drop-meta", n === 1 ? "1 card on this trail matches" : `${n} cards on this trail match`));
@@ -1324,6 +1366,7 @@
       const r = this.dropRows?.[i];
       if (!v || !r) return;
       this.clearSearch();
+      if (r.act === "recall") return this.hooks.goRecall?.(r.item);
       if (this.readonly && r.act !== "private") return this.sayReadonly();
       if (r.act === "open") this.hooks.search?.(v);
       else if (r.act === "search") this.hooks.webSearch?.(v);
