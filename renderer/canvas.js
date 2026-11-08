@@ -117,6 +117,11 @@
     const hh = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = String(t % 60).padStart(2, "0");
     return hh ? `${hh}:${String(m).padStart(2, "0")}:${s}` : `${m}:${s}`;
   };
+  // "7 Nov 21:40", for saved copies (B87).
+  const copyText = (t) => {
+    const d = new Date(t);
+    return `${d.getDate()} ${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.getMonth()]} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  };
   const secsText = (s) => String(s).split(":").reduce((n, p) => n * 60 + Number(p), 0);
   const KIND_LABEL = { page: "Page", video: "Video", capture: "Capture", report: "Report", question: "Question", note: "Note", voice: "Voice", search: "Search", media: "Media", moment: "Moment" };
   const MEDIA_LABEL = { image: "Image", screenshot: "Screenshot", video: "Video", audio: "Audio" };
@@ -322,7 +327,22 @@
       rm.type = "button";
       rm.addEventListener("click", () => this.selected && this.hooks.remove?.(this.selected));
       this.selRemove = rm;
-      this.selBar.append(this.selMeta, openB, rm);
+      // B87: a copy of the page as it looks now, kept on this computer.
+      const cp = h("button", "cv-selbar-btn", "Save a copy");
+      cp.type = "button";
+      cp.addEventListener("click", async () => {
+        if (!this.selected) return;
+        cp.disabled = true;
+        cp.textContent = "Saving…";
+        try {
+          await this.hooks.copySave?.(this.selected);
+        } finally {
+          cp.disabled = false;
+          cp.textContent = "Save a copy";
+        }
+      });
+      this.selCopy = cp;
+      this.selBar.append(this.selMeta, openB, cp, rm);
       // Opened trail files are read only (B109): trying to change one says so.
       this.roMsg = h("div", "cv-readonly-msg", "Read only. Save as new trail to change it.");
       this.roMsg.setAttribute("role", "status");
@@ -889,6 +909,23 @@
         const line = h("div", "cv-card-via", root.NodeProvenance.cap(via));
         if (root.NodeProvenance.CHOSEN_BY_NODE.has(c.via?.how) || (!c.via && c.played)) line.classList.add("node");
         el.append(line);
+      }
+      // B87: the newest saved copy. Opens it; says when it changed or stayed
+      // with the sender.
+      const copy = c.kind === "page" && c.copies?.length ? c.copies[c.copies.length - 1] : null;
+      if (copy) {
+        const when = copy.atText || copyText(copy.at);
+        const changed = c.copies.filter((x) => x.changed).length;
+        const b = h("button", "cv-card-copy cv-media-ctl", copy.changed ? `Copy changed since ${when}` : copy.here === false ? `Copy ${when} · kept by the sender` : `Copy · ${when}${c.copies.length > 1 ? ` · ${c.copies.length} copies` : ""}${changed ? ` · ${changed} changed` : ""}`);
+        b.type = "button";
+        b.title = `SHA-256 ${copy.sha256}${changed ? `\n${changed === 1 ? "One copy has" : `${changed} copies have`} changed since it was saved, so ${changed === 1 ? "it isn't" : "they aren't"} trusted.` : ""}`;
+        if (changed) b.classList.add("changed");
+        b.disabled = Boolean(copy.changed) || copy.here === false;
+        b.addEventListener("click", (e) => {
+          e.stopPropagation();
+          this.hooks.copyOpen?.(copy.sha256);
+        });
+        el.append(b);
       }
       const foot = this.cardFoot(c);
       if (foot) el.append(h("div", "cv-card-foot", foot));
@@ -1505,6 +1542,7 @@
       if (!c) return;
       this.selMeta.textContent = c.url ? hostOf(c.url) : KIND_LABEL[c.kind] || "";
       this.selOpen.hidden = !c.url;
+      this.selCopy.hidden = this.readonly || c.kind !== "page" || !this.hooks.copySave;
       const vp = this.vp.getBoundingClientRect(), el = this.el.getBoundingClientRect();
       const x = vp.left - el.left + this.v.x + c.x * this.v.z;
       const y = vp.top - el.top + this.v.y + c.y * this.v.z - 8;
