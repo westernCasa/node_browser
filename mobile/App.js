@@ -17,6 +17,7 @@ import TabsSheet from "./src/components/TabsSheet";
 import AddressSuggestions from "./src/components/AddressSuggestions";
 import AskSheet from "./src/components/AskSheet";
 import TrailHome from "./src/components/TrailHome";
+import FullTextSheet from "./src/components/FullTextSheet";
 import { captureRef } from "react-native-view-shot";
 import { Directory, File, Paths } from "expo-file-system";
 import SettingsSheet from "./src/components/SettingsSheet";
@@ -155,6 +156,12 @@ function Browser({ services }) {
       } catch {
         return;
       }
+      if (msg.type === "capinfo" && String(msg.id).startsWith("ft:")) {
+        // M19: the page's DOI or PMID, found on the phone; nothing is sent.
+        const ids = Capture.findIds(msg);
+        updateTab(tabId, { doi: ids.doi || "", pmid: ids.pmid || "" });
+        return;
+      }
       if (msg.type === "capinfo") {
         const p = pending.current.get(msg.id);
         if (!p) return;
@@ -206,6 +213,7 @@ function Browser({ services }) {
     // new load, so onLoadEnd does not run: start the new page's media here.
     if (before && !nav.loading && before.url && nav.url !== before.url) {
       if (lastSelection.current.tabId === tabId) lastSelection.current = { tabId: null, url: "", text: "" };
+      updateTab(tabId, { doi: "", pmid: "" });
       services.history.record(nav.url, nav.title);
       const tab = withRule({ ...before, url: nav.url });
       refs.current.get(tabId)?.injectJavaScript(autoplayCall(tab.rule.autoplay));
@@ -279,6 +287,7 @@ function Browser({ services }) {
       playback.navigated(tabId); // media of the previous page will not resume
       view.injectJavaScript(autoplayCall(tab.rule.autoplay));
       if (tab.rule.center !== false) view.injectJavaScript(CENTER_ON_TAP);
+      view.injectJavaScript(Capture.captureInfoCall(`ft:${tabId}`)); // DOI for the Full text button
       if (tabId !== activeRef.current) {
         if (!soundAllRef.current) view.injectJavaScript(MUTE_ALL); // only the active tab plays sound
         return;
@@ -544,6 +553,21 @@ function Browser({ services }) {
         canMosaic={canMosaic}
       />
       <SettingsSheet visible={sheet === "settings"} onClose={() => setSheet(null)} services={services} />
+
+      {(active?.doi || active?.pmid) && !home && !sheet ? (
+        <View style={{ position: "absolute", right: 12, bottom: toast ? 128 : 70, zIndex: 39, elevation: 39 }}>
+          <Button label="Full text" active a11yHint="Finds a free copy of this paper" onPress={() => setSheet("fulltext")} />
+        </View>
+      ) : null}
+      <FullTextSheet
+        visible={sheet === "fulltext"}
+        onClose={() => setSheet(null)}
+        doi={active?.doi}
+        pmid={active?.pmid}
+        services={services}
+        onOpenUrl={(url) => addTab(url)}
+        onOpenSettings={() => setSheet("settings")}
+      />
 
       {toast && !home ? (
         <View accessibilityLiveRegion="polite" style={{ position: "absolute", left: 12, right: 12, bottom: 70, zIndex: 40, elevation: 40, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.bg3, borderWidth: 1, borderColor: colors.line, borderRadius: 10, padding: 10 }}>
