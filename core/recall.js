@@ -23,6 +23,7 @@ const KINDS = {
   song: "audio", track: "audio", audio: "audio", podcast: "audio", listened: "audio",
   question: "question", questions: "question", thread: "question", threads: "question",
   note: "note", notes: "note",
+  moment: "moment", moments: "moment",
   search: "search", searches: "search", searched: "search",
   image: "image", images: "image", photo: "image", picture: "image", screenshot: "image",
 };
@@ -205,7 +206,7 @@ function recallIndex(store) {
           card: c ? c.id : null,
           url: it.url || c?.url || "",
           title: it.title || c?.title || it.url || "",
-          text: c ? [c.excerpt, ...(c.keywords || [])].filter(Boolean).join(" ") : "",
+          text: c ? [c.excerpt, c.transcript, c.text, ...(c.keywords || [])].filter(Boolean).join(" ") : "",
           at: it.at,
           timelineOnly: !c,
         });
@@ -213,7 +214,7 @@ function recallIndex(store) {
     }
     for (const c of cards.values()) {
       if (seenCards.has(c.id) || !c.placedAt) continue;
-      const text = [c.text, c.quote, c.query, c.excerpt, c.conclusion, ...(c.keywords || []), ...(c.replies || []).map((r) => r.text)].filter(Boolean).join(" ");
+      const text = [c.text, c.quote, c.query, c.excerpt, c.conclusion, c.transcript, ...(c.keywords || []), ...(c.replies || []).map((r) => r.text)].filter(Boolean).join(" ");
       rows.push({ kind: c.kind, media: c.media, trail: t.id, card: c.id, url: c.url || "", title: c.title || c.text || c.query || "", text, at: c.placedAt, timelineOnly: false });
     }
     for (const g of snap.groups || []) {

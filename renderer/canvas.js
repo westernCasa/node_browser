@@ -111,7 +111,14 @@
   ];
   const LABEL_TEXT = { supports: "Supports", contradicts: "Contradicts", answers: "Answers", raises: "Raises" };
   const looksLikeAddress = (q) => /^[a-z][a-z0-9+.-]*:\/\//i.test(q) || /^(localhost|[\w-]+(\.[\w-]+)+)(:\d+)?(\/\S*)?$/i.test(q);
-  const KIND_LABEL = { page: "Page", video: "Video", capture: "Capture", report: "Report", question: "Question", note: "Note", voice: "Voice", search: "Search", media: "Media" };
+  // "41:12" and back, for moments (B88).
+  const clockText = (t) => {
+    t = Math.max(0, Math.round(Number(t) || 0));
+    const hh = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = String(t % 60).padStart(2, "0");
+    return hh ? `${hh}:${String(m).padStart(2, "0")}:${s}` : `${m}:${s}`;
+  };
+  const secsText = (s) => String(s).split(":").reduce((n, p) => n * 60 + Number(p), 0);
+  const KIND_LABEL = { page: "Page", video: "Video", capture: "Capture", report: "Report", question: "Question", note: "Note", voice: "Voice", search: "Search", media: "Media", moment: "Moment" };
   const MEDIA_LABEL = { image: "Image", screenshot: "Screenshot", video: "Video", audio: "Audio" };
   // B114: what a card shows as media, and from where: the Library file on
   // this computer, or (in an opened file) the address it came from. Older
@@ -840,13 +847,13 @@
       if (this.multi?.has(c.id)) el.classList.add("multi");
       if (this.seenAt && c.placedAt > this.seenAt && c.id !== this.selected) el.classList.add("new");
       if (c.kind === "question" && c.status === "resolved") el.classList.add("resolved");
-      const pv = c.url ? this.previews[c.url] : null;
+      const pv = c.url && c.kind !== "moment" ? this.previews[c.url] : null;
       if (pv) el.classList.add("open");
 
       const head = h("div", "cv-card-head");
       const label = [c.kind === "media" ? MEDIA_LABEL[c.media] || "Media" : KIND_LABEL[c.kind] || "Card"];
       if (c.kind === "media" && c.url) label.push(hostOf(c.url));
-      if (c.kind === "page" || c.kind === "video") label.push(hostOf(c.url));
+      if (c.kind === "page" || c.kind === "video" || c.kind === "moment") label.push(hostOf(c.url));
       if (c.kind === "capture" && c.source) label.push(c.source);
       if (c.kind === "question") {
         const n = (c.replies || []).length;
@@ -873,7 +880,8 @@
       const title =
         c.kind === "note" ? c.text : c.kind === "capture" && c.quote ? `“${c.quote}”` : c.title || c.text || (c.url ? hostOf(c.url) : KIND_LABEL[c.kind]);
       el.append(h("div", "cv-card-title", title || ""));
-      const sub = md ? "" : this.cardSub(c);
+      if (c.kind === "moment") el.append(...this.momentParts(c));
+      const sub = md || c.kind === "moment" ? "" : this.cardSub(c);
       if (sub && !pv?.thumb) el.append(h("div", "cv-card-sub", sub));
       // How the page was reached (B83). NODE's own picks are marked.
       const via = c.kind === "page" && root.NodeProvenance ? root.NodeProvenance.viaText(c.via, c.played) : "";
@@ -886,6 +894,65 @@
       if (foot) el.append(h("div", "cv-card-foot", foot));
       el.setAttribute("aria-label", `${KIND_LABEL[c.kind] || "Card"}: ${title || ""}${pv ? ", open in a tab" : ""}`);
       return el;
+    }
+
+    // B88: a moment's times (click to change them), the captions shown
+    // during it, Play and Ask for ID.
+    momentParts(c) {
+      const times = h("button", "cv-moment-times cv-media-ctl", `${clockText(c.a)} – ${clockText(c.b)}`);
+      times.type = "button";
+      times.title = this.readonly ? "" : "Change the start and end";
+      times.disabled = this.readonly;
+      times.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (this.readonly) return;
+        const input = h("input", "cv-moment-edit cv-media-ctl");
+        input.value = `${clockText(c.a)}–${clockText(c.b)}`;
+        input.setAttribute("aria-label", "Start and end, like 41:12–42:30");
+        times.replaceWith(input);
+        input.focus();
+        input.select();
+        let done = false;
+        const finish = async (keep) => {
+          if (done) return;
+          done = true;
+          const m = input.value.match(/^\s*([\d:.]+)\s*[–-]\s*([\d:.]+)\s*$/);
+          const a = m && secsText(m[1]), b = m && secsText(m[2]);
+          if (keep && m && b > a) this.apply(await this.hooks.momentTimes?.(c.id, a, b));
+          else {
+            if (keep) this.say("Type the start and end like 41:12–42:30.");
+            input.replaceWith(times);
+          }
+        };
+        input.addEventListener("keydown", (e) => {
+          e.stopPropagation();
+          if (e.key === "Enter") finish(true);
+          if (e.key === "Escape") finish(false);
+        });
+        input.addEventListener("blur", () => finish(true));
+      });
+      const parts = [times];
+      if (c.transcript) parts.push(h("div", "cv-moment-text", c.transcript));
+      const acts = h("div", "cv-moment-acts cv-media-ctl");
+      const play = h("button", "chip", "Play");
+      play.type = "button";
+      play.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this.hooks.momentPlay?.(c.id);
+      });
+      const id = h("button", "chip", "Ask for ID");
+      id.type = "button";
+      id.disabled = this.readonly;
+      if (this.readonly) id.title = "Read only. Save as new trail to change it.";
+      id.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const out = await this.hooks.momentId?.(c.id);
+        this.apply(out);
+        if (out?.result?.id) this.select(out.result.id, { reveal: true });
+      });
+      acts.append(play, id);
+      parts.push(acts);
+      return parts;
     }
 
     surveyEl() {

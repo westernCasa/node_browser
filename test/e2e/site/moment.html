@@ -1,0 +1,12 @@
+<!doctype html><html><head><title>A long talk about levain</title></head><body>
+<h1>A long talk about levain</h1>
+<video id="v" width="640" height="360" muted controls>
+  <track kind="captions" srclang="en" label="English" src="/moment.vtt" default>
+</video>
+<p>A video with captions, for media moments (B88).</p>
+<script>
+  // The test server can't serve parts of a file, so seeking needs the whole
+  // video in memory first.
+  fetch("/long.webm").then((r) => r.blob()).then((b) => { document.getElementById("v").src = URL.createObjectURL(b); });
+</script>
+</body></html>

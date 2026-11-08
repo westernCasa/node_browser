@@ -3880,7 +3880,7 @@ async function openCanvas({ focus = false, select = "" } = {}) {
   if (!api?.trailGet) return;
   const seq = ++canvasSeq;
   trailCanvas ||= new TrailCanvas(canvasEl, api, {
-    open: (card, tab) => (tab?.tabId ? api.activateTab(tab.tabId) : api.createTab(card.url)),
+    open: (card, tab) => (card.kind === "moment" ? api.trailMomentPlay(card.id) : tab?.tabId ? api.activateTab(tab.tabId) : api.createTab(card.url)),
     search: (text) => api.createTab(text, { how: "typed" }),
     pickTrail: (id) => api.trailSwitch(id),
     // B104: Put on canvas (a timeline row dropped on it) and Remove from canvas.
@@ -3902,6 +3902,10 @@ async function openCanvas({ focus = false, select = "" } = {}) {
     webSearch: (q) => api.trailSearch(q),
     privateSearch: (q) => api.trailSearch(q, { private: true }),
     ask: (q) => askAboutTrail(q),
+    // B88: moment cards.
+    momentPlay: (id) => api.trailMomentPlay(id),
+    momentTimes: (id, a, b) => api.trailMomentTimes(id, a, b),
+    momentId: (id) => api.trailMomentId(id),
     // B89: results from past trails in the search bar's list. Cards on this
     // trail are left out: the search bar already marks them.
     recall: async (q) => ((await api.trailRecall?.(q, 6)) || []).filter((r) => !(r.card && r.trail === trailCanvas?.data?.trail?.id)).slice(0, 4),
@@ -4619,6 +4623,12 @@ async function goRecall(r) {
   }
 }
 let timelineFound = null;
+// "41:12", for moments in the timeline (B88).
+function clockText(t) {
+  t = Math.max(0, Math.round(Number(t) || 0));
+  const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = String(t % 60).padStart(2, "0");
+  return h ? `${h}:${String(m).padStart(2, "0")}:${s}` : `${m}:${s}`;
+}
 async function showFoundInTimeline(r) {
   timelineFound = { url: r.url, at: r.at, until: Date.now() + 4000 };
   // The sidebar shows beside the canvas; over a page it is hidden.
@@ -4938,7 +4948,7 @@ function paintTimeline() {
         });
       }
       row.querySelector(".t").textContent = time;
-      row.querySelector(".nm").textContent = it.title || it.url || "Page";
+      row.querySelector(".nm").textContent = (it.moment ? `Moment ${clockText(it.moment.a)}–${clockText(it.moment.b)} · ` : "") + (it.title || it.url || "Page");
       const secs = typeof it.dwell === "number" ? Math.round(it.dwell / 1000) : null;
       row.querySelector(".k").textContent = it.timelineOnly ? (secs !== null ? `${secs} s` : it.removedFromCanvas ? "Removed" : "Timeline only") : "";
       row.title = `${it.title || ""}\n${it.url || ""}${it.timelineOnly ? "\nTimeline only: not on the canvas" : ""}`;

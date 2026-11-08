@@ -46,7 +46,7 @@ const { createAdblock } = require("./adblock");
 const { createNet } = require("./core/net");
 const { createSuggest } = require("./core/suggest");
 const { createPreview } = require("./core/preview");
-const { extractionScript, autoplayScript, blockAutoplayScript, centerOnClickScript, pipScript, loopScript, readableTextScript, pauseForLimitScript, resumeScript, anyPlayingScript } = require("./core/page-scripts");
+const { momentScript, extractionScript, autoplayScript, blockAutoplayScript, centerOnClickScript, pipScript, loopScript, readableTextScript, pauseForLimitScript, resumeScript, anyPlayingScript } = require("./core/page-scripts");
 const { PlaybackLimiter } = require("./core/playback");
 const { fsStorage } = require("./fs-storage");
 const { normalizeUrl, hostOf, SEARCH_URL, isSensitiveUrl } = require("./core/urls");
@@ -1905,11 +1905,11 @@ function contextMenuItems(tab, p, { video = p.mediaType === "video" } = {}) {
   if ((p.mediaType === "video" || p.mediaType === "audio") && http(p.srcURL)) {
     sep();
     items.push({ label: `Open ${p.mediaType === "video" ? "Video" : "Audio"} in New Tab`, click: () => createTab(p.srcURL) }, { label: `Copy ${p.mediaType === "video" ? "Video" : "Audio"} Address`, click: () => clipboard.writeText(p.srcURL) });
-    if (p.mediaType === "video") items.push({ label: "Picture in Picture", click: () => togglePip(tab.id) }, { label: "Loop Section", submenu: loopMenu(tab.id) });
+    if (p.mediaType === "video") items.push({ label: "Picture in Picture", click: () => togglePip(tab.id) }, { label: "Loop Section", submenu: loopMenu(tab.id) }, { label: "Save Moment: Start / End", click: () => saveMoment(tab.id, "mark") }, { label: "Save the Last 30 Seconds", click: () => saveMoment(tab.id, "last", 30) });
   } else if (video) {
     // A video the right-click did not land on directly (custom player, blob: address).
     sep();
-    items.push({ label: "Picture in Picture", click: () => togglePip(tab.id) }, { label: "Loop Section", submenu: loopMenu(tab.id) });
+    items.push({ label: "Picture in Picture", click: () => togglePip(tab.id) }, { label: "Loop Section", submenu: loopMenu(tab.id) }, { label: "Save Moment: Start / End", click: () => saveMoment(tab.id, "mark") }, { label: "Save the Last 30 Seconds", click: () => saveMoment(tab.id, "last", 30) });
   }
   // On a Mac, a right-click selects the word under the pointer, which can be a
   // lone quote mark or bracket; only offer search and pin for real words.
@@ -2549,6 +2549,8 @@ function buildMenu() {
             if (tab) loopVideo(tab.id, tab.loop ? "stop" : "next", 60);
           },
         },
+        { label: "Save Moment: Start / End", accelerator: "CmdOrCtrl+Shift+K", click: () => saveMoment(activeId, "mark") },
+        { label: "Save the Last 30 Seconds", accelerator: "CmdOrCtrl+Shift+J", click: () => saveMoment(activeId, "last", 30) },
         { label: "Show or Hide Suggestions", accelerator: "CmdOrCtrl+Shift+.", click: () => sendUi("toggle-suggest") },
         { type: "separator" },
         // Over a page the sidebar is out of the way; this brings it over the page, or sends it away.
@@ -3365,6 +3367,94 @@ async function loopVideo(id, op, secs) {
   return tab.loop;
 }
 ipcMain.handle("tab:loop", (_e, id, op, secs) => loopVideo(id, op, secs));
+
+// ---- Media moments (B88) ----
+// ⌘⇧K: the first press marks the start and playback goes on; the second
+// marks the end, saves the moment and pauses. With a loop set (B70), one
+// press saves the loop's range. ⌘⇧J saves the last 30 seconds. A moment is
+// a card next to its page's card on the canvas, with the captions shown
+// during it when the site had captions.
+const MOMENT_KEY = process.platform === "darwin" ? "⌘⇧K" : "Ctrl+Shift+K";
+async function inMediaFrames(tab, script) {
+  let frames = [];
+  try {
+    frames = tab.view.webContents.mainFrame.framesInSubtree;
+  } catch (_) {}
+  for (const f of frames) {
+    try {
+      const r = await f.executeJavaScript(script, true);
+      if (r && r !== "none") return r;
+    } catch (_) {}
+  }
+  return null;
+}
+async function saveMoment(id, mode = "mark", secs = 30) {
+  const tab = tabs.get(id || activeId);
+  if (!tab || tab.sleeping) return null;
+  if (tab.private) return void sendUi("notice", { message: "Private tabs are in no trail, so moments can't be saved from them." });
+  const trail = tab.page?.trail || tab.trail || currentTrail();
+  if (trailStore?.get(trail)?.trail.readonly) return void sendUi("notice", { message: "This trail is read only. Save it as a new trail to add moments." });
+  let op = mode === "last" ? "last" : "end";
+  if (mode === "mark") {
+    const st = await inMediaFrames(tab, momentScript("state"));
+    if (!st) return void sendUi("notice", { message: "No video or audio on this page. Start it first." });
+    if (!st.marked) op = tab.loop ? "loop" : "start";
+  }
+  const r = await inMediaFrames(tab, momentScript(op, secs));
+  if (!r) return void sendUi("notice", { message: "No video or audio on this page. Start it first." });
+  if (r.started) {
+    tab.momentMark = true;
+    return void sendUi("notice", { message: `Moment started at ${clock(r.a)}. Press ${MOMENT_KEY} again to end it and save it.` });
+  }
+  tab.momentMark = false;
+  if (r.tooShort) return void sendUi("notice", { message: "That moment was under a second. Nothing saved." });
+  const wc = tab.view.webContents;
+  const url = tab.page?.url || wc.getURL().split("#")[0];
+  research.saveNow();
+  // The page becomes a card first, so the moment goes next to it.
+  engagePage(tab, "moment");
+  const card = trailStore.momentCard(trail, { url, title: wc.getTitle(), a: r.a, b: r.b, transcript: r.transcript });
+  research.reload();
+  if (!card) return void sendUi("notice", { message: "This page can't be saved to a trail." });
+  sendUi("trail-changed", { trail, card: card.id });
+  sendUi("notice", { message: `Saved a moment, ${clock(card.a)} to ${clock(card.b)}, to the canvas.${r.transcript ? " Its captions came with it." : ""}` });
+  return card;
+}
+ipcMain.handle("tab:moment", (_e, id, mode, secs) => saveMoment(id, mode === "last" ? "last" : "mark", Number(secs) || 30));
+// Play a moment card: its page, at its start, looping its range.
+ipcMain.handle("trail:moment-play", async (_e, cardId) => {
+  const c = trailStore?.card(currentTrail(), String(cardId));
+  if (c?.kind !== "moment" || !c.url) return null;
+  const base = (u) => String(u || "").split("#")[0];
+  let tab = [...tabs.values()].find((t) => !t.private && t.trail === currentTrail() && base(t.page?.url || t.view.webContents.getURL()) === base(c.url));
+  if (tab) activateTab(tab.id);
+  else tab = tabs.get(createTab(c.url));
+  if (!tab) return null;
+  // The player may still be loading: try for up to 15 s.
+  for (let i = 0; i < 30; i++) {
+    if (tab.view.webContents.isDestroyed()) return null;
+    const r = await inMediaFrames(tab, loopScript("range", 60, { a: c.a, b: c.b }));
+    if (r && !r.stopped) {
+      tab.loop = { a: r.a, b: r.b, url: base(tab.view.webContents.getURL()) };
+      emitList();
+      return tab.loop;
+    }
+    await new Promise((res) => setTimeout(res, 500));
+  }
+  sendUi("notice", { message: "The video didn't start here. Press play, then try again." });
+  return null;
+});
+ipcMain.handle("trail:moment-times", (_e, cardId, a, b) => canvasEdit((id) => trailStore.momentTimes(id, String(cardId), Number(a), Number(b))));
+// Ask for ID: a question "ID at 41:12?" next to the moment, with a "raises" line.
+ipcMain.handle("trail:moment-id", (_e, cardId) =>
+  canvasEdit((id) => {
+    const c = trailStore.card(id, String(cardId));
+    if (c?.kind !== "moment") return null;
+    const q = trailStore.questionCard(id, { id: `t${Date.now().toString(36)}`, title: `ID at ${clock(c.a)}?`, status: "open", by: loadSettings().displayName || "", at: Date.now(), replies: [] }, { place: { x: Math.round(c.x + c.w + 60), y: Math.round(c.y) } });
+    if (q) trailStore.link(id, c.id, q.id, { kind: "you", label: "raises" });
+    return q;
+  }),
+);
 function loopMenu(id) {
   const tab = tabs.get(id || activeId);
   const run = (op, secs) => () => loopVideo(tab?.id, op, secs);

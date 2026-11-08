@@ -392,11 +392,12 @@ function pipScript() {
  * another address (YouTube reuses one video element for every video).
  * Returns { a, b, duration } or "none".
  */
-function loopScript(op, secs = 60) {
+function loopScript(op, secs = 60, range = null) {
   return `(() => {
     const op = ${JSON.stringify(String(op))};
+    const range = ${JSON.stringify(range && range.b > range.a ? { a: Number(range.a), b: Number(range.b) } : null)};
     const secs = ${Math.max(5, Math.min(3600, Number(secs) || 60))};
-    const vids = [...document.querySelectorAll("video")].filter((v) => v.readyState > 0);
+    const vids = [...document.querySelectorAll(op === "range" ? "video, audio" : "video")].filter((v) => v.readyState > 0);
     if (!vids.length) return "none";
     const area = (v) => { const r = v.getBoundingClientRect(); return r.width * r.height; };
     const v = vids.find((x) => x.__nodeLoop) || vids.find((x) => !x.paused) || vids.sort((a, b) => area(b) - area(a))[0];
@@ -410,6 +411,7 @@ function loopScript(op, secs = 60) {
     if (op === "next") { a = now; b = Math.min(now + secs, end); }
     else if (op === "start") { a = now; b = L && L.b > now + 1 ? L.b : Math.min(now + secs, end); }
     else if (op === "end") { b = now; a = L && L.a < now - 1 ? L.a : Math.max(0, now - secs); }
+    else if (op === "range" && range) { a = range.a; b = Math.min(range.b, end); } // a saved moment (B88)
     else return "none";
     if (!(b > a + 0.5)) return "none";
     v.__nodeLoop = { a, b, href: here() };
@@ -436,7 +438,8 @@ function loopScript(op, secs = 60) {
       v.addEventListener("ended", v.__nodeLoopFn);
     }
     v.__nodePrev = v.currentTime;
-    if (op === "next" || op === "start") { if (v.paused) v.play().catch(() => {}); }
+    if (op === "range") { v.currentTime = a; v.__nodePrev = a; v.play().catch(() => {}); }
+    else if (op === "next" || op === "start") { if (v.paused) v.play().catch(() => {}); }
     else v.currentTime = a;
     return { a, b, duration: v.duration };
   })()`;
@@ -469,4 +472,78 @@ function anyPlayingScript() {
   return `[...document.querySelectorAll("video, audio")].some((el) => !el.paused && !el.ended)`;
 }
 
-module.exports = { extractionScript, autoplayScript, blockAutoplayScript, centerOnClickScript, pipScript, loopScript, readableTextScript, pauseForLimitScript, resumeScript, anyPlayingScript };
+// Media moments (B88). op:
+//   start  mark the start (playback goes on) and collect the captions shown
+//   end    the start mark to now, with the captions collected; pauses
+//   last   the last secs seconds up to now, with the caption cues in that range; pauses
+//   loop   the B70 loop's range, with its caption cues; pauses
+//   cancel forget the start mark
+//   state  { marked, t } without changing anything
+// Playing a moment again uses loopScript("range", 0, { a, b }).
+// Returns "none" when the page has no started video or audio.
+function momentScript(op, arg) {
+  return `(() => {
+    const op = ${JSON.stringify(String(op))};
+    const arg = ${JSON.stringify(arg ?? null)};
+    const media = [...document.querySelectorAll("video, audio")].filter((m) => m.readyState > 0 || (op === "play" && m.currentSrc));
+    if (!media.length) return "none";
+    const area = (v) => { const r = v.getBoundingClientRect(); return r.width * r.height; };
+    const m = media.find((x) => x.__nodeMoment) || media.find((x) => !x.paused) || media.sort((a, b) => area(b) - area(a))[0];
+    // Captions on screen now: text tracks, then players that draw their own.
+    const shown = () => {
+      const out = [];
+      for (const tr of m.textTracks || []) if (tr.mode !== "disabled" && tr.activeCues) for (const c of tr.activeCues) out.push(c.text);
+      if (!out.length) for (const el of document.querySelectorAll(".ytp-caption-segment, .vp-captions, .captions-text, [data-testid='caption-text']")) out.push(el.textContent);
+      return out.map((s) => s.replace(/<[^>]+>/g, "").replace(/\\s+/g, " ").trim()).filter(Boolean).join(" ");
+    };
+    // Caption cues from a to b, for a range already played.
+    const cues = (a, b) => {
+      const out = [];
+      for (const tr of m.textTracks || []) {
+        if (!/^(subtitles|captions)$/.test(tr.kind) || !tr.cues) continue;
+        for (const c of tr.cues) if (c.endTime > a && c.startTime < b) out.push(c.text.replace(/<[^>]+>/g, "").replace(/\\s+/g, " ").trim());
+        if (out.length) break;
+      }
+      return out;
+    };
+    const join = (lines) => { const o = []; for (const l of lines) if (l && o[o.length - 1] !== l) o.push(l); return o.join(" ").slice(0, 1200); };
+    const stop = () => { if (m.__nodeMoment) clearInterval(m.__nodeMoment.timer); m.__nodeMoment = null; };
+    const info = (a, b, lines) => ({ a, b, duration: isFinite(m.duration) ? m.duration : null, transcript: join(lines), kind: m.tagName === "AUDIO" ? "audio" : "video" });
+    if (op === "state") return { marked: Boolean(m.__nodeMoment), t: m.currentTime, a: m.__nodeMoment ? m.__nodeMoment.a : null };
+    if (op === "cancel") { stop(); return { cancelled: true }; }
+    if (op === "start") {
+      stop();
+      const mk = { a: m.currentTime, lines: [], href: location.href.split("#")[0] };
+      const take = () => { const t = shown(); if (t && mk.lines[mk.lines.length - 1] !== t) mk.lines.push(t); };
+      take();
+      mk.timer = setInterval(take, 400);
+      m.__nodeMoment = mk;
+      if (m.paused) m.play().catch(() => {});
+      return { started: true, a: mk.a };
+    }
+    if (op === "end") {
+      const mk = m.__nodeMoment;
+      if (!mk || mk.href !== location.href.split("#")[0]) { stop(); return "none"; }
+      const b = m.currentTime;
+      const lines = mk.lines.length ? mk.lines : cues(mk.a, b);
+      stop();
+      m.pause();
+      return b > mk.a + 0.5 ? info(mk.a, b, lines) : { tooShort: true };
+    }
+    if (op === "last") {
+      const b = m.currentTime, a = Math.max(0, b - Math.max(5, Math.min(600, Number(arg) || 30)));
+      stop();
+      m.pause();
+      return b > a + 0.5 ? info(a, b, cues(a, b)) : { tooShort: true };
+    }
+    if (op === "loop") {
+      const L = m.__nodeLoop;
+      if (!L || L.b == null) return "none";
+      m.pause();
+      return info(L.a, L.b, cues(L.a, L.b));
+    }
+    return "none";
+  })()`;
+}
+
+module.exports = { momentScript, extractionScript, autoplayScript, blockAutoplayScript, centerOnClickScript, pipScript, loopScript, readableTextScript, pauseForLimitScript, resumeScript, anyPlayingScript };
