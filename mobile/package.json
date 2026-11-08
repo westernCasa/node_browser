@@ -14,6 +14,7 @@
     "react-native": "0.88.1",
     "react-native-safe-area-context": "~5.11.1",
     "react-native-url-polyfill": "^2.0.0",
+    "react-native-view-shot": "6.1.1",
     "react-native-webview": "14.0.1"
   },
   "scripts": {
@@ -22,7 +23,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "bundle:check": "expo export --platform android --platform ios --output-dir dist-check",
-    "test": "node test/trail-flow.test.js"
+    "test": "node test/trail-flow.test.js && node test/capture.test.js"
   },
   "private": true
 }
