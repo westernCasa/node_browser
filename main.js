@@ -38,6 +38,7 @@ const { ResearchStore } = require("./core/research");
 const { TrailStore, migrateSessions, sessionStorageOver, mediaKindOf } = require("./core/trail");
 const Prov = require("./core/provenance");
 const { recall, recallIndex } = require("./core/recall");
+const ShareCheck = require("./core/share-check");
 const Replay = require("./core/replay");
 const { Usage } = require("./core/usage");
 const { HistoryStore } = require("./core/history");
@@ -4315,11 +4316,27 @@ function shareFileInfo() {
     copies: shareCopies(snap).length,
   };
 }
-function shareFileText(opts = {}) {
+// B86: contact details in what would be shared, so each can be left out.
+// kind "file" (the trail file, with its choices) or "link" (pages ticked).
+function shareFindings(opts = {}) {
+  if (opts.kind === "link") return ShareCheck.findContacts(ShareCheck.sessionTexts(linkTrail(opts)));
   const snap = shareSnapshot();
+  if (opts.timeline === false) snap.timeline = [];
+  return ShareCheck.findContacts(ShareCheck.snapshotTexts(snap, { note: String(opts.note || "").slice(0, 300) }));
+}
+ipcMain.handle("trail:share-check", (_e, opts = {}) => shareFindings(opts || {}));
+// The details the person unticked: only ones NODE found (by value).
+function leaveOutOf(opts) {
+  const want = new Set((Array.isArray(opts.leaveOut) ? opts.leaveOut : []).map(String));
+  if (!want.size) return [];
+  return shareFindings(opts).filter((f) => want.has(f.value));
+}
+function shareFileText(opts = {}) {
+  const leave = leaveOutOf({ ...opts, kind: "file" });
+  const snap = ShareCheck.redact(shareSnapshot(), leave);
   return TrailFile.toTrailMd(snap, {
     by: loadSettings().displayName || "",
-    note: String(opts.note || "").slice(0, 300),
+    note: ShareCheck.redact(String(opts.note || "").slice(0, 300), leave),
     startHere: opts.startHere || "",
     timeline: opts.timeline !== false,
     openTabs: opts.tabs ? openTabCards(snap) : [],
@@ -4333,15 +4350,18 @@ function shareCopies(snap = shareSnapshot()) {
 }
 ipcMain.handle("trail:share-text", (_e, opts) => shareFileText(opts || {}));
 // Builds the file text. opts: { pages: [urls], reports: bool, tabs: bool }.
-function trailFileText(opts = {}) {
-  const by = loadSettings().displayName || "";
-  const trail = TrailFile.fromSession(research.current, {
-    by,
+function linkTrail(opts = {}) {
+  return TrailFile.fromSession(research.current, {
+    by: loadSettings().displayName || "",
     pages: Array.isArray(opts.pages) ? opts.pages.map(String) : null,
     reports: opts.reports === false ? [] : trailReports(),
     includeTabs: opts.tabs ? trailTabUrls() : [],
   });
-  return TrailFile.toMarkdown(trail, { by });
+}
+function trailFileText(opts = {}) {
+  const by = loadSettings().displayName || "";
+  // B86: details the person unticked are left out.
+  return TrailFile.toMarkdown(ShareCheck.redact(linkTrail(opts), leaveOutOf({ ...opts, kind: "link" })), { by });
 }
 const trailFileName = (name) => `${String(name || "Trail").replace(/[\\/:*?"<>|\u0000-\u001f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 80) || "Trail"}.trail.md`;
 let trailSavePath = null; // tests set a path instead of the Save dialog

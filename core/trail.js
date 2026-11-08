@@ -944,6 +944,8 @@ class TrailStore {
     };
     for (const k of ["reports", "captures", "shareLog", "agent", "extra", "tags"]) if (research[k]?.length) s[k] = JSON.parse(JSON.stringify(research[k]));
     if (research.sharedId) s.sharedId = research.sharedId;
+    // B86: an opened trail file came from someone else; agents treat it as data.
+    if (trail.readonly) s.fromFile = { by: trail.from || "" };
     return s;
   }
 
