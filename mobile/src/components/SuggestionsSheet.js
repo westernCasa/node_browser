@@ -21,12 +21,22 @@ export default function SuggestionsSheet({ visible, onClose, state, controller, 
       <Text style={ui.help}>Tap a keyword to pin it. Press and hold to hide it.</Text>
       <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 8 }}>
         {pins.map((k) => (
-          <Pressable key={"p" + k} style={[ui.chip, { borderColor: colors.accent }]} onPress={() => controller.togglePin(k)}>
+          <Pressable key={"p" + k} style={[ui.chip, { borderColor: colors.accent }]} onPress={() => controller.togglePin(k)} accessibilityRole="button" accessibilityLabel={`${k}, pinned`} accessibilityHint="Unpins this keyword">
             <Text style={[ui.chipText, { color: colors.accent }]}>📌 {k}</Text>
           </Pressable>
         ))}
         {auto.map((k) => (
-          <Pressable key={"a" + k} style={ui.chip} onPress={() => controller.togglePin(k)} onLongPress={() => controller.hide(k)}>
+          <Pressable
+            key={"a" + k}
+            style={ui.chip}
+            onPress={() => controller.togglePin(k)}
+            onLongPress={() => controller.hide(k)}
+            accessibilityRole="button"
+            accessibilityLabel={k}
+            accessibilityHint="Pins this keyword. Actions: hide it"
+            accessibilityActions={[{ name: "hide", label: "Hide keyword" }]}
+            onAccessibilityAction={(e) => e.nativeEvent.actionName === "hide" && controller.hide(k)}
+          >
             <Text style={ui.chipText}>{k}</Text>
           </Pressable>
         ))}
@@ -52,7 +62,7 @@ export default function SuggestionsSheet({ visible, onClose, state, controller, 
               {r.source}
               {r.query ? <Text style={{ color: colors.mute, textTransform: "none" }}> · {r.query}</Text> : null}
             </Text>
-            <Pressable onPress={() => controller.dismiss(r.url)} hitSlop={10}>
+            <Pressable onPress={() => controller.dismiss(r.url)} hitSlop={10} accessibilityRole="button" accessibilityLabel={`Dismiss ${r.title}`}>
               <Text style={{ color: colors.mute }}>×</Text>
             </Pressable>
           </View>

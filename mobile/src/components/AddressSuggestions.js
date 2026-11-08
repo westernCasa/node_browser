@@ -64,7 +64,7 @@ export default function AddressSuggestions({ query, history, bookmarks, getText,
       {/* "handled": tapping a row does not first close the keyboard and the list. */}
       <ScrollView keyboardShouldPersistTaps="handled">
         {rows.map((r) => (
-          <Pressable key={r.key} onPress={() => onPick(r.url)} style={{ paddingHorizontal: 12, paddingVertical: 9, borderTopWidth: 1, borderColor: colors.line }}>
+          <Pressable key={r.key} onPress={() => onPick(r.url)} accessibilityRole="button" accessibilityLabel={`${r.history ? "From history: " : ""}${r.label}`} style={{ paddingHorizontal: 12, paddingVertical: 9, borderTopWidth: 1, borderColor: colors.line }}>
             <Text style={{ color: colors.text, fontSize: 14 }} numberOfLines={1}>
               {r.history ? "🕘 " : ""}
               {r.label}

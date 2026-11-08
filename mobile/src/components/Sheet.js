@@ -12,7 +12,7 @@ export default function Sheet({ visible, title, kicker, onClose, children, scrol
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 14, paddingBottom: 6 }}>
           <View>
             {kicker ? <Text style={[ui.kicker, { marginTop: 0 }]}>{kicker}</Text> : null}
-            <Text style={ui.title}>{title}</Text>
+            <Text style={ui.title} accessibilityRole="header">{title}</Text>
           </View>
           <Button label="Close" onPress={onClose} small />
         </View>

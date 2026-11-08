@@ -121,7 +121,21 @@ export default function TrailHome({ services, controller, onBrowse, onOpenUrl, o
     <View style={{ flex: 1, backgroundColor: colors.bg2 }}>
       {/* Trail switcher: initials, name, last visit, dots; Share next to it. */}
       <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 6 }} {...swipe.panHandlers}>
-        <Pressable onPress={() => setMenu(true)} style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }} accessibilityRole="button" accessibilityLabel="Trails">
+        <Pressable
+          onPress={() => setMenu(true)}
+          style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}
+          accessibilityRole="button"
+          accessibilityLabel={`Trail: ${snap?.trail.name || "Trail"}${readonly ? `, from ${snap.trail.from || "someone"}, read only` : ""}`}
+          accessibilityHint="Opens the list of trails"
+          accessibilityActions={[
+            { name: "next", label: "Next trail" },
+            { name: "previous", label: "Previous trail" },
+          ]}
+          onAccessibilityAction={(e) => {
+            const next = list[index + (e.nativeEvent.actionName === "next" ? 1 : -1)];
+            if (next) show(next.id);
+          }}
+        >
           <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: readonly ? "#2a3a2a" : "#2a3350", alignItems: "center", justifyContent: "center" }}>
             <Text style={{ color: colors.text, fontWeight: "700", fontSize: 13 }}>{snap?.trail.mono || "?"}</Text>
           </View>
@@ -135,12 +149,12 @@ export default function TrailHome({ services, controller, onBrowse, onOpenUrl, o
             </Text>
           </View>
         </Pressable>
-        <Button label="Share" small onPress={() => (readonly ? openOnDesktop() : setSharing(true))} />
+        <Button label="Share" a11yLabel={readonly ? "Share this file" : "Share this trail as a file"} small onPress={() => (readonly ? openOnDesktop() : setSharing(true))} />
       </View>
       {list.length > 1 ? (
         <View style={{ flexDirection: "row", justifyContent: "center", gap: 6, paddingBottom: 6 }}>
           {list.slice(0, MAX_DOTS).map((t) => (
-            <Pressable key={t.id} onPress={() => show(t.id)} hitSlop={6}>
+            <Pressable key={t.id} onPress={() => show(t.id)} hitSlop={6} accessibilityRole="button" accessibilityLabel={`Trail: ${t.name}`} accessibilityState={{ selected: t.id === id }}>
               <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: t.id === id ? colors.accent : colors.line }} />
             </Pressable>
           ))}
@@ -170,7 +184,7 @@ export default function TrailHome({ services, controller, onBrowse, onOpenUrl, o
 
       <View style={{ flexDirection: "row", marginHorizontal: 14, borderWidth: 1, borderColor: colors.line, borderRadius: 8, overflow: "hidden" }}>
         {tabs.map(([k, label]) => (
-          <Pressable key={k} onPress={() => setTab(k)} style={{ flex: 1, paddingVertical: 7, alignItems: "center", backgroundColor: tab === k ? colors.bg3 : "transparent" }}>
+          <Pressable key={k} onPress={() => setTab(k)} accessibilityRole="tab" accessibilityState={{ selected: tab === k }} accessibilityLabel={label} style={{ flex: 1, paddingVertical: 7, alignItems: "center", backgroundColor: tab === k ? colors.bg3 : "transparent" }}>
             <Text style={{ color: tab === k ? colors.accent : colors.mute, fontSize: 13, fontWeight: "600" }}>{label}</Text>
           </Pressable>
         ))}
