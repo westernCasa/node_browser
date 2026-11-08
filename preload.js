@@ -115,6 +115,11 @@ contextBridge.exposeInMainWorld("scout", {
   historySearch: (q, limit) => ipcRenderer.invoke("history:search", q, limit),
   // B89: results from past trails for what the person remembers.
   trailRecall: (q, limit) => ipcRenderer.invoke("trail:recall", q, limit),
+  // B88: media moments.
+  tabMoment: (id, mode, secs) => ipcRenderer.invoke("tab:moment", id, mode, secs),
+  trailMomentPlay: (id) => ipcRenderer.invoke("trail:moment-play", id),
+  trailMomentTimes: (id, a, b) => ipcRenderer.invoke("trail:moment-times", id, a, b),
+  trailMomentId: (id) => ipcRenderer.invoke("trail:moment-id", id),
   historyClear: () => ipcRenderer.invoke("history:clear"),
   claudeDesktop: (mode) => ipcRenderer.invoke("agents:claude-desktop", mode),
   historyRemove: (url) => ipcRenderer.invoke("history:remove", url),

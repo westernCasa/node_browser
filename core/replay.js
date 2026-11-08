@@ -28,6 +28,11 @@
 // ids reached so far (this step included).
 
 const Prov = require("./provenance");
+const clockOf = (t) => {
+  t = Math.max(0, Math.round(Number(t) || 0));
+  const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = String(t % 60).padStart(2, "0");
+  return h ? `${h}:${String(m).padStart(2, "0")}:${s}` : `${m}:${s}`;
+};
 const SESSION_GAP_MS = 30 * 60 * 1000;
 const CARD_EVENTS = new Set(["opened", "placed", "captured", "asked", "reported", "noted"]);
 
@@ -202,6 +207,7 @@ function stepCaption(st, ctx) {
   else if (c.kind === "note") t = `${w} wrote a note: ${q(title)}`;
   else if (c.kind === "voice") t = `${w} recorded a voice note.`;
   else if (c.kind === "search") t = `${w} searched: ${q(title)}.`;
+  else if (c.kind === "moment") t = `${w} saved a moment of ${q(title)}, ${clockOf(c.a)} to ${clockOf(c.b)}.`;
   else if (c.kind === "media") {
     const from = site(c.url) ? ` from ${site(c.url)}` : "";
     t = {

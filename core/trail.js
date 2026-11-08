@@ -24,8 +24,8 @@ const GROUP_SIDE = 24; // group padding around its cards: sides and bottom
 const GROUP_TOP = 48; // and top, where the name sits
 const SESSION_GAP_MS = 30 * 60 * 1000; // a gap of more than 30 minutes starts a new session
 const ENGAGED_MS = 20 * 1000; // the 20-second rule (doc 23); a starting guess
-const EVENT_TYPES = new Set(["opened", "bounced", "captured", "asked", "reported", "noted", "placed", "removed", "linked", "unlinked", "grouped", "renamed", "resolved", "moved"]);
-const CARD_KINDS = new Set(["page", "video", "capture", "report", "question", "note", "voice", "search", "media"]);
+const EVENT_TYPES = new Set(["opened", "bounced", "captured", "asked", "reported", "noted", "placed", "removed", "linked", "unlinked", "grouped", "renamed", "resolved", "moved", "edited"]);
+const CARD_KINDS = new Set(["page", "video", "capture", "report", "question", "note", "voice", "search", "media", "moment"]);
 const LINE_KINDS = new Set(["nav", "auto", "you", "suggested"]);
 const LINE_LABELS = new Set(["", "supports", "contradicts", "answers", "raises"]);
 // Card sizes at 100% zoom, by kind (handoff: cards 240-260 px wide).
@@ -39,6 +39,7 @@ const SIZE = {
   voice: [260, 170],
   search: [260, 140],
   media: [300, 240],
+  moment: [280, 190],
 };
 // Media cards (B114): image, screenshot, video and audio from the Library.
 const MEDIA_KINDS = new Set(["image", "screenshot", "video", "audio"]);
@@ -542,6 +543,46 @@ class TrailStore {
     if (card && source && !source.removed) this.link(id, source.id, card.id, { kind: "auto", label: "captured from", at });
     return card;
   }
+  // ---- media moments (B88) ----
+  // A section of a video or audio page, a to b in seconds, with the caption
+  // text shown during it when the site had captions. It goes next to its
+  // page's card, with a grey line from the page.
+  momentCard(id, { url, title = "", a, b, transcript = "", near, at = this.now() } = {}) {
+    const d = this.get(id);
+    a = Math.max(0, Math.round(Number(a) * 10) / 10);
+    b = Math.round(Number(b) * 10) / 10;
+    if (!d || d.trail.readonly || !url || isSensitiveUrl(url) || !(b > a)) return null;
+    const have = d.cards.find((c) => c.kind === "moment" && !c.removed && c.url === url && Math.abs(c.a - a) < 1 && Math.abs(c.b - b) < 1);
+    if (have) return have;
+    const [w, h] = SIZE.moment;
+    const source = this.pageCard(id, url);
+    const pos = placeNear({ cards: d.cards.filter((c) => !c.removed), groups: d.groups }, source && !source.removed ? source : null, w, h, { near: near || this.below(id, w) });
+    for (const m of pos.moves) {
+      const o = (m.kind === "group" ? d.groups : d.cards).find((k) => k.id === m.id);
+      if (!o) continue;
+      if (typeof m.y === "number") o.y = m.y;
+      if (typeof m.h === "number") o.h = m.h;
+    }
+    const fields = { kind: "moment", url, title: String(title || source?.title || url).slice(0, 300), a, b, placedAt: at, w, h, x: pos.x, y: pos.y };
+    const text = String(transcript || "").replace(/\s+/g, " ").trim().slice(0, 1200);
+    if (text) fields.transcript = text;
+    const card = this.addCard(id, fields, { at, event: "captured", data: { url, a, b, moment: true } });
+    if (card && source && !source.removed) this.link(id, source.id, card.id, { kind: "auto", label: "moment from", at });
+    return card;
+  }
+  // New start and end for a moment, typed on its card.
+  momentTimes(id, cardId, a, b, { at = this.now() } = {}) {
+    const d = this.get(id);
+    const c = this.card(id, cardId);
+    a = Math.max(0, Math.round(Number(a) * 10) / 10);
+    b = Math.round(Number(b) * 10) / 10;
+    if (!d || d.trail.readonly || c?.kind !== "moment" || !(b > a)) return null;
+    c.a = a;
+    c.b = b;
+    this.event(id, { type: "edited", card: c.id, at, data: { a, b } });
+    this.save(id);
+    return c;
+  }
   // ---- search cards (B106) ----
   // A web search made from the canvas or the address bar: a card titled
   // "Search: <query>" that opens the results. Pages opened from the results go
@@ -791,6 +832,7 @@ class TrailStore {
       const item = { event: e.id, type: e.type, at: e.at, card: card && !card.removed ? card.id : null };
       if (url) item.url = url;
       item.title = (card && (card.title || card.text || card.quote)) || e.data?.title || url || e.type;
+      if (card?.kind === "moment") item.moment = { a: card.a, b: card.b }; // B88: shown as "Moment 41:12–42:30"
       if (e.type === "opened") {
         // An opened page shows once per session, at its latest time.
         // Items from an opened file have a title and no address.
