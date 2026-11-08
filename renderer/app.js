@@ -2793,6 +2793,10 @@ async function openShareSheet() {
   document.getElementById("share-tabs-label").textContent = `Open tabs: which cards are open in a tab (${f.tabs})`;
   document.getElementById("share-tabs").checked = false;
   document.getElementById("share-tabs").disabled = !f.tabs;
+  // B87: copies go only when ticked, as files in a folder beside the trail file.
+  document.getElementById("share-copies-label").textContent = `Saved copies of pages, in a folder beside the file (${f.copies || 0})`;
+  document.getElementById("share-copies").checked = false;
+  document.getElementById("share-copies").disabled = !f.copies;
   paintSharePreview();
   document.getElementById("link-made").hidden = true;
   // Share links (B82, unchanged): only when the share server answers.
@@ -2823,6 +2827,7 @@ const fileChoices = () => ({
   startHere: document.getElementById("share-start").value,
   timeline: document.getElementById("share-timeline").checked,
   tabs: document.getElementById("share-tabs").checked,
+  copies: document.getElementById("share-copies").checked,
 });
 let previewSeq = 0;
 async function paintSharePreview() {
@@ -2901,7 +2906,9 @@ document.getElementById("share-save").addEventListener("click", async () => {
   const r = await api.trailShareSave(fileChoices());
   if (r.canceled) return;
   if (!r.ok) return (msg.textContent = r.error);
-  msg.textContent = `Saved: ${r.name} · ${plural(r.cards, "card", "cards")}, ${plural(r.links, "link", "links")}. Send it with any app: Messages, email, Telegram, Discord or AirDrop. `;
+  msg.textContent = r.copies
+    ? `Saved: ${r.name} · ${plural(r.cards, "card", "cards")}, ${plural(r.links, "link", "links")}, and ${plural(r.copies, "saved copy", "saved copies")} in the folder “${r.folder}”. Send the file and the folder together. `
+    : `Saved: ${r.name} · ${plural(r.cards, "card", "cards")}, ${plural(r.links, "link", "links")}. Send it with any app: Messages, email, Telegram, Discord or AirDrop. `;
   const show = el("button", "link-btn", "Show in Folder");
   show.addEventListener("click", () => api.trailShowFile(r.file));
   msg.appendChild(show);
@@ -3902,6 +3909,9 @@ async function openCanvas({ focus = false, select = "" } = {}) {
     webSearch: (q) => api.trailSearch(q),
     privateSearch: (q) => api.trailSearch(q, { private: true }),
     ask: (q) => askAboutTrail(q),
+    // B87: saved copies.
+    copySave: (id) => api.trailCopySave(id),
+    copyOpen: (sha) => api.trailCopyOpen(sha),
     // B88: moment cards.
     momentPlay: (id) => api.trailMomentPlay(id),
     momentTimes: (id, a, b) => api.trailMomentTimes(id, a, b),
@@ -4754,6 +4764,16 @@ function trailActions(row, t, more) {
     acts.remove();
     renameRow(row, t);
   }, t.readonly, t.readonly ? "Read only. Save as new trail to change it." : "");
+  // B87: keep a copy of each page that becomes a card in this trail.
+  if (!t.readonly) {
+    const keep = btn(`Keep copies: ${t.keepCopies ? "On" : "Off"}`, "", async () => {
+      t.keepCopies = Boolean(await api.trailKeepCopies(t.id, !t.keepCopies));
+      keep.textContent = `Keep copies: ${t.keepCopies ? "On" : "Off"}`;
+      keep.setAttribute("aria-pressed", String(t.keepCopies));
+    });
+    keep.setAttribute("aria-pressed", String(Boolean(t.keepCopies)));
+    keep.title = "Save a copy of each page that becomes a card. Copies stay on this computer.";
+  }
   const del = btn("Delete…", "", () => confirmDelete(acts, t));
   row.after(acts);
   (t.readonly ? del : first).focus();
