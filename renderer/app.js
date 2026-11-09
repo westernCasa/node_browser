@@ -2749,6 +2749,7 @@ function notesBlock(r) {
 // go with them, and the open tabs (off). Save File writes <name>.trail.md.
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 async function openShareSheet() {
+  document.getElementById("share-check-link").replaceChildren(); // B86: fresh ticks each time
   if (!menuOpen || menuSection !== "trail") await openMenu("trail");
   const p = await api.trailSharePreview();
   const sheet = document.getElementById("share-sheet");
@@ -2797,6 +2798,8 @@ async function openShareSheet() {
   document.getElementById("share-copies-label").textContent = `Saved copies of pages, in a folder beside the file (${f.copies || 0})`;
   document.getElementById("share-copies").checked = false;
   document.getElementById("share-copies").disabled = !f.copies;
+  document.getElementById("share-check-file").replaceChildren();
+  await paintShareCheck("share-check-file");
   paintSharePreview();
   document.getElementById("link-made").hidden = true;
   // Share links (B82, unchanged): only when the share server answers.
@@ -2816,6 +2819,34 @@ function shareBoxes() {
 function paintShareCount() {
   const boxes = shareBoxes();
   document.getElementById("share-pages-count").textContent = `Pages: ${boxes.filter((b) => b.checked).length} of ${boxes.length}`;
+  paintShareCheck("share-check-link");
+}
+// B86: contact details (email addresses, phone numbers) in what would be
+// shared, each ticked. Unticking one leaves it out of what is shared.
+const checkLeftOut = (boxId) => [...document.querySelectorAll(`#${boxId} input[type=checkbox]`)].filter((b) => !b.checked).map((b) => b.value);
+const shareCheckSeq = {};
+async function paintShareCheck(boxId) {
+  const box = document.getElementById(boxId);
+  if (!box || !api?.trailShareCheck) return;
+  const seq = (shareCheckSeq[boxId] = (shareCheckSeq[boxId] || 0) + 1);
+  const left = new Set(checkLeftOut(boxId));
+  const opts = boxId === "share-check-file" ? { kind: "file", note: document.getElementById("share-note").value, timeline: document.getElementById("share-timeline").checked } : { kind: "link", ...shareChoices() };
+  const found = (await api.trailShareCheck(opts)) || [];
+  if (seq !== shareCheckSeq[boxId]) return;
+  box.replaceChildren();
+  box.hidden = !found.length;
+  if (!found.length) return;
+  box.append(el("p", "help", `${found.length === 1 ? "A contact detail is" : `${found.length} contact details are`} in what you share. Untick one to leave it out: it shows as “[email left out]” or “[phone number left out]”.`));
+  for (const f of found) {
+    const row = el("label", "toggle");
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.value = f.value;
+    cb.checked = !left.has(f.value);
+    if (boxId === "share-check-file") cb.addEventListener("change", paintSharePreview);
+    row.append(cb, el("span", "", `${f.kind === "email" ? "Email" : "Phone"} ${f.value} · ${f.where}${f.count > 1 ? `, and ${f.count - 1} more ${f.count === 2 ? "place" : "places"}` : ""}`));
+    box.append(row);
+  }
 }
 document.getElementById("share-open").addEventListener("click", openShareSheet);
 document.getElementById("share-cancel").addEventListener("click", () => (document.getElementById("share-sheet").hidden = true));
@@ -2828,6 +2859,7 @@ const fileChoices = () => ({
   timeline: document.getElementById("share-timeline").checked,
   tabs: document.getElementById("share-tabs").checked,
   copies: document.getElementById("share-copies").checked,
+  leaveOut: checkLeftOut("share-check-file"),
 });
 let previewSeq = 0;
 async function paintSharePreview() {
@@ -2836,11 +2868,14 @@ async function paintSharePreview() {
   if (seq === previewSeq) document.getElementById("share-preview-text").textContent = text || "";
 }
 for (const id of ["share-note", "share-start", "share-timeline", "share-tabs"]) document.getElementById(id).addEventListener(id === "share-note" ? "input" : "change", paintSharePreview);
+for (const id of ["share-note", "share-timeline"]) document.getElementById(id).addEventListener(id === "share-note" ? "input" : "change", () => paintShareCheck("share-check-file").then(paintSharePreview));
+for (const id of ["share-reports", "share-link-tabs"]) document.getElementById(id).addEventListener("change", () => paintShareCheck("share-check-link"));
 // Share links (B82 phase 2): pages ticked, uploaded encrypted (format 1).
 const shareChoices = () => ({
   pages: shareBoxes().filter((b) => b.checked).map((b) => b.value),
   reports: document.getElementById("share-reports").checked,
   tabs: document.getElementById("share-link-tabs").checked,
+  leaveOut: checkLeftOut("share-check-link"),
 });
 const dayText = (ms) => new Date(ms).toLocaleDateString([], { month: "short", day: "numeric" });
 document.getElementById("share-link").addEventListener("click", async () => {
