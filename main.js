@@ -1273,6 +1273,45 @@ function systemName() {
   if (process.platform === "win32") return `Windows ${os.release()} (${process.arch})`;
   return `Linux ${os.release()} (${process.arch})`;
 }
+// ---- Automatic active count (B116, core/active-count.js) ----
+// Once a day while NODE is in use (window focused, input in the last two
+// minutes): one request with the version and OS, and whether it is the first
+// this week and this month. No id, no pages, addresses or keywords. On by
+// default; Settings → Help turns it off. Only installed copies send it (or a
+// test that sets NODE_ACTIVE_API). State in userData/active-count.json.
+const ActiveCount = require("./core/active-count");
+const ACTIVE_API = process.env.NODE_ACTIVE_API || `${ShareLink.API_BASE}/api/active`;
+let activeSending = false;
+async function sendActiveCount({ inUse = nodeInUse() } = {}) {
+  if (activeSending || loadSettings().activeCount === false || !inUse) return null;
+  if (!app.isPackaged && !process.env.NODE_ACTIVE_API) return null;
+  const file = path.join(app.getPath("userData"), "active-count.json");
+  let state = null;
+  try {
+    state = JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch (_) {}
+  const next = ActiveCount.nextCount(state, { version: app.getVersion(), platform: process.platform });
+  if (!next) return null;
+  activeSending = true;
+  try {
+    // Node's fetch: no cookies, no browser session.
+    const res = await fetch(ACTIVE_API, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(next.body), signal: AbortSignal.timeout(10000) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    fs.writeFileSync(file, JSON.stringify(next.state));
+    return next.body;
+  } catch (err) {
+    log().warn(`active count: ${err.message}`); // tried again later
+    return null;
+  } finally {
+    activeSending = false;
+  }
+}
+function startActiveCount() {
+  setTimeout(sendActiveCount, 60 * 1000);
+  setInterval(sendActiveCount, 15 * 60 * 1000);
+  app.on("browser-window-focus", () => setTimeout(sendActiveCount, 5000));
+}
+
 function usageSummary() {
   return usage().summary({ version: app.getVersion(), os: systemName() });
 }
@@ -2307,6 +2346,7 @@ function loadSettings() {
   base.adblockCookies = raw.adblockCookies === true; // B77: also hide cookie notices (off by default, as in uBlock Origin)
   base.restoreTabs = raw.restoreTabs !== false;
   base.autoUpdate = raw.autoUpdate !== false;
+  base.activeCount = raw.activeCount !== false; // B116: on by default
   base.passkeys = raw.passkeys === true;
   base.mosaicMax = MOSAIC_MAX_CHOICES.includes(raw.mosaicMax) ? raw.mosaicMax : 4;
   base.tabSleep = SLEEP_CHOICES.includes(raw.tabSleep) ? raw.tabSleep : 30;
@@ -2348,6 +2388,7 @@ function saveSettings(next) {
   }
   if (next && "restoreTabs" in next) current.restoreTabs = Boolean(next.restoreTabs);
   if (next && "autoUpdate" in next) current.autoUpdate = Boolean(next.autoUpdate);
+  if (next && "activeCount" in next) current.activeCount = Boolean(next.activeCount);
   if (next && "passkeys" in next) current.passkeys = Boolean(next.passkeys);
   if (next && next.firstRunDone) current.firstRunDone = true;
   if (next && "passwordsOffer" in next) current.passwordsOffer = Boolean(next.passwordsOffer);
@@ -2386,6 +2427,7 @@ function saveSettings(next) {
     google: { ...current.google },
     restoreTabs: current.restoreTabs !== false,
     autoUpdate: current.autoUpdate !== false,
+    activeCount: current.activeCount !== false,
     passkeys: current.passkeys === true,
     mosaicMax: current.mosaicMax,
     tabSleep: current.tabSleep,
@@ -2435,6 +2477,7 @@ function publicSettings() {
     google: { ...s.google },
     restoreTabs: s.restoreTabs !== false,
     autoUpdate: s.autoUpdate !== false,
+    activeCount: s.activeCount !== false,
     passkeys: s.passkeys === true,
     passkeysActive: PASSKEYS_ON,
     update: updater ? updater.state() : null,
@@ -2949,6 +2992,7 @@ app.commandLine.appendSwitch("disable-features", "PreloadMediaEngagementData");
 
 app.whenReady().then(() => {
   usage().touch();
+  startActiveCount();
   if (process.env.NODE_TEST_PLAIN_PASSWORDS === "1" && app.commandLine.hasSwitch("user-data-dir")) safeStorage.setUsePlainTextEncryption?.(true);
   protocol.handle("scoutlib", (request) => {
     try {
@@ -3009,6 +3053,7 @@ app.whenReady().then(() => {
   global.nodeCompanion = companion; // for the e2e tests
   global.nodeTest = {
   claudeDesktopEntry, sleepIdleTabs,
+  sendActiveCount: () => sendActiveCount({ inUse: true }), // B116
   setTrailSavePath: (p) => (trailSavePath = p),
   openSharedTrail, openFromOutside, openShareLink,
   setPasswordAsk: (answer) => (passwordAsk = async (opts) => ((global.nodeTest.lastPasswordAsk = opts), answer)),

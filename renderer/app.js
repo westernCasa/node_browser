@@ -1572,6 +1572,7 @@ async function renderSources() {
   document.getElementById("mosaic-max").value = String(settings.mosaicMax ?? 4);
   document.getElementById("tab-sleep").value = String(settings.tabSleep ?? 30);
   document.getElementById("auto-update").checked = settings.autoUpdate !== false;
+  document.getElementById("active-count").checked = settings.activeCount !== false; // B116
   document.getElementById("passkeys").checked = settings.passkeys === true;
   document.getElementById("passkeys").closest(".top").hidden = document.getElementById("passkeys-help").hidden = !/Mac/.test(navigator.platform);
   fillUpdate(settings.update);
@@ -2019,6 +2020,7 @@ async function saveSources(rerender = true) {
     tabSleep: Number(document.getElementById("tab-sleep").value),
     passwordsOffer: document.getElementById("passwords-offer").checked,
     autoUpdate: document.getElementById("auto-update").checked,
+    activeCount: document.getElementById("active-count").checked,
     passkeys: document.getElementById("passkeys").checked,
   });
   if (rerender) await renderSources();
