@@ -4,7 +4,7 @@
   "rewrites": [
     {
       "source": "/t/:id",
-      "destination": "https://node-share.westerncasa.workers.dev/t/:id"
+      "destination": "https://node-share.sven-f70.workers.dev/t/:id"
     },
     {
       "source": "/fun",
