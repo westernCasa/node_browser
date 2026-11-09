@@ -274,6 +274,27 @@ The same core modules run in the built-in extension of the Chromium build (`brow
 - **Rename:** `rename(id, name)` records a `renamed` event; `applySession` now does the same when a session's name changes, so renames through research:\* are events too.
 - **Channels:** `trail:rename-id` (id, name; refused for read-only trails; the current trail goes through research:\*), `trail:delete` (closes the trail's tabs first, then `changeTrail` if it was current; returns `{deleted, name, tabs, current}`), `trail:restore` (via `changeTrail`).
 - **Switcher** (`renderer/app.js`): each trail row is `.sb-menu-row` with the item and a "…" button; the actions row (`.sb-menu-acts`) holds Rename and Delete…, then the question with Delete trail and Keep. `#sb-undo` under the menu shows Undo for 10 s. Keys on a trail in the menu: F2 renames, Delete or Backspace asks to delete, → reaches "…". Over a page the field is typed in the sidebar's layer (`chrome-overlay.html`); the real field does not save on losing focus there, and Enter or Esc come back through `overlayEvent`.
+## Automatic active count (B116)
+
+- `core/active-count.js` (no platform imports): `nextCount(state, { now, version, platform })` gives the body `{ v, os, w, m }` (w and m: first count this ISO week and this month, local time) and the new state, or null when today's count was sent or the version is not a release number.
+- **Main:** `sendActiveCount` runs a minute after start, every 15 minutes and 5 s after the window gets focus; it sends only when the setting `activeCount` is on (default), NODE is in use (`nodeInUse`), and the app is packaged (or `NODE_ACTIVE_API` is set, for tests). It uses Node's `fetch` (no cookies or session) to `<share API>/api/active` and writes `userData/active-count.json` only after a 2xx.
+- **Worker** (`worker/src/index.js`): `POST /api/active` validates and writes an empty R2 object `a/<UTC day>/<os>/<version>/<w|-><m|->/<random>`; `COUNT_LIMIT` rate limiter (5 a minute per address, in memory). `GET /api/active` lists `a/` and sums per day, ISO week (from w) and month (from m), only with `STATS_TOKEN`. The deploy workflow adds a 400-day lifecycle rule on `a/`.
+
+## The check before sharing (B86)
+
+- `core/share-check.js` (no platform imports): `findContacts(texts)` finds email addresses and phone numbers (10 to 15 digits in groups, or starting with +; not dates, times, year ranges or plain runs of digits), one finding per detail with `where`, `count` and other spellings (`also`). `snapshotTexts(snap, { note })` lists what a trail file shares; `sessionTexts(trail)` what a share link (format 1) shares. `redact(obj, leaveOut)` replaces each left-out detail in every string of a copy.
+- **Main:** `trail:share-check` ({ kind: "file" | "link", … }) runs the check on the same choices as the share sheet. `shareFileText` and `trailFileText` take `leaveOut` (values from the window), keep only details the check found (`leaveOutOf`), and redact the snapshot or the link's trail before writing. The trail is never changed.
+- **Window:** `#share-check-file` above the file preview and `#share-check-link` above Create Link, repainted when the note, the timeline choice or the pages ticked change.
+- **Agents:** `TrailStore.sessionView` marks an opened file `fromFile: { by }`; `ResearchStore.markdown` then starts with a line saying it is untrusted data.
+
+## Saved copies (B87)
+
+- **Files:** `userData/copies/<sha256>.mhtml` (`webContents.savePage(…, "MHTML")`, then renamed to its SHA-256) and `<sha256>.txt` (`readableTextScript`). MHTML differs on every save (date, part boundaries), so a copy whose text equals the newest copy's text is dropped and the newest one stands (`sameAsLastCopy`). `cleanCopies` at start-up deletes files that no trail names (`TrailStore.copyHashes`, after `purge`).
+- **Main:** `copyTab(tab)` (File menu, page right-click, Keep copies after `engagePage`) and `copyUrl(trail, url)` (a card with no tab: a hidden, sandboxed window, 20 s limit, refused if it lands on a sign-in page). `openCopy(sha)` checks the SHA-256 before opening the file in a tab. `trailSnapshot` adds `here` (the file is on this computer) to each copy.
+- **Store:** page cards have `copies: [{ at, sha256, bytes }]`, newest last, each recorded as a `copied` event (not shown in the timeline). `trail.keepCopies` is the trail setting.
+- **Sharing:** `trail:share-save` with `copies` writes the files to "<name> copies" beside the trail file and passes `{ folder, include }` to `toTrailMd`. `takeCopies(file, data)` runs before `importFile`: only files inside the trail file's folder, ending in .mhtml, under 100 MB; a match is copied in, a mismatch is marked `changed`.
+- **Window:** the card's `.cv-card-copy` line, the selection bar's "Save a copy", "Keep copies: On/Off" in the switcher's trail actions, "Saved copies of pages" in the share sheet.
+
 ## Media moments (B88)
 
 - **Page script** `momentScript(op, secs)` (`core/page-scripts.js`), run in every frame until one has media: `state`, `start` (marks the time and collects the captions on screen every 400 ms: text tracks' active cues, else `.ytp-caption-segment`, `.vp-captions` and similar), `end` (the mark to now, with what it collected, else the text-track cues in that range; pauses), `last` (the last n seconds with their cues; pauses), `loop` (the B70 loop's range; pauses), `cancel`. `loopScript("range", 60, { a, b })` seeks to a, plays and loops a–b, for video or audio.

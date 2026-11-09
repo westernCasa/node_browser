@@ -12,9 +12,17 @@
 // GET    /t/:id             → a page that decrypts and shows the trail in the
 //                             browser, with Open in NODE and Download NODE
 //
-// Bindings (wrangler.toml): TRAILS (R2 bucket), UPLOAD_LIMIT (rate limiter,
-// optional). Nothing else is stored: no names, no addresses, no logs of what
-// is inside.
+// POST   /api/active        body: { v, os, w, m } → 204. The daily active
+//                           count (B116): one empty object per count, named by
+//                           the day, OS, version and the week and month marks.
+//                           No id, no address, nothing else.
+// GET    /api/active        Authorization: Bearer <STATS_TOKEN> → counts per
+//                           day, ISO week and month (?days=, at most 400)
+//
+// Bindings (wrangler.toml): TRAILS (R2 bucket), UPLOAD_LIMIT and COUNT_LIMIT
+// (rate limiters, optional), STATS_TOKEN (secret, optional: without it the
+// counts can't be read here). Nothing else is stored: no names, no addresses,
+// no logs of what is inside.
 
 export const MAX_BYTES = 1024 * 1024;
 export const DAYS = 30;
@@ -70,6 +78,62 @@ async function upload(request, env) {
   return json({ id, deleteToken, expiresAt: created + DAYS * DAY_MS }, 201);
 }
 
+// ---- Daily active count (B116) ----
+const COUNT_OS = new Set(["mac", "windows", "linux", "other"]);
+const COUNT_VERSION = /^\d{1,3}\.\d{1,3}\.\d{1,4}(?:-[0-9A-Za-z.]{1,20})?$/;
+const utcDay = (t) => new Date(t).toISOString().slice(0, 10);
+async function count(request, env) {
+  if (env.COUNT_LIMIT) {
+    // The address is only used for this limit, in memory, and never stored.
+    const { success } = await env.COUNT_LIMIT.limit({ key: request.headers.get("cf-connecting-ip") || "unknown" });
+    if (!success) return fail(429, "Too many counts from here.");
+  }
+  if (Number(request.headers.get("content-length") || 0) > 200) return fail(413, "Too large.");
+  let b;
+  try {
+    b = JSON.parse((await request.text()).slice(0, 200));
+  } catch (_) {
+    return fail(400, "Not a count.");
+  }
+  if (!b || !COUNT_VERSION.test(String(b.v)) || !COUNT_OS.has(b.os) || typeof b.w !== "boolean" || typeof b.m !== "boolean") return fail(400, "Not a count.");
+  const flags = `${b.w ? "w" : "-"}${b.m ? "m" : "-"}`;
+  await env.TRAILS.put(`a/${utcDay(Date.now())}/${b.os}/${b.v}/${flags}/${randomString(12)}`, new Uint8Array(0));
+  return new Response(null, { status: 204 });
+}
+// Counts per day (with OS and version), and weekly and monthly users from
+// the counts marked first this week or month, for the last ?days= days.
+async function counts(request, env, url) {
+  const token = (request.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
+  if (!env.STATS_TOKEN || token !== env.STATS_TOKEN) return fail(403, "Counts are private.");
+  const days = Math.min(400, Math.max(1, Number(url.searchParams.get("days")) || 30));
+  const from = utcDay(Date.now() - (days - 1) * DAY_MS);
+  const out = { days: {}, weeks: {}, months: {} };
+  let cursor;
+  do {
+    const page = await env.TRAILS.list({ prefix: "a/", cursor, startAfter: cursor ? undefined : `a/${from}` });
+    for (const o of page.objects) {
+      const [, day, os, v, flags] = o.key.split("/");
+      if (day < from) continue;
+      const d = (out.days[day] = out.days[day] || { total: 0, os: {}, versions: {} });
+      d.total++;
+      d.os[os] = (d.os[os] || 0) + 1;
+      d.versions[v] = (d.versions[v] || 0) + 1;
+      // Weeks and months are counted on the day of the first count in them.
+      if (flags[0] === "w") out.weeks[weekOfDay(day)] = (out.weeks[weekOfDay(day)] || 0) + 1;
+      if (flags[1] === "m") out.months[day.slice(0, 7)] = (out.months[day.slice(0, 7)] || 0) + 1;
+    }
+    cursor = page.truncated ? page.cursor : undefined;
+  } while (cursor);
+  return json(out);
+}
+function weekOfDay(day) {
+  const t = new Date(`${day}T00:00:00Z`);
+  const wd = t.getUTCDay() || 7;
+  t.setUTCDate(t.getUTCDate() + 4 - wd);
+  const year = t.getUTCFullYear();
+  return `${year}-W${String(Math.ceil(((t - Date.UTC(year, 0, 1)) / DAY_MS + 1) / 7)).padStart(2, "0")}`;
+}
+
 async function remove(request, env, id) {
   const found = await readTrail(env, id);
   if (!found) return fail(404, "This link has expired or was removed.");
@@ -108,6 +172,8 @@ export default {
     const path = url.pathname;
     if (path === "/robots.txt") return new Response("User-agent: *\nDisallow: /\n", { headers: { "content-type": "text/plain" } });
     if (path === "/api/trails" && request.method === "POST") return upload(request, env);
+    if (path === "/api/active" && request.method === "POST") return count(request, env);
+    if (path === "/api/active" && request.method === "GET") return counts(request, env, url);
     const api = path.match(/^\/api\/trails\/([^/]+)$/);
     if (api && request.method === "GET") {
       const found = await readTrail(env, api[1]);

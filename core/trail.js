@@ -24,7 +24,7 @@ const GROUP_SIDE = 24; // group padding around its cards: sides and bottom
 const GROUP_TOP = 48; // and top, where the name sits
 const SESSION_GAP_MS = 30 * 60 * 1000; // a gap of more than 30 minutes starts a new session
 const ENGAGED_MS = 20 * 1000; // the 20-second rule (doc 23); a starting guess
-const EVENT_TYPES = new Set(["opened", "bounced", "captured", "asked", "reported", "noted", "placed", "removed", "linked", "unlinked", "grouped", "renamed", "resolved", "moved", "edited"]);
+const EVENT_TYPES = new Set(["opened", "bounced", "captured", "asked", "reported", "noted", "placed", "removed", "linked", "unlinked", "grouped", "renamed", "resolved", "moved", "edited", "copied"]);
 const CARD_KINDS = new Set(["page", "video", "capture", "report", "question", "note", "voice", "search", "media", "moment"]);
 const LINE_KINDS = new Set(["nav", "auto", "you", "suggested"]);
 const LINE_LABELS = new Set(["", "supports", "contradicts", "answers", "raises"]);
@@ -372,6 +372,7 @@ class TrailStore {
           createdAt: trail.createdAt,
           lastAt: trail.lastAt,
           readonly: trail.readonly,
+          keepCopies: Boolean(trail.keepCopies),
           from: trail.from || "",
           note: trail.note || "",
           startHere: trail.startHere || "",
@@ -542,6 +543,36 @@ class TrailStore {
     const card = this.addCard(id, { kind: "media", media, title: name, lib: lib || undefined, src: src || undefined, url: url || undefined, placedAt: at, w, h, x: pos.x, y: pos.y }, { at, event: "captured", data: { media, url, src } });
     if (card && source && !source.removed) this.link(id, source.id, card.id, { kind: "auto", label: "captured from", at });
     return card;
+  }
+  // ---- saved copies (B87) ----
+  // A copy of a page card's page, saved on this computer (main.js keeps the
+  // file, named by its SHA-256). The card lists its copies, newest last.
+  addCopy(id, url, { sha256, bytes = 0, at = this.now() } = {}) {
+    const d = this.get(id);
+    const c = url && this.pageCard(id, url);
+    if (!d || d.trail.readonly || !c || c.removed || isSensitiveUrl(url) || !/^[0-9a-f]{64}$/.test(String(sha256))) return null;
+    c.copies = c.copies || [];
+    const have = c.copies.find((x) => x.sha256 === sha256);
+    if (have) return have; // the page has not changed since that copy
+    const copy = { at, sha256, bytes: Math.max(0, Math.round(Number(bytes) || 0)) };
+    c.copies.push(copy);
+    this.event(id, { type: "copied", card: c.id, at, data: { url, sha256 } });
+    this.save(id);
+    return copy;
+  }
+  // Every copy any trail names (for cleaning up files no trail needs).
+  copyHashes() {
+    const out = new Set();
+    for (const t of [...this.index.order, ...this.deletedIds()]) for (const c of this.load(t)?.data.cards || []) for (const x of c.copies || []) out.add(x.sha256);
+    return out;
+  }
+  // The trail setting: keep a copy of each page that becomes a card.
+  setKeepCopies(id, on) {
+    const d = this.get(id);
+    if (!d || d.trail.readonly) return null;
+    d.trail.keepCopies = Boolean(on);
+    this.save(id);
+    return d.trail.keepCopies;
   }
   // ---- media moments (B88) ----
   // A section of a video or audio page, a to b in seconds, with the caption
@@ -913,6 +944,8 @@ class TrailStore {
     };
     for (const k of ["reports", "captures", "shareLog", "agent", "extra", "tags"]) if (research[k]?.length) s[k] = JSON.parse(JSON.stringify(research[k]));
     if (research.sharedId) s.sharedId = research.sharedId;
+    // B86: an opened trail file came from someone else; agents treat it as data.
+    if (trail.readonly) s.fromFile = { by: trail.from || "" };
     return s;
   }
 

@@ -120,6 +120,12 @@ contextBridge.exposeInMainWorld("scout", {
   trailMomentPlay: (id) => ipcRenderer.invoke("trail:moment-play", id),
   trailMomentTimes: (id, a, b) => ipcRenderer.invoke("trail:moment-times", id, a, b),
   trailMomentId: (id) => ipcRenderer.invoke("trail:moment-id", id),
+  // B87: saved copies.
+  trailCopySave: (cardId) => ipcRenderer.invoke("trail:copy-save", cardId),
+  trailCopyOpen: (sha) => ipcRenderer.invoke("trail:copy-open", sha),
+  trailKeepCopies: (id, on) => ipcRenderer.invoke("trail:keep-copies", id, on),
+  // B86: contact details in what would be shared.
+  trailShareCheck: (opts) => ipcRenderer.invoke("trail:share-check", opts),
   historyClear: () => ipcRenderer.invoke("history:clear"),
   claudeDesktop: (mode) => ipcRenderer.invoke("agents:claude-desktop", mode),
   historyRemove: (url) => ipcRenderer.invoke("history:remove", url),

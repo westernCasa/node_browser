@@ -126,7 +126,7 @@ The old Tauri setup (`src-tauri/`, `renderer/tauri-bridge.js`) does not compile 
 
 ## What NODE sends
 
-NODE has no account and sends no usage data or analytics. The usage summary in Help stays on your computer until you copy it. Diagnostics are only copied when you click Copy Diagnostics.
+NODE has no account. The only usage data it sends is one anonymous count a day (below), which you can turn off in Settings → Help. The usage summary in Help stays on your computer until you copy it. Diagnostics are only copied when you click Copy Diagnostics.
 
 What leaves your computer, and when:
 
@@ -139,6 +139,7 @@ What leaves your computer, and when:
 | The text, titles and addresses of the tabs in Mosaic, or of the 8 pages you read most recently in the research session | Your local model, or xAI (Grok) | Only when you ask about Mosaic tabs or the session in Ask AI. Session pages that are not open are read again, logged out. Sign-in, account and payment pages are never sent |
 | The address of the page you're reading | Hacker News search (Algolia) and Bluesky search | Only while the Talk tab is open |
 | A check for a new version | GitHub | Every 6 hours in installed copies, if "Check for updates" is on |
+| One anonymous count: NODE's version, your operating system (Mac, Windows or Linux), and whether it is the first count this week and this month. No id, pages, addresses or keywords | NODE's share server (a Cloudflare Worker), which keeps a count per day and nothing else | Once a day while you use NODE, in installed copies. On by default; turn it off in Settings → Help ("Send one anonymous count a day") |
 | A download of the ad and tracker block lists (uBlock Origin's default lists; with cookie notices on, also the cookie-notice lists) | GitHub | About once a week |
 | Google sign-in and Google apps | A separate Chrome-based browser on your computer, with its own NODE profile | When you open a Google account page (Settings → Google window) |
 | A shared trail, encrypted on your computer (the key stays in the link, so the server cannot read it) | NODE's share server (a Cloudflare Worker), which deletes it after 30 days | Only when you click Create Link in Share Trail. Stop Sharing deletes it sooner |

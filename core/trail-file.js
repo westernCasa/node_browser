@@ -516,6 +516,12 @@ function merge(base, incoming, answers = {}) {
 
 const FORMAT_V2 = 2;
 const SIZE_V2 = { page: [260, 200], video: [260, 220], capture: [260, 210], report: [260, 240], question: [260, 170], note: [260, 150], voice: [260, 170], search: [260, 140], media: [300, 240], moment: [280, 190] };
+// Saved copies (B87): "7 Nov 2026 21:40".
+const copyTime = (t) => {
+  const d = new Date(t);
+  return `${d.getDate()} ${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+};
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 // Media moments (B88): "41:12" and back, in seconds.
 const clockOf = (t) => {
   t = Math.max(0, Math.round(Number(t) || 0));
@@ -695,7 +701,9 @@ function timelineLine(sess, byId) {
 
 // options: { by, at (ms or ISO), note, startHere (card id), timeline (true),
 // openTabs: [card ids] (none by default) }
-function toTrailMd(snap, { by = "", at = Date.now(), note, startHere, timeline = true, openTabs = [] } = {}) {
+// copies (B87): { folder, include: [sha256] } — saved copies sent beside the
+// file, in that folder. Copies not sent are still listed, as kept by the sender.
+function toTrailMd(snap, { by = "", at = Date.now(), note, startHere, timeline = true, openTabs = [], copies = null } = {}) {
   const t = snap.trail || {};
   const cards = (snap.cards || []).filter(sendable).map(forFile);
   const byId = new Map(cards.map((c) => [c.id, c]));
@@ -708,7 +716,10 @@ function toTrailMd(snap, { by = "", at = Date.now(), note, startHere, timeline =
   L.push("---", `# ${oneLine(t.name) || "Trail"}`, "");
   if (oneLine(words)) L.push(oneLine(words), "");
   if (start) L.push(`**Start here:** [${mdText(cardTitle(start))}](#${start.id})`, "");
-  const block = (c) => L.push(cardHeading(c), layoutComment(c), ...cardBody(c), "");
+  const sent = new Set(copies?.include || []);
+  const copyLines = (c) =>
+    (c.copies || []).map((x) => `Copy: ${x.atText || copyTime(x.at)} · SHA-256 ${x.sha256}${copies?.folder && sent.has(x.sha256) ? ` · [saved copy](${encodeURI(`${copies.folder}/${x.sha256}.mhtml`)})` : ""}`);
+  const block = (c) => L.push(cardHeading(c), layoutComment(c), ...cardBody(c), ...(c.kind === "page" ? copyLines(c) : []), "");
   const placed = new Set();
   for (const g of groups) {
     L.push(`## ${oneLine(g.label) || "New group"}`, `<!-- group:${g.id} at:${Math.round(g.x)},${Math.round(g.y)} size:${Math.round(g.w)}x${Math.round(g.h)}${g.resolved ? " resolved" : ""} -->`, "");
@@ -889,7 +900,14 @@ function readCard(raw) {
     case "page": {
       const kw = b.find((l) => /^Keywords:/.test(l));
       const reached = b.find((l) => /^Reached: /.test(l));
-      const ex = b.filter((l) => l !== kw && l !== reached);
+      // Saved copies (B87): "Copy: <time> · SHA-256 <hash>[ · [saved copy](folder/<hash>.mhtml)]"
+      const copyRows = b.filter((l) => /^Copy: .+ · SHA-256 [0-9a-f]{64}/.test(l));
+      for (const l of copyRows) {
+        const m = l.match(/^Copy: (.+?) · SHA-256 ([0-9a-f]{64})(?: · \[saved copy\]\((\S+)\))?$/);
+        if (!m) continue;
+        (c.copies = c.copies || []).push({ atText: m[1], sha256: m[2], ...(m[3] ? { file: decodeURI(m[3]) } : {}) });
+      }
+      const ex = b.filter((l) => l !== kw && l !== reached && !copyRows.includes(l));
       if (ex.length) c.excerpt = ex.join(" ");
       c.keywords = kw ? kw.replace(/^Keywords:\s*/, "").split(/,\s*/).filter(Boolean) : [];
       if (reached) {

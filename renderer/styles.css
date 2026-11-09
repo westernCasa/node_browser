@@ -1361,6 +1361,11 @@ body.side #canvas { grid-column: 2; grid-row: 1; border: 1px solid var(--line); 
 #canvas .cv-card.k-note .cv-card-title { font-weight: 400; -webkit-line-clamp: 5; }
 #canvas .cv-card.k-capture .cv-card-title { font-weight: 400; font-style: italic; }
 #canvas .cv-card-sub { font-size: 13px; line-height: 18px; color: var(--ink-muted); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; }
+/* Saved copies (B87): the newest copy, under the title. */
+#canvas .cv-card-copy { align-self: flex-start; max-width: 100%; margin-top: 2px; padding: 0; border: 0; background: transparent; color: var(--ink-muted); font: 11px/14px var(--mono); text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; flex: none; }
+#canvas .cv-card-copy:hover:not(:disabled) { color: var(--ink); text-decoration: underline; }
+#canvas .cv-card-copy:disabled { cursor: default; }
+#canvas .cv-card-copy.changed { color: var(--alert); }
 /* Media moments (B88): times, captions, Play and Ask for ID. */
 #canvas .cv-moment-times { align-self: flex-start; margin: 2px 0 0; padding: 2px 6px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: transparent; color: var(--ink); font: 14px/18px var(--mono); cursor: text; }
 #canvas .cv-moment-times:disabled { cursor: default; border-color: transparent; padding-left: 0; }
@@ -1684,3 +1689,9 @@ body.sb-replaying .sb-timeline { display: none; }
 .sb-undo .chip { height: 26px; padding: 0 10px; font-size: 11px; }
 @keyframes sb-undo-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .sb-undo { animation: none; } }
+
+/* B86: contact details found in what would be shared. */
+.share-check { margin: 8px 0; padding: 8px 10px; border: 1px solid var(--line); border-left: 2px solid var(--alert); border-radius: var(--radius-sm); }
+.share-check .help { margin: 0 0 6px; }
+.share-check .toggle { display: flex; align-items: flex-start; gap: 6px; margin: 4px 0; }
+.share-check .toggle span { overflow-wrap: anywhere; }

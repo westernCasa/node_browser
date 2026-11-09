@@ -361,7 +361,9 @@
             <p class="help" id="share-always"></p>
             <label class="toggle"><input type="checkbox" id="share-timeline" checked /> <span id="share-timeline-label">Timeline</span></label>
             <label class="toggle"><input type="checkbox" id="share-tabs" /> <span id="share-tabs-label">Open tabs</span></label>
+            <label class="toggle"><input type="checkbox" id="share-copies" /> <span id="share-copies-label">Saved copies</span></label>
             <p class="help">Never in the file: screenshots (they stay on this computer), sign-in, account and payment pages, private parts of addresses and tracking codes, private tabs and other trails.</p>
+            <div class="share-check" id="share-check-file" hidden></div>
             <details class="share-preview"><summary>Preview the file</summary><pre id="share-preview-text"></pre></details>
             <div class="actions-row">
               <button class="chip" id="share-save">Save File…</button>
@@ -380,6 +382,7 @@
             <label class="toggle"><input type="checkbox" id="share-reports" checked /> <span id="share-reports-label">Research reports</span></label>
             <label class="toggle"><input type="checkbox" id="share-link-tabs" /> <span id="share-link-tabs-label">Open tabs</span></label>
             <p class="help">Never shared: sign-in, account and payment pages, private parts of addresses (tokens, keys, session codes), tracking codes, and anything outside this trail. Screenshots and saved pages are not included.</p>
+            <div class="share-check" id="share-check-link" hidden></div>
             <div class="actions-row">
               <button class="chip" id="share-link">Create Link</button>
             </div>
@@ -567,12 +570,14 @@
             <p class="help">Copy diagnostics puts NODE's version, your system, which features are on and recent errors on the clipboard, without page text, addresses you typed or keys. Paste it into a bug report.</p>
             <div class="row"><button class="chip" id="diag-copy">Copy diagnostics</button><button class="chip" id="diag-folder">Log folder</button></div>
             <div class="state" id="diag-state"></div>
-            <p class="help">Beta survey: about 4 minutes, anonymous. Copy usage summary puts counts on the clipboard to paste into the survey: days used, suggestions shown and opened, pins, hides, trail pages and a few others. No pages, addresses or keywords, and nothing is sent by NODE.</p>
+            <p class="help">Beta survey: about 4 minutes, anonymous. Copy usage summary puts counts on the clipboard to paste into the survey: days used, suggestions shown and opened, pins, hides, trail pages and a few others. No pages, addresses or keywords; the summary is only sent if you paste it.</p>
             <p class="help">Gestures and shortcuts: pinch on the trackpad to move between one tab, Mosaic and all your tabs. The tutorial takes about 2 minutes, on practice tabs.</p>
             <div class="row"><button class="chip" id="tour-start">Learn gestures and shortcuts</button></div>
             <div class="row"><button class="chip" id="survey-open">Take the survey</button><button class="chip" id="usage-copy">Copy usage summary</button></div>
             <div class="state" id="usage-state"></div>
             <div class="top"><label class="toggle"><input type="checkbox" id="auto-update" /> Check for updates automatically</label></div>
+            <div class="top"><label class="toggle"><input type="checkbox" id="active-count" /> Send one anonymous count a day</label></div>
+            <p class="help">Once a day while you use NODE, it sends NODE's version and your operating system (Mac, Windows or Linux), and nothing else: no id, pages, addresses or keywords. It lets us count how many people use NODE each day, week and month.</p>
             <div class="top"><label class="toggle"><input type="checkbox" id="passkeys" /> Passkeys (sign in with Touch ID or iCloud Keychain)</label></div>
             <p class="help" id="passkeys-help">On a Mac, passkeys need a signed NODE that Apple has approved as a browser. Until then they are off, so sites such as X offer password sign-in instead of waiting for a passkey. Takes effect after restarting NODE.</p>
             <div class="row"><button class="chip" id="update-check">Check now</button><button class="chip" id="update-releases">Releases</button></div>
@@ -653,6 +658,7 @@
         <label class="toggle"><input type="checkbox" id="fr-restore" checked /> Reopen my tabs when NODE starts</label>
         <label class="toggle"><input type="checkbox" id="fr-adblock" checked /> Block ads and trackers</label>
         <p class="help">NODE blocks ads and trackers on every page with the filter lists uBlock Origin uses by default, built in. The shield next to the address shows how many it blocked on the page you're reading.</p>
+        <p class="help" id="fr-active">NODE sends one anonymous count a day: its version and your operating system, nothing else. Turn it off in Settings → Help.</p>
       </section>
       <div class="fr-actions"><button type="button" class="chip" id="fr-done">Start browsing</button></div>
     </div>

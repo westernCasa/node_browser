@@ -38,6 +38,7 @@ const { ResearchStore } = require("./core/research");
 const { TrailStore, migrateSessions, sessionStorageOver, mediaKindOf } = require("./core/trail");
 const Prov = require("./core/provenance");
 const { recall, recallIndex } = require("./core/recall");
+const ShareCheck = require("./core/share-check");
 const Replay = require("./core/replay");
 const { Usage } = require("./core/usage");
 const { HistoryStore } = require("./core/history");
@@ -576,6 +577,7 @@ function openTrails() {
   // Trails deleted last time (B115) are gone for good now.
   const purged = trailStore.purge();
   if (purged.length) log().info(`trails: deleted ${purged.length}`);
+  cleanCopies(trailStore.copyHashes());
   trailStore.current();
   return new ResearchStore(sessionStorageOver(trailStore));
 }
@@ -637,7 +639,161 @@ function engagePage(tab, reason) {
   const p = tab?.page;
   if (!p || p.engaged || tab.private || !trailStore) return null;
   p.engaged = true;
-  return placeCard(p.trail || currentTrail(), p.url, { title: tab.view.webContents.getTitle(), from: p.from, via: p.via, played: p.played, reason });
+  const card = placeCard(p.trail || currentTrail(), p.url, { title: tab.view.webContents.getTitle(), from: p.from, via: p.via, played: p.played, reason });
+  // B87: a trail set to keep copies saves one when a page becomes a card.
+  if (card && reason !== "copy" && trailStore.get(p.trail || currentTrail())?.trail.keepCopies) setTimeout(() => tab.page === p && copyTab(tab, { quiet: true }), 1500);
+  return card;
+}
+
+// ---- Saved copies (B87) ----
+// A copy of a page as it looked, saved as one MHTML file named by its
+// SHA-256, with its readable text beside it (for search), in
+// userData/copies. Offered, never forced: "Save a copy" on a tab or a page
+// card, or the trail setting "Keep copies". Copies stay on this computer
+// unless the person ticks "Include saved copies" when sharing a trail file.
+const copiesDir = () => path.join(app.getPath("userData"), "copies");
+const copyFile = (sha) => path.join(copiesDir(), `${sha}.mhtml`);
+const sha256Of = (buf) => require("crypto").createHash("sha256").update(buf).digest("hex");
+async function saveCopyOf(wc) {
+  fs.mkdirSync(copiesDir(), { recursive: true });
+  const tmp = path.join(copiesDir(), `tmp-${process.pid}-${Date.now().toString(36)}.mhtml`);
+  await wc.savePage(tmp, "MHTML");
+  const buf = fs.readFileSync(tmp);
+  const sha = sha256Of(buf);
+  if (fs.existsSync(copyFile(sha))) fs.rmSync(tmp, { force: true });
+  else fs.renameSync(tmp, copyFile(sha));
+  let text = "";
+  try {
+    const page = await runInPage(wc, readableTextScript(200000));
+    text = [page?.title, page?.text].filter(Boolean).join("\n\n");
+    if (text) fs.writeFileSync(path.join(copiesDir(), `${sha}.txt`), text);
+  } catch (_) {}
+  return { sha256: sha, bytes: buf.length, text };
+}
+// MHTML files differ each time (their date and part boundaries), so a page
+// is "unchanged" when its text is the same as in its newest copy.
+function sameAsLastCopy(trail, url, text) {
+  const last = trailStore.pageCard(trail, url)?.copies?.at(-1);
+  if (!last || !text) return null;
+  try {
+    return fs.readFileSync(path.join(copiesDir(), `${last.sha256}.txt`), "utf8") === text ? last : null;
+  } catch (_) {
+    return null;
+  }
+}
+function dropCopyFiles(sha) {
+  if (trailStore.copyHashes().has(sha)) return;
+  for (const ext of ["mhtml", "txt"]) fs.rmSync(path.join(copiesDir(), `${sha}.${ext}`), { force: true });
+}
+function copyRefused(url, trail) {
+  if (!/^https?:/i.test(url || "")) return "Only web pages can be saved as copies.";
+  if (isSensitiveUrl(url)) return "Sign-in, account and payment pages are never saved.";
+  if (trailStore.get(trail)?.trail.readonly) return "This trail is read only. Save it as a new trail to save copies.";
+  return "";
+}
+const copyWhen = (t) => new Date(t).toLocaleString("en-CA", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false });
+async function copyTab(tab, { quiet = false } = {}) {
+  if (!tab || tab.sleeping) return null;
+  if (tab.private) return quiet ? null : void sendUi("notice", { message: "Private tabs are in no trail, so their pages can't be saved as copies." });
+  const wc = tab.view.webContents;
+  const url = tab.page?.url || wc.getURL();
+  const trail = tab.page?.trail || tab.trail || currentTrail();
+  const why = copyRefused(url, trail);
+  if (why) return quiet ? null : void sendUi("notice", { message: why });
+  engagePage(tab, "copy"); // the copy belongs to the page's card
+  let saved;
+  try {
+    saved = await saveCopyOf(wc);
+  } catch (err) {
+    log().warn(`copy: ${err.message}`);
+    return quiet ? null : void sendUi("notice", { message: "The copy could not be saved." });
+  }
+  const same = sameAsLastCopy(trail, url, saved.text);
+  if (same) {
+    dropCopyFiles(saved.sha256);
+    return quiet ? same : (sendUi("notice", { message: `This page hasn't changed since its copy of ${copyWhen(same.at)}.` }), same);
+  }
+  research.saveNow();
+  const copy = trailStore.addCopy(trail, url, { sha256: saved.sha256, bytes: saved.bytes });
+  research.reload();
+  if (copy) sendUi("trail-changed", { trail });
+  if (!quiet && copy) sendUi("notice", { message: `Saved a copy of this page (${copyWhen(copy.at)}). It stays on this computer.` });
+  return copy;
+}
+// A page card with no open tab: the page loads in a hidden window first.
+async function copyUrl(trail, url) {
+  const why = copyRefused(url, trail);
+  if (why) return void sendUi("notice", { message: why });
+  const w = new BrowserWindow({ show: false, width: 1280, height: 900, webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false } });
+  try {
+    await Promise.race([w.loadURL(url), new Promise((_, no) => setTimeout(() => no(new Error("timed out")), 20000))]);
+    await new Promise((r) => setTimeout(r, 1500)); // late content
+    if (copyRefused(w.webContents.getURL(), trail)) throw new Error("redirected to a page that is never saved");
+    const saved = await saveCopyOf(w.webContents);
+    const same = sameAsLastCopy(trail, url, saved.text);
+    if (same) {
+      dropCopyFiles(saved.sha256);
+      sendUi("notice", { message: `This page hasn't changed since its copy of ${copyWhen(same.at)}.` });
+      return same;
+    }
+    research.saveNow();
+    const copy = trailStore.addCopy(trail, url, { sha256: saved.sha256, bytes: saved.bytes });
+    research.reload();
+    if (copy) {
+      sendUi("trail-changed", { trail });
+      sendUi("notice", { message: `Saved a copy of this page (${copyWhen(copy.at)}). It stays on this computer.` });
+    }
+    return copy;
+  } catch (err) {
+    log().warn(`copy: ${err.message}`);
+    sendUi("notice", { message: "The page could not be loaded to save a copy." });
+    return null;
+  } finally {
+    if (!w.isDestroyed()) w.destroy();
+  }
+}
+// Copy files no trail names any more go (after deleted trails are purged).
+function cleanCopies(keep) {
+  try {
+    for (const f of fs.readdirSync(copiesDir())) {
+      const sha = f.replace(/\.(mhtml|txt)$/, "");
+      if (/^tmp-/.test(f) || (/^[0-9a-f]{64}$/.test(sha) && !keep.has(sha))) fs.rmSync(path.join(copiesDir(), f), { force: true });
+    }
+  } catch (_) {}
+}
+// Save a copy of a page card's page: from its open tab in this trail if
+// there is one, else in a hidden window.
+ipcMain.handle("trail:copy-save", async (_e, cardId) => {
+  const trail = currentTrail();
+  const c = trailStore?.card(trail, String(cardId));
+  if (c?.kind !== "page" || !c.url) return null;
+  const base = (u) => String(u || "").split("#")[0];
+  const tab = [...tabs.values()].find((t) => !t.private && t.trail === trail && base(t.page?.url || t.view.webContents.getURL()) === base(c.url));
+  return tab ? copyTab(tab) : copyUrl(trail, c.url);
+});
+ipcMain.handle("trail:copy-open", (_e, sha) => openCopy(String(sha)));
+ipcMain.handle("trail:keep-copies", (_e, id, on) => {
+  const trail = String(id || currentTrail());
+  const out = trailStore?.setKeepCopies(trail, Boolean(on));
+  sendUi("trail-changed", { trail });
+  return out ?? null;
+});
+// Opens a saved copy in a tab, after checking it still has its hash.
+function openCopy(sha) {
+  if (!/^[0-9a-f]{64}$/.test(String(sha))) return null;
+  let buf;
+  try {
+    buf = fs.readFileSync(copyFile(sha));
+  } catch (_) {
+    sendUi("notice", { message: "That copy is not on this computer." });
+    return { ok: false, missing: true };
+  }
+  if (sha256Of(buf) !== sha) {
+    sendUi("notice", { message: "This copy has changed since it was saved, so it was not opened." });
+    return { ok: false, changed: true };
+  }
+  createTab(require("url").pathToFileURL(copyFile(sha)).href);
+  return { ok: true };
 }
 function engageUrl(url, reason) {
   const tab = [...tabs.values()].find((t) => t.page?.url === url);
@@ -666,7 +822,10 @@ function placeCard(id, url, opts = {}) {
 
 function trailSnapshot(id) {
   research.saveNow();
-  return trailStore.snapshot(id || research.current.id);
+  const snap = trailStore.snapshot(id || research.current.id);
+  // B87: whether each saved copy is on this computer.
+  if (snap) snap.cards = snap.cards.map((c) => (c.copies?.length ? { ...c, copies: c.copies.map((x) => ({ ...x, here: fs.existsSync(copyFile(x.sha256)) })) } : c));
+  return snap;
 }
 
 // ---- Trails keep their own tabs (B80, docs/18-sidebar-chrome.md) ----
@@ -1114,6 +1273,45 @@ function systemName() {
   if (process.platform === "win32") return `Windows ${os.release()} (${process.arch})`;
   return `Linux ${os.release()} (${process.arch})`;
 }
+// ---- Automatic active count (B116, core/active-count.js) ----
+// Once a day while NODE is in use (window focused, input in the last two
+// minutes): one request with the version and OS, and whether it is the first
+// this week and this month. No id, no pages, addresses or keywords. On by
+// default; Settings → Help turns it off. Only installed copies send it (or a
+// test that sets NODE_ACTIVE_API). State in userData/active-count.json.
+const ActiveCount = require("./core/active-count");
+const ACTIVE_API = process.env.NODE_ACTIVE_API || `${ShareLink.API_BASE}/api/active`;
+let activeSending = false;
+async function sendActiveCount({ inUse = nodeInUse() } = {}) {
+  if (activeSending || loadSettings().activeCount === false || !inUse) return null;
+  if (!app.isPackaged && !process.env.NODE_ACTIVE_API) return null;
+  const file = path.join(app.getPath("userData"), "active-count.json");
+  let state = null;
+  try {
+    state = JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch (_) {}
+  const next = ActiveCount.nextCount(state, { version: app.getVersion(), platform: process.platform });
+  if (!next) return null;
+  activeSending = true;
+  try {
+    // Node's fetch: no cookies, no browser session.
+    const res = await fetch(ACTIVE_API, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(next.body), signal: AbortSignal.timeout(10000) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    fs.writeFileSync(file, JSON.stringify(next.state));
+    return next.body;
+  } catch (err) {
+    log().warn(`active count: ${err.message}`); // tried again later
+    return null;
+  } finally {
+    activeSending = false;
+  }
+}
+function startActiveCount() {
+  setTimeout(sendActiveCount, 60 * 1000);
+  setInterval(sendActiveCount, 15 * 60 * 1000);
+  app.on("browser-window-focus", () => setTimeout(sendActiveCount, 5000));
+}
+
 function usageSummary() {
   return usage().summary({ version: app.getVersion(), os: systemName() });
 }
@@ -1939,6 +2137,7 @@ function contextMenuItems(tab, p, { video = p.mediaType === "video" } = {}) {
       { label: "Reload", click: () => wc.reload() },
       { type: "separator" },
       { label: "Save Page as PDF", click: () => savePdf(tab.id) },
+      ...(tab.private ? [] : [{ label: "Save a Copy of This Page", click: () => copyTab(tab) }]), // B87
       { label: "Print…", click: () => wc.print({}, () => {}) },
       { label: "Screenshot Tab", click: () => runShotFromMain(tab.id) }
     );
@@ -2147,6 +2346,7 @@ function loadSettings() {
   base.adblockCookies = raw.adblockCookies === true; // B77: also hide cookie notices (off by default, as in uBlock Origin)
   base.restoreTabs = raw.restoreTabs !== false;
   base.autoUpdate = raw.autoUpdate !== false;
+  base.activeCount = raw.activeCount !== false; // B116: on by default
   base.passkeys = raw.passkeys === true;
   base.mosaicMax = MOSAIC_MAX_CHOICES.includes(raw.mosaicMax) ? raw.mosaicMax : 4;
   base.tabSleep = SLEEP_CHOICES.includes(raw.tabSleep) ? raw.tabSleep : 30;
@@ -2188,6 +2388,7 @@ function saveSettings(next) {
   }
   if (next && "restoreTabs" in next) current.restoreTabs = Boolean(next.restoreTabs);
   if (next && "autoUpdate" in next) current.autoUpdate = Boolean(next.autoUpdate);
+  if (next && "activeCount" in next) current.activeCount = Boolean(next.activeCount);
   if (next && "passkeys" in next) current.passkeys = Boolean(next.passkeys);
   if (next && next.firstRunDone) current.firstRunDone = true;
   if (next && "passwordsOffer" in next) current.passwordsOffer = Boolean(next.passwordsOffer);
@@ -2226,6 +2427,7 @@ function saveSettings(next) {
     google: { ...current.google },
     restoreTabs: current.restoreTabs !== false,
     autoUpdate: current.autoUpdate !== false,
+    activeCount: current.activeCount !== false,
     passkeys: current.passkeys === true,
     mosaicMax: current.mosaicMax,
     tabSleep: current.tabSleep,
@@ -2275,6 +2477,7 @@ function publicSettings() {
     google: { ...s.google },
     restoreTabs: s.restoreTabs !== false,
     autoUpdate: s.autoUpdate !== false,
+    activeCount: s.activeCount !== false,
     passkeys: s.passkeys === true,
     passkeysActive: PASSKEYS_ON,
     update: updater ? updater.state() : null,
@@ -2480,6 +2683,7 @@ function buildMenu() {
         { label: "Bookmarks", accelerator: "CmdOrCtrl+Shift+B", click: () => sendUi("open-bookmarks") },
         { type: "separator" },
         { label: "Share Trail…", click: () => sendUi("share-trail") },
+        { label: "Save a Copy of This Page", click: () => copyTab(tabs.get(activeId)) },
         { label: "Open Trail File…", accelerator: "CmdOrCtrl+O", click: () => chooseSharedTrail() },
         { type: "separator" },
         { label: "Screenshot Tab", accelerator: "CmdOrCtrl+Shift+S", click: () => runShotFromMain(activeId) },
@@ -2788,6 +2992,7 @@ app.commandLine.appendSwitch("disable-features", "PreloadMediaEngagementData");
 
 app.whenReady().then(() => {
   usage().touch();
+  startActiveCount();
   if (process.env.NODE_TEST_PLAIN_PASSWORDS === "1" && app.commandLine.hasSwitch("user-data-dir")) safeStorage.setUsePlainTextEncryption?.(true);
   protocol.handle("scoutlib", (request) => {
     try {
@@ -2848,6 +3053,7 @@ app.whenReady().then(() => {
   global.nodeCompanion = companion; // for the e2e tests
   global.nodeTest = {
   claudeDesktopEntry, sleepIdleTabs,
+  sendActiveCount: () => sendActiveCount({ inUse: true }), // B116
   setTrailSavePath: (p) => (trailSavePath = p),
   openSharedTrail, openFromOutside, openShareLink,
   setPasswordAsk: (answer) => (passwordAsk = async (opts) => ((global.nodeTest.lastPasswordAsk = opts), answer)),
@@ -4152,34 +4358,59 @@ function shareFileInfo() {
     timeline: items.length,
     timelineOnly: items.filter((i) => i.timelineOnly).length,
     tabs: openTabCards(snap).length,
+    copies: shareCopies(snap).length,
   };
 }
-function shareFileText(opts = {}) {
+// B86: contact details in what would be shared, so each can be left out.
+// kind "file" (the trail file, with its choices) or "link" (pages ticked).
+function shareFindings(opts = {}) {
+  if (opts.kind === "link") return ShareCheck.findContacts(ShareCheck.sessionTexts(linkTrail(opts)));
   const snap = shareSnapshot();
+  if (opts.timeline === false) snap.timeline = [];
+  return ShareCheck.findContacts(ShareCheck.snapshotTexts(snap, { note: String(opts.note || "").slice(0, 300) }));
+}
+ipcMain.handle("trail:share-check", (_e, opts = {}) => shareFindings(opts || {}));
+// The details the person unticked: only ones NODE found (by value).
+function leaveOutOf(opts) {
+  const want = new Set((Array.isArray(opts.leaveOut) ? opts.leaveOut : []).map(String));
+  if (!want.size) return [];
+  return shareFindings(opts).filter((f) => want.has(f.value));
+}
+function shareFileText(opts = {}) {
+  const leave = leaveOutOf({ ...opts, kind: "file" });
+  const snap = ShareCheck.redact(shareSnapshot(), leave);
   return TrailFile.toTrailMd(snap, {
     by: loadSettings().displayName || "",
-    note: String(opts.note || "").slice(0, 300),
+    note: ShareCheck.redact(String(opts.note || "").slice(0, 300), leave),
     startHere: opts.startHere || "",
     timeline: opts.timeline !== false,
     openTabs: opts.tabs ? openTabCards(snap) : [],
+    copies: opts.copiesFolder ? { folder: opts.copiesFolder, include: shareCopies(snap) } : null,
   });
+}
+// B87: the saved copies a shared file can carry (on this computer, in cards
+// that go in the file).
+function shareCopies(snap = shareSnapshot()) {
+  return [...new Set(snap.cards.filter((c) => c.kind === "page" && !c.removed && !(c.url && isSensitiveUrl(c.url))).flatMap((c) => (c.copies || []).map((x) => x.sha256)))].filter((sha) => fs.existsSync(copyFile(sha)));
 }
 ipcMain.handle("trail:share-text", (_e, opts) => shareFileText(opts || {}));
 // Builds the file text. opts: { pages: [urls], reports: bool, tabs: bool }.
-function trailFileText(opts = {}) {
-  const by = loadSettings().displayName || "";
-  const trail = TrailFile.fromSession(research.current, {
-    by,
+function linkTrail(opts = {}) {
+  return TrailFile.fromSession(research.current, {
+    by: loadSettings().displayName || "",
     pages: Array.isArray(opts.pages) ? opts.pages.map(String) : null,
     reports: opts.reports === false ? [] : trailReports(),
     includeTabs: opts.tabs ? trailTabUrls() : [],
   });
-  return TrailFile.toMarkdown(trail, { by });
+}
+function trailFileText(opts = {}) {
+  const by = loadSettings().displayName || "";
+  // B86: details the person unticked are left out.
+  return TrailFile.toMarkdown(ShareCheck.redact(linkTrail(opts), leaveOutOf({ ...opts, kind: "link" })), { by });
 }
 const trailFileName = (name) => `${String(name || "Trail").replace(/[\\/:*?"<>|\u0000-\u001f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 80) || "Trail"}.trail.md`;
 let trailSavePath = null; // tests set a path instead of the Save dialog
 ipcMain.handle("trail:share-save", async (_e, opts = {}) => {
-  const text = shareFileText(opts);
   let file = trailSavePath;
   if (!file) {
     const r = await dialog.showSaveDialog(win, {
@@ -4191,14 +4422,26 @@ ipcMain.handle("trail:share-save", async (_e, opts = {}) => {
     if (r.canceled || !r.filePath) return { ok: false, canceled: true };
     file = r.filePath.endsWith(".md") ? r.filePath : `${r.filePath}.trail.md`;
   }
+  // B87: saved copies go in a folder beside the file, "<name> copies".
+  const folder = opts.copies ? `${path.basename(file).replace(/(\.trail)?\.md$/i, "")} copies` : "";
+  const text = shareFileText({ ...opts, copiesFolder: folder });
+  let copied = 0;
   try {
     fs.writeFileSync(file, text);
+    if (folder) {
+      const dir = path.join(path.dirname(file), folder);
+      fs.mkdirSync(dir, { recursive: true });
+      for (const sha of shareCopies()) {
+        fs.copyFileSync(copyFile(sha), path.join(dir, `${sha}.mhtml`));
+        copied++;
+      }
+    }
   } catch (err) {
     return { ok: false, error: `The file could not be saved: ${err.message}` };
   }
   usage().count("trailsShared");
   const back = TrailFile.parseTrailMd(text);
-  return { ok: true, file, name: path.basename(file), cards: back.cards.length, links: back.lines.length };
+  return { ok: true, file, name: path.basename(file), cards: back.cards.length, links: back.lines.length, copies: copied, folder };
 });
 // ---- Opening a shared trail (B82 step 5) ----
 // The file is read and checked; the Trail section shows a preview, then Open
@@ -4237,6 +4480,7 @@ function openTrailFileV2(file, text) {
     sendUi("shared-trail", { payload: { error: `${path.basename(file)}: ${err.message}` } });
     return { ok: false, error: err.message };
   }
+  takeCopies(file, data);
   research.saveNow();
   let opened;
   changeTrail(() => {
@@ -4246,6 +4490,29 @@ function openTrailFileV2(file, text) {
   if (!canvasOn) showCanvas();
   sendUi("trail-opened", { payload: trailSnapshot(opened.trail.id) });
   return { ok: true, id: opened.trail.id };
+}
+// B87: copies sent beside a trail file come into this computer's copies
+// when their SHA-256 matches the file; one that doesn't is marked changed.
+function takeCopies(file, data) {
+  const dir = path.dirname(file);
+  for (const c of data.cards || []) {
+    for (const x of c.copies || []) {
+      if (!x.file) continue;
+      const p = path.resolve(dir, x.file);
+      delete x.file;
+      if (!p.startsWith(dir + path.sep) || !/\.mhtml$/i.test(p)) continue;
+      try {
+        const buf = fs.readFileSync(p);
+        if (buf.length > 100 * 1024 * 1024) continue;
+        if (sha256Of(buf) !== x.sha256) {
+          x.changed = true;
+          continue;
+        }
+        fs.mkdirSync(copiesDir(), { recursive: true });
+        if (!fs.existsSync(copyFile(x.sha256))) fs.writeFileSync(copyFile(x.sha256), buf);
+      } catch (_) {}
+    }
+  }
 }
 function openSharedTrail(file) {
   let text = "";
