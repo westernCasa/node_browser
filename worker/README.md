@@ -10,6 +10,8 @@ NODE encrypts the trail on the sender's computer (AES-256-GCM, `core/share-link.
 | `GET /api/trails/<id>` | The encrypted trail, for NODE |
 | `DELETE /api/trails/<id>` | Removes it, with the delete key (Stop Sharing in NODE) |
 | `GET /t/<id>` | A page that decrypts the trail in the browser and shows it, with Open in NODE and Download NODE |
+| `POST /api/active` | The daily active count (B116): `{ v, os, w, m }` only. Stored as one empty object per count, named by day, OS, version and the week and month marks, deleted after 400 days. No address is stored; it is used only for a limit of 5 a minute |
+| `GET /api/active?days=30` | Counts per day (by OS and version), ISO week and month. Needs `Authorization: Bearer <STATS_TOKEN>` |
 
 Links look like `https://noderesearch.app/t/<id>#k=<key>`. The website (Vercel, `site/vercel.json`) passes `/t/…` to this Worker. NODE talks to the Worker directly at its workers.dev address (`core/share-link.js` → `API_BASE`).
 
@@ -22,7 +24,13 @@ Trails are deleted after 30 days: by an R2 lifecycle rule, and the Worker refuse
 - `CLOUDFLARE_ACCOUNT_ID`
 - `CLOUDFLARE_API_TOKEN`: a Cloudflare API token with **Workers Scripts: Edit** and **Workers R2 Storage: Edit** on the account.
 
-The first run creates the `node-share-trails` bucket and the 30-day rule.
+The first run creates the `node-share-trails` bucket and the 30-day rule. Each run also sets the 400-day rule for active counts.
+
+To read the active counts, add a third repository secret, `NODE_STATS_TOKEN` (any long random text), and run the workflow. Then:
+
+```
+curl -H "Authorization: Bearer <your token>" https://node-share.westerncasa.workers.dev/api/active?days=30
+```
 
 ## Testing
 

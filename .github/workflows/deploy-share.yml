@@ -17,6 +17,7 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      NODE_STATS_TOKEN: ${{ secrets.NODE_STATS_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -36,6 +37,15 @@ jobs:
       - name: Delete trails after 30 days
         working-directory: worker
         run: npx --yes wrangler@4 r2 bucket lifecycle add node-share-trails expire-after-30-days t/ --expire-days 30 --force || echo "::warning::Could not set the 30-day rule. The Worker still refuses trails older than 30 days; set the rule in the Cloudflare dashboard (R2 → node-share-trails → Settings → Object lifecycle rules)."
+      - name: Delete active counts after 400 days (B116)
+        working-directory: worker
+        run: npx --yes wrangler@4 r2 bucket lifecycle add node-share-trails expire-counts-after-400-days a/ --expire-days 400 --force || echo "::warning::Could not set the 400-day rule for active counts."
       - name: Deploy
         working-directory: worker
         run: npx --yes wrangler@4 deploy
+      # Reading the counts (GET /api/active) needs this token. Optional: add a
+      # repository secret NODE_STATS_TOKEN (any long random text) to turn it on.
+      - name: Set the token for reading counts
+        if: env.NODE_STATS_TOKEN != ''
+        working-directory: worker
+        run: printf '%s' "$NODE_STATS_TOKEN" | npx --yes wrangler@4 secret put STATS_TOKEN
