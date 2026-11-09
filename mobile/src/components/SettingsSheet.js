@@ -4,6 +4,9 @@ import { Switch, Text, TextInput, View } from "react-native";
 import { colors, ui } from "../theme";
 import Button from "./Button";
 import Sheet from "./Sheet";
+import { FullTextDisclaimer, FullTextTutorial } from "./FullTextSheet";
+
+const F = require("../fulltext");
 
 function Field({ label, value, onChange, secret, placeholder }) {
   return (
@@ -36,11 +39,12 @@ export default function SettingsSheet({ visible, onClose, services }) {
   const s = services.settings;
   const [p, setP] = useState(() => JSON.parse(JSON.stringify(s.providers)));
   const [ai, setAi] = useState(() => JSON.parse(JSON.stringify(s.ai)));
+  const [ft, setFt] = useState(() => ({ enabled: false, email: "", openalexKey: "", ...(s.fulltext || {}) }));
   const [msg, setMsg] = useState("");
   const setProv = (id, patch) => setP({ ...p, [id]: { ...p[id], ...patch } });
 
   const save = async () => {
-    await services.saveSettings({ providers: p, ai });
+    await services.saveSettings({ providers: p, ai, fulltext: ft });
     setMsg("Saved.");
   };
   const testAI = async () => {
@@ -81,6 +85,22 @@ export default function SettingsSheet({ visible, onClose, services }) {
           <Field label="Model name" value={ai.grok.model} onChange={(v) => setAi({ ...ai, grok: { ...ai.grok, model: v } })} />
         </>
       )}
+
+      <Text style={ui.kicker} accessibilityRole="header">
+        Full text for papers
+      </Text>
+      <Text style={ui.help}>On a page with a DOI, Full text finds a free, legal copy of the paper and links it through your library.</Text>
+      <Toggle label="Find free copies (Unpaywall, OpenAlex)" value={ft.enabled} onChange={(v) => setFt({ ...ft, enabled: v })} />
+      {ft.enabled ? (
+        <>
+          <Field label="Your email (Unpaywall asks for it)" value={ft.email} onChange={(v) => setFt({ ...ft, email: v })} placeholder="you@example.org" />
+          {ft.email && !F.EMAIL_RE.test(ft.email.trim()) ? <Text style={[ui.help, { color: colors.bad }]}>This doesn't look like an email address.</Text> : null}
+          <Field label="OpenAlex API key (optional)" value={ft.openalexKey} onChange={(v) => setFt({ ...ft, openalexKey: v })} secret placeholder="From openalex.org/settings/api" />
+        </>
+      ) : null}
+      <FullTextTutorial />
+      <FullTextDisclaimer />
+
       <View style={{ flexDirection: "row", gap: 6, marginTop: 12 }}>
         <Button label="Save" onPress={save} />
         <Button label="Test AI" onPress={testAI} />

@@ -2,7 +2,7 @@
 // browser behind it keeps its tabs of WebViews, address bar, and the shared
 // suggestion engine from core/.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, BackHandler, Keyboard, PanResponder, Platform, Pressable, Text, TextInput, View, useWindowDimensions } from "react-native";
+import { AccessibilityInfo, ActivityIndicator, BackHandler, Keyboard, PanResponder, Platform, Pressable, Text, TextInput, View, useWindowDimensions } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
@@ -17,6 +17,7 @@ import TabsSheet from "./src/components/TabsSheet";
 import AddressSuggestions from "./src/components/AddressSuggestions";
 import AskSheet from "./src/components/AskSheet";
 import TrailHome from "./src/components/TrailHome";
+import FullTextSheet from "./src/components/FullTextSheet";
 import { captureRef } from "react-native-view-shot";
 import { Directory, File, Paths } from "expo-file-system";
 import SettingsSheet from "./src/components/SettingsSheet";
@@ -155,6 +156,12 @@ function Browser({ services }) {
       } catch {
         return;
       }
+      if (msg.type === "capinfo" && String(msg.id).startsWith("ft:")) {
+        // M19: the page's DOI or PMID, found on the phone; nothing is sent.
+        const ids = Capture.findIds(msg);
+        updateTab(tabId, { doi: ids.doi || "", pmid: ids.pmid || "" });
+        return;
+      }
       if (msg.type === "capinfo") {
         const p = pending.current.get(msg.id);
         if (!p) return;
@@ -206,6 +213,7 @@ function Browser({ services }) {
     // new load, so onLoadEnd does not run: start the new page's media here.
     if (before && !nav.loading && before.url && nav.url !== before.url) {
       if (lastSelection.current.tabId === tabId) lastSelection.current = { tabId: null, url: "", text: "" };
+      updateTab(tabId, { doi: "", pmid: "" });
       services.history.record(nav.url, nav.title);
       const tab = withRule({ ...before, url: nav.url });
       refs.current.get(tabId)?.injectJavaScript(autoplayCall(tab.rule.autoplay));
@@ -217,6 +225,7 @@ function Browser({ services }) {
   // recorded as a capture card. No screen change; a note with Undo shows.
   const showToast = (t) => {
     clearTimeout(toastTimer.current);
+    AccessibilityInfo.announceForAccessibility?.(t.text); // VoiceOver reads the note; TalkBack uses the live region
     setToast(t);
     toastTimer.current = setTimeout(() => setToast(null), 6000);
   };
@@ -278,6 +287,7 @@ function Browser({ services }) {
       playback.navigated(tabId); // media of the previous page will not resume
       view.injectJavaScript(autoplayCall(tab.rule.autoplay));
       if (tab.rule.center !== false) view.injectJavaScript(CENTER_ON_TAP);
+      view.injectJavaScript(Capture.captureInfoCall(`ft:${tabId}`)); // DOI for the Full text button
       if (tabId !== activeRef.current) {
         if (!soundAllRef.current) view.injectJavaScript(MUTE_ALL); // only the active tab plays sound
         return;
@@ -397,8 +407,8 @@ function Browser({ services }) {
       {/* Address bar, with suggestions from history and Wikipedia while typing */}
       <View style={{ zIndex: 20, elevation: 20 }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 6, padding: 8, borderBottomWidth: 1, borderColor: colors.line }} {...addressPan.panHandlers}>
-        <Button label="‹" small onPress={() => refs.current.get(activeId)?.goBack()} style={!active?.canGoBack && { opacity: 0.4 }} />
-        <Button label="›" small onPress={() => refs.current.get(activeId)?.goForward()} style={!active?.canGoForward && { opacity: 0.4 }} />
+        <Button label="‹" a11yLabel="Back" small onPress={() => refs.current.get(activeId)?.goBack()} style={!active?.canGoBack && { opacity: 0.4 }} />
+        <Button label="›" a11yLabel="Forward" small onPress={() => refs.current.get(activeId)?.goForward()} style={!active?.canGoForward && { opacity: 0.4 }} />
         <TextInput
           style={[ui.input, { flex: 1, paddingVertical: 6 }]}
           value={editing ? address : active?.url || ""}
@@ -432,7 +442,7 @@ function Browser({ services }) {
           }}
         />
         {/* Tap: tab list. Press and hold: new tab. */}
-        <Button label={String(tabs.length)} small onPress={() => setSheet("tabs")} onLongPress={() => addTab(HOME_URL)} />
+        <Button label={String(tabs.length)} a11yLabel={`${tabs.length} ${tabs.length === 1 ? "tab" : "tabs"}, open the tab list`} a11yHint="Press and hold for a new tab" small onPress={() => setSheet("tabs")} onLongPress={() => addTab(HOME_URL)} />
       </View>
       {editing ? (
         <AddressSuggestions
@@ -484,7 +494,13 @@ function Browser({ services }) {
               />
               {showMosaic && !isActive ? (
                 // Tap an inactive tile to make it the active tab; then it takes touches.
-                <Pressable style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0 }} onPress={() => switchTo(t.id)} />
+                <Pressable
+                  style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0 }}
+                  onPress={() => switchTo(t.id)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Mosaic tile ${tile + 1}: ${t.title || t.url || "new tab"}`}
+                  accessibilityHint="Makes this the active tab"
+                />
               ) : null}
             </View>
           );
@@ -494,10 +510,10 @@ function Browser({ services }) {
       {/* Bottom bar */}
       <View style={{ flexDirection: "row", gap: 6, padding: 8, borderTopWidth: 1, borderColor: colors.line, alignItems: "center" }}>
         <Button label={`Suggest${state.results.length ? ` (${state.results.length})` : ""}`} active={state.busy} onPress={() => setSheet("suggest")} />
-        <Button label="Capture" onPress={capture} />
+        <Button label="Capture" a11yHint="Saves this page, the selected text and a thumbnail into the trail" onPress={capture} />
         <Button label="Mosaic" active={mosaic} onPress={() => setMosaic(!mosaic)} />
         <Button label="Trail" onPress={() => setHome(true)} />
-        <Button label="⚙︎" onPress={() => setSheet("settings")} />
+        <Button label="⚙︎" a11yLabel="Settings" onPress={() => setSheet("settings")} />
         <Text style={[ui.help, { flex: 1 }]} numberOfLines={1}>
           {state.busy ? "Searching…" : ""}
         </Text>
@@ -538,8 +554,23 @@ function Browser({ services }) {
       />
       <SettingsSheet visible={sheet === "settings"} onClose={() => setSheet(null)} services={services} />
 
+      {(active?.doi || active?.pmid) && !home && !sheet ? (
+        <View style={{ position: "absolute", right: 12, bottom: toast ? 128 : 70, zIndex: 39, elevation: 39 }}>
+          <Button label="Full text" active a11yHint="Finds a free copy of this paper" onPress={() => setSheet("fulltext")} />
+        </View>
+      ) : null}
+      <FullTextSheet
+        visible={sheet === "fulltext"}
+        onClose={() => setSheet(null)}
+        doi={active?.doi}
+        pmid={active?.pmid}
+        services={services}
+        onOpenUrl={(url) => addTab(url)}
+        onOpenSettings={() => setSheet("settings")}
+      />
+
       {toast && !home ? (
-        <View style={{ position: "absolute", left: 12, right: 12, bottom: 70, zIndex: 40, elevation: 40, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.bg3, borderWidth: 1, borderColor: colors.line, borderRadius: 10, padding: 10 }}>
+        <View accessibilityLiveRegion="polite" style={{ position: "absolute", left: 12, right: 12, bottom: 70, zIndex: 40, elevation: 40, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.bg3, borderWidth: 1, borderColor: colors.line, borderRadius: 10, padding: 10 }}>
           <Text style={{ color: colors.text, flex: 1 }} numberOfLines={2}>
             {toast.text}
           </Text>

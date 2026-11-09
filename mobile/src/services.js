@@ -8,7 +8,7 @@ const { TrailStore, migrateSessions, sessionStorageOver } = require("../../core/
 const appConfig = require("../app.json");
 
 const PREFIX = "scout:";
-const SECRET_KEYS = { brave: "scout.brave.key", grok: "scout.grok.key" };
+const SECRET_KEYS = { brave: "scout.brave.key", grok: "scout.grok.key", unpaywallEmail: "node.unpaywall.email", openalex: "node.openalex.key" };
 
 // Load every saved file into memory first, so core stores can read
 // synchronously; each write is persisted to AsyncStorage in the background.
@@ -72,6 +72,10 @@ export async function createServices() {
   } catch (_) {}
   settings.providers.brave.key = (await SecureStore.getItemAsync(SECRET_KEYS.brave)) || "";
   settings.ai.grok.key = (await SecureStore.getItemAsync(SECRET_KEYS.grok)) || "";
+  // M19 full text: off until the person turns it on; email and key in the keychain.
+  settings.fulltext = { enabled: false, tutorialSeen: false, ...(safeParse(storage.read("settings.json")).fulltext || {}) };
+  settings.fulltext.email = (await SecureStore.getItemAsync(SECRET_KEYS.unpaywallEmail)) || "";
+  settings.fulltext.openalexKey = (await SecureStore.getItemAsync(SECRET_KEYS.openalex)) || "";
 
   // Identify NODE to the sites it calls in the background (Wikipedia limits
   // unidentified apps to 10 requests a minute). Same contact URL as desktop.
@@ -96,9 +100,14 @@ export async function createServices() {
     }
     await SecureStore.setItemAsync(SECRET_KEYS.brave, settings.providers.brave.key || "");
     await SecureStore.setItemAsync(SECRET_KEYS.grok, settings.ai.grok.key || "");
+    if (next.fulltext) settings.fulltext = { ...settings.fulltext, ...next.fulltext };
+    await SecureStore.setItemAsync(SECRET_KEYS.unpaywallEmail, String(settings.fulltext.email || "").trim());
+    await SecureStore.setItemAsync(SECRET_KEYS.openalex, String(settings.fulltext.openalexKey || "").trim());
     const disk = JSON.parse(JSON.stringify(settings));
     delete disk.providers.brave.key;
     delete disk.ai.grok.key;
+    delete disk.fulltext.email;
+    delete disk.fulltext.openalexKey;
     storage.write("settings.json", JSON.stringify(disk));
   }
 
@@ -117,4 +126,12 @@ export async function createServices() {
     bookmarks,
     ruleFor: (url) => core.resolve(rules, url),
   };
+}
+
+function safeParse(text) {
+  try {
+    return JSON.parse(text || "{}");
+  } catch (_) {
+    return {};
+  }
 }
