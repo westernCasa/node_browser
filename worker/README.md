@@ -29,7 +29,7 @@ The first run creates the `node-share-trails` bucket and the 30-day rule. Each r
 To read the active counts, add a third repository secret, `NODE_STATS_TOKEN` (any long random text), and run the workflow. Then:
 
 ```
-curl -H "Authorization: Bearer <your token>" https://node-share.westerncasa.workers.dev/api/active?days=30
+curl -H "Authorization: Bearer <your token>" https://node-share.sven-f70.workers.dev/api/active?days=30
 ```
 
 ## Testing
