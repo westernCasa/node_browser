@@ -21,6 +21,8 @@ import FullTextSheet from "./src/components/FullTextSheet";
 import { captureRef } from "react-native-view-shot";
 import { Directory, File, Paths } from "expo-file-system";
 import SettingsSheet from "./src/components/SettingsSheet";
+import MosaicLayoutSheet from "./src/components/MosaicLayoutPicker";
+const { layoutRects, isLayout } = require("./src/mosaicLayout");
 
 const { SuggestController } = require("../core/controller");
 const { PlaybackLimiter } = require("../core/playback");
@@ -64,6 +66,19 @@ function Browser({ services }) {
   const [tabs, setTabs] = useState(() => [newTab(HOME_URL)]);
   const [activeId, setActiveId] = useState(() => tabs[0].id);
   const [mosaic, setMosaic] = useState(false);
+  // Mosaic layout (Auto, Stack, Side by side, Grid, Focus), kept between launches.
+  const [layout, setLayoutState] = useState(() => {
+    try {
+      const saved = JSON.parse(services.storage.read("mosaic.json") || "{}");
+      return isLayout(saved.layout) ? saved.layout : "auto";
+    } catch {
+      return "auto";
+    }
+  });
+  const setLayout = (id) => {
+    setLayoutState(id);
+    services.storage.write("mosaic.json", JSON.stringify({ layout: id, hinted: true }));
+  };
   // Sound from every playing tab. Android only: iOS (WebKit) lets only one
   // video with sound play at a time and pauses the others.
   const canSoundAll = Platform.OS === "android";
@@ -223,6 +238,13 @@ function Browser({ services }) {
   // M18 smart capture: the page's address, title, DOI or PMID, the time with
   // the time zone, the selected text and a thumbnail go into the trail being
   // recorded as a capture card. No screen change; a note with Undo shows.
+  const mosaicHinted = () => {
+    try {
+      return Boolean(JSON.parse(services.storage.read("mosaic.json") || "{}").hinted);
+    } catch {
+      return false;
+    }
+  };
   const showToast = (t) => {
     clearTimeout(toastTimer.current);
     AccessibilityInfo.announceForAccessibility?.(t.text); // VoiceOver reads the note; TalkBack uses the live region
@@ -398,8 +420,7 @@ function Browser({ services }) {
       ? tabs
       : [active, ...tabs.filter((t) => t.id !== active?.id).slice(-(PHONE_TILES - 1))].sort((a, b) => tabs.indexOf(a) - tabs.indexOf(b));
   const tiledIds = new Set(tiled.map((t) => t.id));
-  const cols = wide ? Math.ceil(Math.sqrt(tiled.length)) : tiled.length <= 3 ? 1 : 2;
-  const rows = Math.ceil(tiled.length / cols) || 1;
+  const rects = layoutRects(layout, tiled.length, { active: Math.max(0, tiled.findIndex((t) => t.id === active?.id)), wide });
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg2 }} edges={["top", "bottom"]}>
@@ -472,10 +493,10 @@ function Browser({ services }) {
             tile >= 0
               ? {
                   position: "absolute",
-                  left: `${((tile % cols) * 100) / cols}%`,
-                  top: `${(Math.floor(tile / cols) * 100) / rows}%`,
-                  width: `${100 / cols}%`,
-                  height: `${100 / rows}%`,
+                  left: `${rects[tile].left}%`,
+                  top: `${rects[tile].top}%`,
+                  width: `${rects[tile].width}%`,
+                  height: `${rects[tile].height}%`,
                   zIndex: 2,
                   borderWidth: isActive ? 2 : 0,
                   borderColor: colors.accent,
@@ -511,7 +532,21 @@ function Browser({ services }) {
       <View style={{ flexDirection: "row", gap: 6, padding: 8, borderTopWidth: 1, borderColor: colors.line, alignItems: "center" }}>
         <Button label={`Suggest${state.results.length ? ` (${state.results.length})` : ""}`} active={state.busy} onPress={() => setSheet("suggest")} />
         <Button label="Capture" a11yHint="Saves this page, the selected text and a thumbnail into the trail" onPress={capture} />
-        <Button label="Mosaic" active={mosaic} onPress={() => setMosaic(!mosaic)} />
+        <Button
+          label="Mosaic"
+          active={mosaic}
+          a11yHint="Press and hold to change the layout"
+          onPress={() => {
+            const on = !mosaic;
+            setMosaic(on);
+            // Once: say how to change the layout.
+            if (on && tabs.length > 1 && !mosaicHinted()) {
+              services.storage.write("mosaic.json", JSON.stringify({ layout, hinted: true }));
+              showToast({ text: "Press and hold Mosaic to change the layout." });
+            }
+          }}
+          onLongPress={() => setSheet("layout")}
+        />
         <Button label="Trail" onPress={() => setHome(true)} />
         <Button label="⚙︎" a11yLabel="Settings" onPress={() => setSheet("settings")} />
         <Text style={[ui.help, { flex: 1 }]} numberOfLines={1}>
@@ -552,7 +587,8 @@ function Browser({ services }) {
         onToggleSoundAll={() => setSoundAll(!soundAll)}
         canMosaic={canMosaic}
       />
-      <SettingsSheet visible={sheet === "settings"} onClose={() => setSheet(null)} services={services} />
+      <SettingsSheet visible={sheet === "settings"} onClose={() => setSheet(null)} services={services} mosaicLayout={layout} onMosaicLayout={setLayout} wide={wide} />
+      <MosaicLayoutSheet visible={sheet === "layout"} onClose={() => setSheet(null)} value={layout} onChange={setLayout} wide={wide} />
 
       {(active?.doi || active?.pmid) && !home && !sheet ? (
         <View style={{ position: "absolute", right: 12, bottom: toast ? 128 : 70, zIndex: 39, elevation: 39 }}>

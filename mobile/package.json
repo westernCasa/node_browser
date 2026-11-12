@@ -23,7 +23,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "bundle:check": "expo export --platform android --platform ios --output-dir dist-check",
-    "test": "node test/trail-flow.test.js && node test/capture.test.js && node test/fulltext.test.js"
+    "test": "node test/trail-flow.test.js && node test/capture.test.js && node test/fulltext.test.js && node test/mosaic-layout.test.js"
   },
   "private": true
 }

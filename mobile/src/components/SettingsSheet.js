@@ -5,6 +5,7 @@ import { colors, ui } from "../theme";
 import Button from "./Button";
 import Sheet from "./Sheet";
 import { FullTextDisclaimer, FullTextTutorial } from "./FullTextSheet";
+import { MosaicLayoutList } from "./MosaicLayoutPicker";
 
 const F = require("../fulltext");
 
@@ -35,7 +36,7 @@ function Toggle({ label, value, onChange }) {
   );
 }
 
-export default function SettingsSheet({ visible, onClose, services }) {
+export default function SettingsSheet({ visible, onClose, services, mosaicLayout, onMosaicLayout, wide }) {
   const s = services.settings;
   const [p, setP] = useState(() => JSON.parse(JSON.stringify(s.providers)));
   const [ai, setAi] = useState(() => JSON.parse(JSON.stringify(s.ai)));
@@ -55,7 +56,17 @@ export default function SettingsSheet({ visible, onClose, services }) {
   };
 
   return (
-    <Sheet visible={visible} onClose={onClose} title="Settings" kicker="Search">
+    <Sheet visible={visible} onClose={onClose} title="Settings">
+      <Text style={[ui.kicker, { marginTop: 0 }]} accessibilityRole="header">
+        Mosaic layout
+      </Text>
+      <Text style={ui.help}>Also: press and hold the Mosaic button. Changes apply right away.</Text>
+      <MosaicLayoutList value={mosaicLayout} onChange={onMosaicLayout} wide={wide} />
+
+      <Text style={ui.kicker} accessibilityRole="header">
+        Search
+      </Text>
+
       <Text style={ui.help}>Wikipedia runs for every search. Web results come from the first working source: Brave, SearXNG, DuckDuckGo.</Text>
       <Toggle label="Wikipedia" value={p.wikipedia.enabled} onChange={(v) => setProv("wikipedia", { enabled: v })} />
       <Toggle label="Brave Search API" value={p.brave.enabled} onChange={(v) => setProv("brave", { enabled: v })} />
