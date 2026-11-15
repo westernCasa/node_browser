@@ -8,6 +8,7 @@ import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
 import { createServices } from "./src/services";
 const Capture = require("./src/capture");
+const PageMessages = require("./src/pageMessages");
 const { createEngagement } = require("./src/engagement");
 import { autoplayCall, CENTER_ON_TAP, extractCall, MUTE_ALL, PAUSE_FOR_LIMIT, readCall, RESUME, UNMUTE } from "./src/bridge";
 import { colors, ui } from "./src/theme";
@@ -161,7 +162,7 @@ function Browser({ services }) {
               pending.current.delete(id);
               reject(new Error("The page did not answer"));
             }, 5000);
-            pending.current.set(id, { resolve, reject, timer });
+            pending.current.set(id, { resolve, reject, timer, tabId: tab.id });
             view.injectJavaScript(extractCall(tab.rule?.extract, id));
           }),
       }),
@@ -179,7 +180,7 @@ function Browser({ services }) {
         pending.current.delete(id);
         reject(new Error("The page did not answer"));
       }, 5000);
-      pending.current.set(id, { resolve, reject, timer });
+      pending.current.set(id, { resolve, reject, timer, tabId: tab.id });
       view.injectJavaScript(readCall(id));
     });
 
@@ -187,12 +188,10 @@ function Browser({ services }) {
 
   const onMessage = useCallback(
     (tabId, raw) => {
-      let msg;
-      try {
-        msg = JSON.parse(raw);
-      } catch {
-        return;
-      }
+      // Pages are untrusted: only known, well-formed messages, and answers
+      // only to requests NODE sent to this tab (src/pageMessages.js).
+      const msg = PageMessages.checkMessage(raw, { tabId, pendingFor: (id) => pending.current.get(id)?.tabId ?? null });
+      if (!msg) return;
       if (msg.type === "capinfo" && String(msg.id).startsWith("ft:")) {
         // M19: the page's DOI or PMID, found on the phone; nothing is sent.
         const ids = Capture.findIds(msg);
@@ -212,7 +211,7 @@ function Browser({ services }) {
         if (!p) return;
         clearTimeout(p.timer);
         pending.current.delete(msg.id);
-        msg.error ? p.reject(new Error(msg.error)) : p.resolve(msg.data);
+        msg.error || !msg.data ? p.reject(new Error(msg.error || "The page did not answer")) : p.resolve(msg.data);
         return;
       }
       if (msg.type === "media") {
@@ -291,7 +290,7 @@ function Browser({ services }) {
         pending.current.delete(reqId);
         resolve({ error: "timeout" });
       }, 3000);
-      pending.current.set(reqId, { resolve, reject: (e) => resolve({ error: String(e) }), timer });
+      pending.current.set(reqId, { resolve, reject: (e) => resolve({ error: String(e) }), timer, tabId: id });
       view.injectJavaScript(Capture.captureInfoCall(reqId));
     });
     const at = Date.now();

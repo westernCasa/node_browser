@@ -8,6 +8,7 @@ import { FullTextDisclaimer, FullTextTutorial } from "./FullTextSheet";
 import { MosaicLayoutList } from "./MosaicLayoutPicker";
 
 const F = require("../fulltext");
+const P = require("../aiPolicy");
 
 function Field({ label, value, onChange, secret, placeholder }) {
   return (
@@ -42,14 +43,18 @@ export default function SettingsSheet({ visible, onClose, services, mosaicLayout
   const [ai, setAi] = useState(() => JSON.parse(JSON.stringify(s.ai)));
   const [ft, setFt] = useState(() => ({ enabled: false, email: "", openalexKey: "", ...(s.fulltext || {}) }));
   const [msg, setMsg] = useState("");
+  const [consents, setConsents] = useState(() => ({ ...(s.aiConsent || {}) }));
+  const [wipe, setWipe] = useState(false); // "Delete all NODE data" asks first
   const setProv = (id, patch) => setP({ ...p, [id]: { ...p[id], ...patch } });
 
   const save = async () => {
-    await services.saveSettings({ providers: p, ai, fulltext: ft });
+    await services.saveSettings({ providers: p, ai: ai.provider === "demo" ? { ...ai, enabled: false } : ai, fulltext: ft, aiConsent: consents });
     setMsg("Saved.");
   };
   const testAI = async () => {
     await save();
+    if (ai.provider === "demo") return setMsg("Demo runs on this phone; there is nothing to test.");
+    if (!consents[ai.provider]) return setMsg("Agree to send page text to this provider first (above).");
     setMsg("Testing…");
     const r = await services.flow.aiTest();
     setMsg(r.ok ? `Working. Sample ideas: ${r.queries.join(" · ")}` : r.error);
@@ -75,13 +80,41 @@ export default function SettingsSheet({ visible, onClose, services, mosaicLayout
       {p.searxng.enabled ? <Field label="Instance URL" value={p.searxng.url} onChange={(v) => setProv("searxng", { url: v })} placeholder="https://searx.example.org" /> : null}
       <Toggle label="DuckDuckGo (fallback)" value={p.ddg.enabled} onChange={(v) => setProv("ddg", { enabled: v })} />
 
-      <Text style={ui.kicker}>AI query ideas</Text>
-      <Toggle label="Use AI query ideas" value={ai.enabled} onChange={(v) => setAi({ ...ai, enabled: v })} />
+      <Text style={ui.kicker} accessibilityRole="header">
+        AI
+      </Text>
+      <Text style={ui.help}>Used by Ask AI and, if turned on, AI query ideas. Demo runs on this phone and sends nothing.</Text>
       <View style={{ flexDirection: "row", gap: 6, marginTop: 8 }}>
-        <Button label="Local model" active={ai.provider === "local"} small onPress={() => setAi({ ...ai, provider: "local" })} />
+        <Button label="Demo" active={ai.provider === "demo"} small onPress={() => setAi({ ...ai, provider: "demo" })} />
+        <Button label="Model server" active={ai.provider === "local"} small onPress={() => setAi({ ...ai, provider: "local" })} />
         <Button label="Grok" active={ai.provider === "grok"} small onPress={() => setAi({ ...ai, provider: "grok" })} />
       </View>
-      {ai.provider === "local" ? (
+      {ai.provider !== "demo" ? <Toggle label="Use AI query ideas" value={ai.enabled} onChange={(v) => setAi({ ...ai, enabled: v })} /> : null}
+      {ai.provider !== "demo" ? (
+        <View style={{ borderWidth: 1, borderColor: consents[ai.provider] ? colors.line : colors.accent, borderRadius: 8, padding: 10, marginTop: 8 }}>
+          {consents[ai.provider] ? (
+            <>
+              <Text style={ui.help}>You agreed on {new Date(consents[ai.provider]).toLocaleDateString()} to send page text to {P.providerName(ai)}.</Text>
+              <View style={{ flexDirection: "row", marginTop: 6 }}>
+                <Button label="Withdraw consent" small onPress={() => setConsents({ ...consents, [ai.provider]: 0 })} />
+              </View>
+            </>
+          ) : (
+            <>
+              {P.consentText(ai).lines.map((l) => (
+                <Text key={l} style={[ui.help, { marginBottom: 4 }]}>
+                  {l}
+                </Text>
+              ))}
+              <View style={{ flexDirection: "row", marginTop: 6 }}>
+                <Button label="Agree" small active onPress={() => setConsents({ ...consents, [ai.provider]: Date.now() })} />
+              </View>
+              <Text style={[ui.help, { marginTop: 4 }]}>Without this, Ask AI and AI query ideas stay off for this provider. Save to apply.</Text>
+            </>
+          )}
+        </View>
+      ) : null}
+      {ai.provider === "demo" ? null : ai.provider === "local" ? (
         <>
           <Text style={[ui.help, { marginTop: 6 }]}>
             On a phone, "local" means a model server on your own network, such as Ollama on your computer (address like http://192.168.1.20:11434/v1).
@@ -117,6 +150,33 @@ export default function SettingsSheet({ visible, onClose, services, mosaicLayout
         <Button label="Test AI" onPress={testAI} />
       </View>
       {msg ? <Text style={[ui.help, { marginTop: 8 }]}>{msg}</Text> : null}
+
+      <Text style={ui.kicker} accessibilityRole="header">
+        Your data
+      </Text>
+      <Text style={ui.help}>NODE keeps your trails, history, settings and keys on this phone only. NODE has no accounts and no analytics.</Text>
+      {wipe ? (
+        <View style={{ borderWidth: 1, borderColor: colors.bad, borderRadius: 8, padding: 10, marginTop: 8 }}>
+          <Text style={{ color: colors.text }}>Delete every trail, page history, bookmark, setting and saved key on this phone? This can't be undone.</Text>
+          <View style={{ flexDirection: "row", gap: 6, marginTop: 8 }}>
+            <Button
+              label="Delete all"
+              active
+              onPress={async () => {
+                await services.clearAll();
+                setWipe(false);
+                setMsg("All NODE data on this phone was deleted. Close NODE and open it again.");
+              }}
+            />
+            <Button label="Cancel" onPress={() => setWipe(false)} />
+          </View>
+        </View>
+      ) : (
+        <View style={{ flexDirection: "row", marginTop: 8 }}>
+          <Button label="Delete all NODE data…" onPress={() => setWipe(true)} />
+        </View>
+      )}
+      <Text style={[ui.help, { marginTop: 8 }]}>NODE {require("../../app.json").expo.version} · Privacy policy: see the App Store or Google Play listing.</Text>
     </Sheet>
   );
 }
