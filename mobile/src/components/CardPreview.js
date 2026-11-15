@@ -6,7 +6,8 @@ import Sheet from "./Sheet";
 
 const M = require("../trailModel");
 
-export default function CardPreview({ card, onClose, onOpenUrl }) {
+// extra: more content at the end (the canvas actions when editing).
+export default function CardPreview({ card, onClose, onOpenUrl, extra = null }) {
   if (!card) return null;
   const f = M.cardFace(card);
   const replies = [];
@@ -52,6 +53,7 @@ export default function CardPreview({ card, onClose, onOpenUrl }) {
           </View>
         </>
       ) : null}
+      {extra}
     </Sheet>
   );
 }

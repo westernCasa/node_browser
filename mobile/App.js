@@ -2,12 +2,13 @@
 // browser behind it keeps its tabs of WebViews, address bar, and the shared
 // suggestion engine from core/.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AccessibilityInfo, ActivityIndicator, BackHandler, Keyboard, PanResponder, Platform, Pressable, Text, TextInput, View, useWindowDimensions } from "react-native";
+import { AccessibilityInfo, ActivityIndicator, AppState, BackHandler, Keyboard, PanResponder, Platform, Pressable, Text, TextInput, View, useWindowDimensions } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
 import { createServices } from "./src/services";
 const Capture = require("./src/capture");
+const { createEngagement } = require("./src/engagement");
 import { autoplayCall, CENTER_ON_TAP, extractCall, MUTE_ALL, PAUSE_FOR_LIMIT, readCall, RESUME, UNMUTE } from "./src/bridge";
 import { colors, ui } from "./src/theme";
 import TabView from "./src/components/TabView";
@@ -114,6 +115,27 @@ function Browser({ services }) {
   const tileRefs = useRef(new Map()); // tab id -> the View around its WebView (for capture thumbnails)
   const lastSelection = useRef({ tabId: null, url: "", text: "" }); // the last text selected, for Capture
   const [toast, setToast] = useState(null); // { text, saved, trailId }
+  // Pages becoming cards on the phone (desktop's B104 rule, every trail).
+  const engagement = useRef(null);
+  if (!engagement.current) {
+    engagement.current = createEngagement({
+      store: services.trails,
+      trailOf: () => services.research.current.id,
+      onCard: () => setTrailVersion((v) => v + 1),
+    });
+  }
+  const onScreenRef = useRef([]); // tab ids on screen now, for time on page
+  useEffect(() => {
+    let front = AppState.currentState === "active";
+    const sub = AppState.addEventListener("change", (st) => (front = st === "active"));
+    const timer = setInterval(() => {
+      if (front) engagement.current.tick(onScreenRef.current);
+    }, 1000);
+    return () => {
+      clearInterval(timer);
+      sub.remove();
+    };
+  }, []);
   const toastTimer = useRef(null);
   const tabsRef = useRef(tabs);
   tabsRef.current = tabs;
@@ -216,7 +238,10 @@ function Browser({ services }) {
         lastSelection.current = { tabId, url: tab?.url || "", text: msg.text };
         controller.onPage(tab, "selection", msg.text);
       }
-      if (msg.type === "scroll") controller.onPage(tab, "scroll");
+      if (msg.type === "scroll") {
+        controller.onPage(tab, "scroll");
+        engagement.current.engage(tabId, "scroll"); // scrolling counts as engaging (B104)
+      }
     },
     [controller]
   );
@@ -224,6 +249,10 @@ function Browser({ services }) {
   const onNav = useCallback((tabId, nav) => {
     const before = tabById(tabId);
     updateTab(tabId, { url: nav.url, title: nav.title, canGoBack: nav.canGoBack, canGoForward: nav.canGoForward, loading: nav.loading });
+    if (!nav.loading && nav.url) {
+      engagement.current.started(tabId, nav.url, { title: nav.title, openedFrom: before?.openedFrom || "" });
+      engagement.current.title(tabId, nav.title);
+    }
     // Single-page sites (m.youtube.com and similar) change address without a
     // new load, so onLoadEnd does not run: start the new page's media here.
     if (before && !nav.loading && before.url && nav.url !== before.url) {
@@ -281,6 +310,7 @@ function Browser({ services }) {
     } catch (_) {
       // No thumbnail (the page may not allow it); the capture still saves.
     }
+    engagement.current.engage(id, "capture"); // a page captured from becomes a card (B104)
     services.research.saveNow();
     const trailId = services.research.current.id;
     const saved = Capture.saveCapture(services.trails, trailId, card, { pageTitle: tab.title });
@@ -319,8 +349,11 @@ function Browser({ services }) {
     [controller, services]
   );
 
-  const addTab = (url, activate = true) => {
-    const t = newTab(url);
+  const addTab = (url, activate = true, { fromTrail = false } = {}) => {
+    // The page this tab was opened from: where its card goes (B104). Opened
+    // from the trail screen: no source page.
+    const from = fromTrail ? "" : tabById(activeRef.current)?.url || "";
+    const t = { ...newTab(url), openedFrom: /^https?:/i.test(from) ? from : "" };
     setTabs((list) => [...list, t]);
     if (activate) switchTo(t.id);
     return t.id;
@@ -375,6 +408,7 @@ function Browser({ services }) {
   }, []);
 
   const closeTab = (id) => {
+    engagement.current.closed(id);
     refs.current.delete(id);
     playback.closed(id);
     setTabs((list) => {
@@ -420,6 +454,8 @@ function Browser({ services }) {
       ? tabs
       : [active, ...tabs.filter((t) => t.id !== active?.id).slice(-(PHONE_TILES - 1))].sort((a, b) => tabs.indexOf(a) - tabs.indexOf(b));
   const tiledIds = new Set(tiled.map((t) => t.id));
+  // Time on page counts for the tabs on screen, with NODE in front and the trail screen closed.
+  onScreenRef.current = home ? [] : showMosaic ? [...tiledIds] : active ? [active.id] : [];
   const rects = layoutRects(layout, tiled.length, { active: Math.max(0, tiled.findIndex((t) => t.id === active?.id)), wide });
 
   return (
@@ -555,7 +591,16 @@ function Browser({ services }) {
       </View>
 
       <SuggestionsSheet visible={sheet === "suggest"} onClose={() => setSheet(null)} state={state} controller={controller} onOpen={openResult} onAsk={() => setSheet("ask")} />
-      <AskSheet visible={sheet === "ask"} onClose={() => setSheet(null)} tab={active} services={services} readPage={readPage} />
+      <AskSheet
+        visible={sheet === "ask"}
+        onClose={() => setSheet(null)}
+        tab={active}
+        services={services}
+        readPage={(...a) => {
+          if (active) engagement.current.engage(active.id, "ask"); // a page asked about becomes a card (B104)
+          return readPage(...a);
+        }}
+      />
       <TabsSheet
         visible={sheet === "tabs"}
         onClose={() => setSheet(null)}
@@ -628,11 +673,11 @@ function Browser({ services }) {
               onBrowse={() => setHome(false)}
               onOpenUrl={(url) => {
                 setHome(false);
-                addTab(url);
+                addTab(url, true, { fromTrail: true });
               }}
               onSearch={(q) => {
                 setHome(false);
-                addTab(normalizeUrl(q));
+                addTab(normalizeUrl(q), true, { fromTrail: true });
               }}
             />
           </SafeAreaView>
