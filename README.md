@@ -6,7 +6,7 @@
 
 NODE Research Browser (NODE for short) is a desktop browser for knowledge networking. It maps what you read on a canvas, and you send the whole trail to a friend or a small group as one file. They open it in NODE, replay how you built it, and save their own copy to keep going. NODE also reads the page you are on, picks out its keywords, and suggests the next pages to read.
 
-Built with Electron and plain JavaScript, with an Expo mobile app (iPhone and Android, in testing) that shares the same core logic. Status: released, version 0.10.0, updated often.
+Built with Electron and plain JavaScript, with an Expo mobile app (iPhone and Android, in testing) that shares the same core logic. Status: released, version 0.11.0, updated often.
 
 ## What it does
 
