@@ -18,6 +18,7 @@
 const { isSensitiveUrl, hostOf } = require("./urls");
 const Prov = require("./provenance");
 const { placeNear } = require("./placement");
+const Cite = require("./citations");
 
 const FORMAT = 1;
 const GROUP_SIDE = 24; // group padding around its cards: sides and bottom
@@ -573,6 +574,20 @@ class TrailStore {
     d.trail.keepCopies = Boolean(on);
     this.save(id);
     return d.trail.keepCopies;
+  }
+  // ---- citation details (B91) ----
+  // What a page card's page says about itself (core/citations.js fromMeta):
+  // authors, date, DOI, journal or site. Read once, when the page becomes a
+  // card; kept on the card and in the trail file. Not an event: the person
+  // did nothing.
+  setCite(id, url, cite) {
+    const d = this.get(id);
+    const c = url && this.pageCard(id, url);
+    const clean = Cite.clean(cite);
+    if (!d || d.trail.readonly || !c || isSensitiveUrl(url) || !clean) return null;
+    c.cite = clean;
+    this.save(id);
+    return clean;
   }
   // ---- media moments (B88) ----
   // A section of a video or audio page, a to b in seconds, with the caption

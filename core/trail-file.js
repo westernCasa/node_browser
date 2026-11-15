@@ -13,6 +13,7 @@
 //   Reply: { id, by, at, text, replies: [Reply] }
 
 const { isSensitiveUrl } = require("./urls");
+const Cite = require("./citations");
 const Prov = require("./provenance");
 
 const FORMAT = 1;
@@ -606,6 +607,8 @@ function cardBody(c) {
       // How the page was reached (B83).
       const via = Prov.viaText(c.via, c.played);
       if (via) out.push(`Reached: ${via}`);
+      // B91: citation details, "Cite: article-journal · by Smith, Jane · 2024 · …"
+      if (c.cite) out.push(Cite.citeLine(c.cite));
       break;
     }
     case "video":
@@ -900,6 +903,9 @@ function readCard(raw) {
     case "page": {
       const kw = b.find((l) => /^Keywords:/.test(l));
       const reached = b.find((l) => /^Reached: /.test(l));
+      const citeRow = b.find((l) => /^Cite: /.test(l));
+      const cite = citeRow && Cite.parseCiteLine(citeRow);
+      if (cite) c.cite = cite;
       // Saved copies (B87): "Copy: <time> · SHA-256 <hash>[ · [saved copy](folder/<hash>.mhtml)]"
       const copyRows = b.filter((l) => /^Copy: .+ · SHA-256 [0-9a-f]{64}/.test(l));
       for (const l of copyRows) {
@@ -907,7 +913,7 @@ function readCard(raw) {
         if (!m) continue;
         (c.copies = c.copies || []).push({ atText: m[1], sha256: m[2], ...(m[3] ? { file: decodeURI(m[3]) } : {}) });
       }
-      const ex = b.filter((l) => l !== kw && l !== reached && !copyRows.includes(l));
+      const ex = b.filter((l) => l !== kw && l !== reached && l !== citeRow && !copyRows.includes(l));
       if (ex.length) c.excerpt = ex.join(" ");
       c.keywords = kw ? kw.replace(/^Keywords:\s*/, "").split(/,\s*/).filter(Boolean) : [];
       if (reached) {

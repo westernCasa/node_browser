@@ -39,6 +39,7 @@ const { TrailStore, migrateSessions, sessionStorageOver, mediaKindOf } = require
 const Prov = require("./core/provenance");
 const { recall, recallIndex } = require("./core/recall");
 const ShareCheck = require("./core/share-check");
+const Citations = require("./core/citations");
 const Replay = require("./core/replay");
 const { Usage } = require("./core/usage");
 const { HistoryStore } = require("./core/history");
@@ -817,7 +818,22 @@ function placeCard(id, url, opts = {}) {
   research?.saveNow?.();
   const card = trailStore.placePage(id, url, { near: canvasMiddle(id), ...opts });
   if (card) sendUi("trail-changed", { trail: id, card: card.id });
+  if (card && card.kind === "page" && !card.cite) readCite(id, url);
   return card;
+}
+// B91: a page that becomes a card is asked for its citation details
+// (authors, date, DOI, journal or site), from its own tags, if a tab is
+// showing it. Pages saved before 0.12 have none; their entries use the
+// title, address and date accessed.
+async function readCite(id, url) {
+  const tab = [...tabs.values()].find((t) => !t.private && !t.view.webContents.isDestroyed() && t.view.webContents.getURL() === url);
+  if (!tab) return;
+  try {
+    const raw = await tab.view.webContents.executeJavaScript(Citations.citeScript(), true);
+    if (trailStore.setCite(id, url, Citations.fromMeta(raw, { url, title: tab.view.webContents.getTitle() }))) sendUi("trail-changed", { trail: id });
+  } catch (e) {
+    log().warn(`cite: ${e.message}`);
+  }
 }
 
 function trailSnapshot(id) {
@@ -3055,6 +3071,7 @@ app.whenReady().then(() => {
   claudeDesktopEntry, sleepIdleTabs,
   sendActiveCount: () => sendActiveCount({ inUse: true }), // B116
   setTrailSavePath: (p) => (trailSavePath = p),
+  setCitationSavePath: (p) => (citationSavePath = p),
   openSharedTrail, openFromOutside, openShareLink,
   setPasswordAsk: (answer) => (passwordAsk = async (opts) => ((global.nodeTest.lastPasswordAsk = opts), answer)),
   loginMenu: (id) => loginMenuItems(tabs.get(id)).map((i) => i.label),
@@ -4442,6 +4459,44 @@ ipcMain.handle("trail:share-save", async (_e, opts = {}) => {
   usage().count("trailsShared");
   const back = TrailFile.parseTrailMd(text);
   return { ok: true, file, name: path.basename(file), cards: back.cards.length, links: back.lines.length, copies: copied, folder };
+});
+// ---- Citations (B91) ----
+// A trail's page cards as a reference list: BibTeX (.bib, for Overleaf and
+// LaTeX) or CSL-JSON (.json, for Zotero, Pandoc and Mendeley), chosen by the
+// file type in the Save dialog. Sign-in and payment pages never go in (B66).
+let citationSavePath = null; // tests set a path instead of the Save dialog
+ipcMain.handle("trail:export-citations", async (_e, id) => {
+  const trail = String(id || currentTrail());
+  const snap = trailStore?.snapshot(trail);
+  if (!snap) return { ok: false };
+  const list = Citations.entries(snap);
+  if (!list.length) {
+    sendUi("notice", { message: "This trail has no pages on its canvas to cite yet." });
+    return { ok: false, empty: true };
+  }
+  let file = citationSavePath;
+  if (!file) {
+    const r = await dialog.showSaveDialog(win, {
+      title: "Export Citations",
+      defaultPath: path.join(app.getPath("downloads"), trailFileName(snap.trail.name).replace(/\.trail\.md$/, ".bib")),
+      filters: [
+        { name: "BibTeX (Overleaf, LaTeX)", extensions: ["bib"] },
+        { name: "CSL-JSON (Zotero, Pandoc)", extensions: ["json"] },
+      ],
+      buttonLabel: "Export",
+    });
+    if (r.canceled || !r.filePath) return { ok: false, canceled: true };
+    file = /\.(bib|json)$/i.test(r.filePath) ? r.filePath : `${r.filePath}.bib`;
+  }
+  const json = /\.json$/i.test(file);
+  const opts = { trailName: snap.trail.name };
+  try {
+    fs.writeFileSync(file, json ? Citations.toCslJson(list, opts) : Citations.toBibtex(list, opts));
+  } catch (err) {
+    return { ok: false, error: `The file could not be saved: ${err.message}` };
+  }
+  sendUi("notice", { message: `Exported ${list.length} ${list.length === 1 ? "citation" : "citations"} as ${json ? "CSL-JSON" : "BibTeX"}.`, file });
+  return { ok: true, file, format: json ? "csl-json" : "bibtex", count: list.length };
 });
 // ---- Opening a shared trail (B82 step 5) ----
 // The file is read and checked; the Trail section shows a preview, then Open
