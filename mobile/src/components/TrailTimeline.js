@@ -4,7 +4,7 @@ import { colors, ui } from "../theme";
 
 const M = require("../trailModel");
 
-export default function TrailTimeline({ snap, header, onItem }) {
+export default function TrailTimeline({ snap, header, onItem, onPutOnCanvas }) {
   const rows = M.timelineRows(snap);
   // One flat list: a session label, then its items.
   const data = rows.flatMap((s) => [{ key: `h:${s.id}`, head: s.label }, ...s.items.map((it) => ({ ...it, key: `${s.id}:${it.key}` }))]);
@@ -26,9 +26,12 @@ export default function TrailTimeline({ snap, header, onItem }) {
         return (
           <Pressable
             onPress={() => onItem(item)}
+            onLongPress={item.timelineOnly && onPutOnCanvas ? () => onPutOnCanvas(item) : undefined}
+            accessibilityActions={item.timelineOnly && onPutOnCanvas ? [{ name: "put", label: "Put on canvas" }] : undefined}
+            onAccessibilityAction={(e) => e.nativeEvent.actionName === "put" && onPutOnCanvas?.(item)}
             accessibilityRole="button"
             accessibilityLabel={[item.time, face ? `${face.kicker}: ${face.title}` : item.title, face?.text || item.sub].filter(Boolean).join(". ")}
-            accessibilityHint={item.card ? "Opens the card's preview" : "Opens the page"}
+            accessibilityHint={item.card ? "Opens the card's preview" : item.timelineOnly && onPutOnCanvas ? "Opens the page. Press and hold to put it on the canvas" : "Opens the page"}
             style={({ pressed }) => ({ flexDirection: "row", gap: 10, paddingVertical: 10, borderTopWidth: 1, borderColor: colors.line, opacity: pressed ? 0.6 : 1 })}
           >
             <Text style={[ui.help, { width: 42 }]}>{item.time}</Text>

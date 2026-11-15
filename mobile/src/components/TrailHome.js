@@ -14,11 +14,13 @@ import Button from "./Button";
 import Sheet from "./Sheet";
 import TrailTimeline from "./TrailTimeline";
 import TrailCanvas from "./TrailCanvas";
+import CanvasEditor from "./CanvasEditor";
 import ReplayPanel from "./ReplayPanel";
 import CardPreview from "./CardPreview";
 import ShareTrailSheet, { shareTrailFile } from "./ShareTrailSheet";
 
 const M = require("../trailModel");
+const { createEditor } = require("../trailEdit");
 
 const MAX_DOTS = 7;
 
@@ -33,6 +35,11 @@ export default function TrailHome({ services, controller, onBrowse, onOpenUrl, o
   const [step, setStep] = useState(0);
   const [query, setQuery] = useState("");
   const [displayName, setDisplayName] = useState(() => readProfile(services.storage).displayName || "");
+  const nameRef = useRef(displayName);
+  nameRef.current = displayName;
+  // Canvas tools for your own trails (opened files stay read only).
+  const editor = useMemo(() => createEditor({ store, research, by: () => nameRef.current }), [store, research]);
+  const [note, setNote] = useState("");
 
   // The shown trail can be deleted or replaced elsewhere: fall back to the current one.
   const id = store.has(shownId) ? shownId : research.current.id;
@@ -192,7 +199,11 @@ export default function TrailHome({ services, controller, onBrowse, onOpenUrl, o
 
       <View style={{ flex: 1, marginTop: 8 }}>
         {!snap ? null : tab === "canvas" ? (
-          <TrailCanvas snap={snap} onCard={setCard} shown={shown?.cards ? shown : null} focus={readonly ? replay?.steps[step]?.card || null : null} />
+          readonly ? (
+            <TrailCanvas snap={snap} onCard={setCard} shown={shown?.cards ? shown : null} focus={replay?.steps[step]?.card || null} />
+          ) : (
+            <CanvasEditor snap={snap} editor={editor} onChanged={bump} onOpenUrl={onOpenUrl} />
+          )
         ) : tab === "replay" && readonly ? (
           <ReplayPanel
             snap={snap}
@@ -207,6 +218,11 @@ export default function TrailHome({ services, controller, onBrowse, onOpenUrl, o
           <TrailTimeline
             snap={snap}
             onItem={(it) => (it.card ? setCard(it.card) : it.url ? onOpenUrl(it.url) : null)}
+            onPutOnCanvas={(it) => {
+              const out = editor.place(it.url, { title: it.title });
+              setNote(out ? `“${it.title}” is on the canvas now.` : "Couldn't put this page on the canvas.");
+              bump();
+            }}
             header={
               keywords.length ? (
                 <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 4 }}>
@@ -224,6 +240,11 @@ export default function TrailHome({ services, controller, onBrowse, onOpenUrl, o
         )}
       </View>
 
+      {note ? (
+        <Pressable onPress={() => setNote("")} accessibilityLiveRegion="polite" style={{ padding: 8, borderTopWidth: 1, borderColor: colors.line }}>
+          <Text style={ui.help}>{note}</Text>
+        </Pressable>
+      ) : null}
       <View style={{ flexDirection: "row", gap: 6, padding: 8, borderTopWidth: 1, borderColor: colors.line }}>
         <Button label={`Browse${tabCount ? ` (${tabCount})` : ""}`} onPress={onBrowse} />
         <Button label="Open file" onPress={openFile} />
