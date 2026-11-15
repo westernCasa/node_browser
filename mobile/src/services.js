@@ -1,9 +1,11 @@
 // Platform services for the mobile app: storage, settings, keys, search and
 // sessions, built from the shared core/ modules.
+import { Directory, Paths } from "expo-file-system";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
 
 const core = require("../../core");
+const AIPolicy = require("./aiPolicy");
 const { TrailStore, migrateSessions, sessionStorageOver } = require("../../core/trail");
 const appConfig = require("../app.json");
 
@@ -69,7 +71,11 @@ export async function createServices() {
     const saved = JSON.parse(storage.read("settings.json") || "{}");
     for (const [id, conf] of Object.entries(saved.providers || {})) settings.providers[id] = { ...settings.providers[id], ...conf };
     if (saved.ai) settings.ai = { ...settings.ai, ...saved.ai, local: { ...settings.ai.local, ...saved.ai.local }, grok: { ...settings.ai.grok, ...saved.ai.grok } };
+    // New installs start on the demo AI (nothing sent); see src/aiPolicy.js.
+    else settings.ai = { ...settings.ai, provider: "demo", enabled: false };
+    settings.aiConsent = saved.aiConsent || {};
   } catch (_) {}
+  settings.aiConsent = settings.aiConsent || {};
   settings.providers.brave.key = (await SecureStore.getItemAsync(SECRET_KEYS.brave)) || "";
   settings.ai.grok.key = (await SecureStore.getItemAsync(SECRET_KEYS.grok)) || "";
   // M19 full text: off until the person turns it on; email and key in the keychain.
@@ -82,7 +88,8 @@ export async function createServices() {
   const userAgent = `NODE/${appConfig.expo.version} (research browser; mobile; +https://github.com/westernCasa/node_browser)`;
   const net = core.createNet({ fetch: (...args) => fetch(...args), userAgent });
   const registry = new core.Registry({ getText: net.getText, getConfig: (id) => settings.providers[id] || {} });
-  const flow = core.createSuggest({ registry, getAISettings: () => settings.ai, ttl: net.ttl });
+  // AI query ideas run only with consent for the chosen provider (Apple 5.1.2(i)).
+  const flow = core.createSuggest({ registry, getAISettings: () => AIPolicy.aiForQueries(settings.ai, settings.aiConsent), ttl: net.ttl });
   const { preview } = core.createPreview({ getText: net.getText });
   const { trails, research } = openTrails(storage);
   const history = new core.HistoryStore(storage);
@@ -101,6 +108,7 @@ export async function createServices() {
     await SecureStore.setItemAsync(SECRET_KEYS.brave, settings.providers.brave.key || "");
     await SecureStore.setItemAsync(SECRET_KEYS.grok, settings.ai.grok.key || "");
     if (next.fulltext) settings.fulltext = { ...settings.fulltext, ...next.fulltext };
+    if (next.aiConsent) settings.aiConsent = { ...next.aiConsent };
     await SecureStore.setItemAsync(SECRET_KEYS.unpaywallEmail, String(settings.fulltext.email || "").trim());
     await SecureStore.setItemAsync(SECRET_KEYS.openalex, String(settings.fulltext.openalexKey || "").trim());
     const disk = JSON.parse(JSON.stringify(settings));
@@ -125,6 +133,18 @@ export async function createServices() {
     history,
     bookmarks,
     ruleFor: (url) => core.resolve(rules, url),
+    // Settings → Delete all NODE data: trails, history, settings, keys and
+    // capture thumbnails on this phone. NODE keeps no copy anywhere else.
+    clearAll: async () => {
+      const keys = (await AsyncStorage.getAllKeys()).filter((k) => k.startsWith(PREFIX));
+      await AsyncStorage.multiRemove(keys);
+      for (const k of Object.values(SECRET_KEYS)) await SecureStore.deleteItemAsync(k).catch(() => {});
+      for (const name of storage.list()) storage.remove(name);
+      try {
+        const shots = new Directory(Paths.document, "captures");
+        if (shots.exists) shots.delete();
+      } catch (_) {}
+    },
   };
 }
 
