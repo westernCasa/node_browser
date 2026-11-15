@@ -112,7 +112,7 @@ Effort: XS under 1 hour, S half a day, M 1-2 days, L 3+ days. Finding IDs (C1, K
 | B88 | 4 | Media moments: one key saves start and end time, transcript text if available, and the link, then pauses playback; reuses the B70 loop range. "ID at 41:12" requests in threads | P1 | M | Built 2026-11-07 (PR #68): ⌘⇧K marks the start, then the end (with a loop set, one press saves the loop), and ⌘⇧J saves the last 30 seconds (Sven chose both, 2026-11-07); a moment card next to the page's card with the captions shown during it; times can be changed on the card; Play opens the page at the start and loops the range; Ask for ID makes a question "ID at 41:12?" that the moment raises. Electron build only. Tests `test:moment`, e2e `52-media-moments` |
 | B89 | 4 | Search past trails by what the person remembers: order ("after the Discogs page"), time, thread, keyword | P1 | M | Built 2026-11-07 (PR #67): an "In your trails" group in the CommandBar and the canvas search bar's list; local rules only, no AI; picking a result goes to its card, or its timeline row (Sven, 2026-11-07). Electron build only. Tests `test:recall`, e2e `51-trail-recall` |
 | B90 | 4 | Close tabs into a trail with a reason (to read, reference, reminder). Possible answer to B75 | P2 | S | Not started |
-| B91 | 4 | Export citations as CSL-JSON and BibTeX (Zotero, Overleaf); README states trails always export to open formats | P2 | S | Not started |
+| B91 | 4 | Export citations as CSL-JSON and BibTeX (Zotero, Overleaf); README states trails always export to open formats | P2 | S | Built 2026-11-15 (PR #80): citation details read from the page's tags when it becomes a card (authors, date, journal or site, DOI) and kept in the trail file; \"Export citations…\" in each trail's … menu saves page cards and moments' pages as BibTeX or CSL-JSON (Sven, 2026-11-15: read the tags, … menu only, page cards only). README section \"Your trails are yours\". Electron build only. Tests `test:cite`, e2e `56-citations` |
 | B92 | 4 | Trail sharing phase 3: viewer and editor roles; owner's edits apply at once, others' wait for approval | P2 | M | Not started; with B82 phase 3 |
 | B93 | 4 | Review states on threads: draft, sourced (a linked page), verified (a saved copy) | P2 | S | Not started; with B82 phase 3 |
 | B94 | 4 | Typed links between pages: "contradicts", "supports", "samples", "same source as" | P3 | S | Not started. Canvas link labels in B105 (supports, contradicts, answers, raises) |
@@ -149,9 +149,9 @@ Effort: XS under 1 hour, S half a day, M 1-2 days, L 3+ days. Finding IDs (C1, K
 - ~~Add a Brave Search API key under Settings and confirm Brave results appear.~~ Done on the Mac, 2026-10-18.
 - ~~Check that browsing feels smooth with several tabs open, and that video sites (YouTube, Vimeo, news sites) start playing on their own (B32, B34). ~~ Smooth browsing and autoplay confirmed on the Mac, 2026-10-26; found B78.
 - ~~Turn on AI query ideas with Ollama or Grok, press Test, and check the "(AI)" queries give useful results.~~ Done on the Mac, 2026-10-26.
-- Talk (S01-S03): Reddit is winding down its public Data API (no new access after 2026-10-31, RSS ends 2026-11-13, public access ends March 2027). Confirm Talk only builds a Reddit search link and relies on no Reddit API or RSS.
+- ~~Talk (S01-S03): Reddit is winding down its public Data API (no new access after 2026-10-31, RSS ends 2026-11-13, public access ends March 2027). Confirm Talk only builds a Reddit search link and relies on no Reddit API or RSS.~~ Confirmed 2026-11-15: `core/talk.js` only builds a Reddit search link.
 
-These checks were backlog item B26 (done 2026-10-26). All are done except the Talk check.
+These checks were backlog item B26 (done 2026-10-26). All are done.
 
 ## Mobile backlog
 

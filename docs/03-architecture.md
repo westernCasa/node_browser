@@ -268,6 +268,13 @@ The same core modules run in the built-in extension of the Chromium build (`brow
 - **Double-click on cards** now finds the card under the pointer (the viewport holds the pointer while a card is pressed, so the event arrives on the viewport). This also fixes double-click to open a page card.
 - **Files and Replay:** see `26-trail-file-format.md`. Replay says "saved an image / a video clip / audio from <site>" or "took a screenshot".
 
+## Citations (B91)
+
+- `core/citations.js` (no platform imports): `citeScript()` runs in the page and returns its `<meta>` pairs (Highwire `citation_*`, Dublin Core, Open Graph, `article:*`, `author`) and JSON-LD blocks. `fromMeta(raw, { url, title })` turns them into a cite `{ type, title, authors, date, container, publisher, doi, volume, issue, pages }`: Highwire tags first, then schema.org, then Open Graph; `type` is a CSL type (article-journal, article-newspaper, paper-conference, post-weblog, webpage, report, thesis, book, motion_picture, song). `entries(snapshot)` lists a trail's page cards in the order placed, then the pages of media moments with no page card (note "Moment 1:12–1:35"); sign-in pages are left out and addresses go through `cleanUrl`; `accessed` is the page's first visit. `toCslJson(list)` and `toBibtex(list)` write the files (BibTeX keys like `smith2024lactic`, made unique; text escaped). `citeLine` and `parseCiteLine` are the trail file's `Cite:` line.
+- **Store:** `TrailStore.setCite(id, url, cite)` keeps `cite` on the page card. Not an event.
+- **Main:** `placeCard` calls `readCite(id, url)` for a new page card when a tab (not private) shows that address. `trail:export-citations` (trail id) saves `.bib` or `.json` by the file type chosen in the Save dialog; an empty trail gets a notice and no file. Test hook `nodeTest.setCitationSavePath`.
+- **Window:** "Export citations…" in each trail's … menu in the switcher, read-only trails too.
+
 ## Renaming and deleting trails (B115)
 
 - **Store:** `TrailStore.remove(id)` takes a trail out of `index.order` into `index.deleted` (`{id, at}`) and keeps its files; if it was current, the most recently used other trail becomes current, or a new trail is made when none is left. `restore(id)` puts it back first in the list and current. `purge()` deletes the folders of deleted trails through the storage's `remove(name)` (`fs-storage.js`: a file or folder inside its own folder, never the folder itself; `memoryStorage`: the name and everything under `name/`). `main.js` purges at start-up, before the trail store is used, so Undo works until NODE quits. A trail file opened again after its trail was deleted is taken off the deleted list by `create()`.
@@ -379,7 +386,7 @@ The renderer stores hidden keywords and the Auto setting in local storage.
 | Layout | `layout:set`, `layout:ladder`, `layout:sidebar`, `layout:library`, `layout:chrome` (sidebar width), `layout:side-over` (sidebar over the page) |
 | Find, zoom, history | `find:start`, `find:stop`, `tab:zoom`, `history:search`, `history:clear`, `history:remove` |
 | Site rules | `rules:edit`, `rules:reload` |
-| Trail store | `trail:get`, `trail:list`, `trail:new`, `trail:switch`, `trail:rename`, `trail:view`, `trail:timeline`, `trail:previews`, `trail:place`, `trail:remove`, `trail:move`, `trail:group-move`, `trail:link`, `trail:link-label`, `trail:unlink`, `trail:group`, `trail:group-rename`, `trail:question`, `trail:note`, `trail:search`; `tab:engaged` (page → main) |
+| Trail store | `trail:get`, `trail:list`, `trail:new`, `trail:switch`, `trail:rename`, `trail:view`, `trail:timeline`, `trail:previews`, `trail:export-citations`, `trail:place`, `trail:remove`, `trail:move`, `trail:group-move`, `trail:link`, `trail:link-label`, `trail:unlink`, `trail:group`, `trail:group-rename`, `trail:question`, `trail:note`, `trail:search`; `tab:engaged` (page → main) |
 | Research session (over the trail store) | `research:get`, `research:list`, `research:new`, `research:switch`, `research:rename`, `research:pins`, `research:visit`, `research:opened`, `research:dismiss`, `research:undismiss`, `research:export` |
 | Keywords and search | `page:extract`, `page:keywords`, `suggest:search` (legacy, used by Tauri), `suggest:for`, `suggest:preview` |
 | Sources and AI | `settings:get`, `settings:set`, `search:status`, `search:test`, `ai:test` |

@@ -124,6 +124,10 @@ The old Tauri setup (`src-tauri/`, `renderer/tauri-bridge.js`) does not compile 
 13. **Previews** on result cards load only when a card scrolls into view, 3 at a time. Wikipedia and Brave results that already include an image skip the fetch.
 14. **Auto** re-searches when you open a new page, select text, or scroll to content with different keywords (at most every 20 seconds). Turn Auto off to search only when you press **Crawl**.
 
+## Your trails are yours
+
+Trails always export to open formats you can read without NODE: a trail is a Markdown file (`.trail.md`, see `docs/26-trail-file-format.md`), and its pages export as a reference list in BibTeX (Overleaf, LaTeX) or CSL-JSON (Zotero, Pandoc) from **Export citations…** in the trail's … menu.
+
 ## What NODE sends
 
 NODE has no account. The only usage data it sends is one anonymous count a day (below), which you can turn off in Settings → Help. The usage summary in Help stays on your computer until you copy it. Diagnostics are only copied when you click Copy Diagnostics.

@@ -4811,6 +4811,11 @@ function trailActions(row, t, more) {
     keep.setAttribute("aria-pressed", String(Boolean(t.keepCopies)));
     keep.title = "Save a copy of each page that becomes a card. Copies stay on this computer.";
   }
+  // B91: the trail's page cards as BibTeX or CSL-JSON. Opened files too.
+  btn("Export citations…", "", () => {
+    closeSwitchMenu();
+    api.trailExportCitations(t.id);
+  }, false, "Save this trail's pages as a reference list: BibTeX for Overleaf, or CSL-JSON for Zotero.");
   const del = btn("Delete…", "", () => confirmDelete(acts, t));
   row.after(acts);
   (t.readonly ? del : first).focus();
