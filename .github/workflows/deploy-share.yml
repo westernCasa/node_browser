@@ -40,6 +40,9 @@ jobs:
       - name: Delete active counts after 400 days (B116)
         working-directory: worker
         run: npx --yes wrangler@4 r2 bucket lifecycle add node-share-trails expire-counts-after-400-days a/ --expire-days 400 --force || echo "::warning::Could not set the 400-day rule for active counts."
+      - name: Delete sync batches after 30 days (B50)
+        working-directory: worker
+        run: npx --yes wrangler@4 r2 bucket lifecycle add node-share-trails expire-sync-after-30-days s/b/ --expire-days 30 --force || echo "::warning::Could not set the 30-day rule for sync batches. The Worker still refuses batches older than 30 days."
       - name: Deploy
         working-directory: worker
         run: npx --yes wrangler@4 deploy
