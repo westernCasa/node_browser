@@ -137,6 +137,38 @@ function Browser({ services }) {
       sub.remove();
     };
   }, []);
+  // Sync (B50): a round at start, every 30 s while NODE is in front, and when
+  // it comes back to the front. Trails that arrive refresh the trail view; a
+  // trail deleted on another device says so, with Undo.
+  useEffect(() => {
+    const sync = services.sync;
+    let front = AppState.currentState === "active";
+    const off = sync.on((e) => {
+      if (e.type === "changed") setTrailVersion((v) => v + 1);
+      if (e.type === "deleted") {
+        const d = e.trails[0];
+        showToast({ text: `“${d.name || "A trail"}” was deleted on ${d.byName}.`, undoTrail: d.id, sync: true });
+      }
+    });
+    sync.start().then((i) => i.paired && sync.now());
+    const sub = AppState.addEventListener("change", (st) => {
+      front = st === "active";
+      if (front) sync.now();
+    });
+    const timer = setInterval(() => front && sync.now(), 30000);
+    return () => {
+      off();
+      sub.remove();
+      clearInterval(timer);
+    };
+  }, []);
+  const undoTrailDelete = () => {
+    if (!toast?.undoTrail) return;
+    services.trails.restore(toast.undoTrail, { current: false });
+    setTrailVersion((v) => v + 1);
+    services.sync.now(); // Undo reaches the other devices too
+    showToast({ text: "Trail brought back." });
+  };
   const toastTimer = useRef(null);
   const tabsRef = useRef(tabs);
   tabsRef.current = tabs;
@@ -649,12 +681,13 @@ function Browser({ services }) {
         onOpenSettings={() => setSheet("settings")}
       />
 
-      {toast && !home ? (
-        <View accessibilityLiveRegion="polite" style={{ position: "absolute", left: 12, right: 12, bottom: 70, zIndex: 40, elevation: 40, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.bg3, borderWidth: 1, borderColor: colors.line, borderRadius: 10, padding: 10 }}>
+      {toast && (!home || toast.sync) ? (
+        <View accessibilityLiveRegion="polite" style={{ position: "absolute", left: 12, right: 12, bottom: 70, zIndex: toast.sync ? 60 : 40, elevation: toast.sync ? 60 : 40, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.bg3, borderWidth: 1, borderColor: colors.line, borderRadius: 10, padding: 10 }}>
           <Text style={{ color: colors.text, flex: 1 }} numberOfLines={2}>
             {toast.text}
           </Text>
           {toast.saved ? <Button label="Undo" small onPress={undoCapture} /> : null}
+          {toast.undoTrail ? <Button label="Undo" small onPress={undoTrailDelete} /> : null}
         </View>
       ) : null}
 

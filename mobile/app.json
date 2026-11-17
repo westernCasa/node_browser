@@ -18,7 +18,7 @@
           "NSAllowsLocalNetworking": true
         },
         "NSLocalNetworkUsageDescription": "NODE connects to an AI model server you run on your own network, such as Ollama on your computer, only if you add one in Settings.",
-        "NSCameraUsageDescription": "Websites you visit can ask to use the camera, for example to upload a photo. NODE asks you first.",
+        "NSCameraUsageDescription": "NODE uses the camera to scan the pairing code that NODE on your computer shows, so your trails can sync. Websites you visit can also ask to use the camera, for example to upload a photo; NODE asks you first.",
         "NSMicrophoneUsageDescription": "Websites you visit can ask to use the microphone, for example for a video call. NODE asks you first.",
         "NSLocationWhenInUseUsageDescription": "Websites you visit can ask for your location, for example to show nearby results. NODE asks you first."
       },
@@ -85,6 +85,13 @@
             "targetSdkVersion": 36,
             "usesCleartextTraffic": true
           }
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "NODE uses the camera to scan the pairing code that NODE on your computer shows, so your trails can sync. Websites you visit can also ask to use the camera, for example to upload a photo; NODE asks you first.",
+          "barcodeScannerEnabled": true
         }
       ]
     ],

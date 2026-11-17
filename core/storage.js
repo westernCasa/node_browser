@@ -33,6 +33,7 @@ function prefixedStorage(storage, prefix) {
     read: (name) => storage.read(prefix + name),
     write: (name, text) => storage.write(prefix + name, text),
     list: () => storage.list().filter((n) => n.startsWith(prefix)).map((n) => n.slice(prefix.length)),
+    remove: (name) => storage.remove?.(prefix + name),
   };
 }
 

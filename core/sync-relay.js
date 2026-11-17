@@ -24,7 +24,9 @@ class SyncError extends Error {
 }
 
 class RelayClient {
-  constructor({ api, group, auth, device, fetch: f = globalThis.fetch, timeoutMs = 20000 }) {
+  // text: send and fetch batches as base64url text (phones), not binary.
+  constructor({ api, group, auth, device, fetch: f = globalThis.fetch, timeoutMs = 20000, text = false }) {
+    this.text = text;
     this.base = `${String(api).replace(/\/$/, "")}/api/sync/${group}`;
     this.auth = auth;
     this.device = device;
@@ -37,6 +39,9 @@ class RelayClient {
     if (json) {
       headers["content-type"] = "application/json";
       body = JSON.stringify(json);
+    } else if (bytes && this.text) {
+      headers["content-type"] = "application/x-node-sync-b64url";
+      body = Crypto.b64url(bytes);
     } else if (bytes) {
       headers["content-type"] = "application/octet-stream";
       body = bytes;
@@ -69,6 +74,7 @@ class RelayClient {
     return (await this.call(`batches${after ? `?after=${encodeURIComponent(after)}` : ""}`)).json();
   }
   async get(name) {
+    if (this.text) return Crypto.fromB64url(await (await this.call(`batches/${name}?as=b64url`)).text());
     return new Uint8Array(await (await this.call(`batches/${name}`)).arrayBuffer());
   }
   async post(bytes) {

@@ -166,8 +166,9 @@ class SyncEngine {
         ts.life = { deleted: gone, at: when, by };
         out.life.push({ t: tid, deleted: gone, at: when, by });
         if (!gone) {
-          // Brought back: send it all again.
-          ts.items = {};
+          // Brought back: send it all again (each item with its own time),
+          // in case another device already removed its files.
+          ts.resend = true;
           ts.events = [];
         }
       }
@@ -250,31 +251,40 @@ class SyncEngine {
       if (store.has(tid)) return true;
       if (deletedHere().has(tid) || this.state.trails[tid]?.life?.deleted) return false;
       store.create("", { id: tid, current: false });
+      // A new copy here (or files removed after a delete): take every item.
+      const ts = this.trailState(tid);
+      ts.items = {};
+      ts.events = [];
       res.added.push(tid);
       return true;
     };
     for (const c of batch.changes || []) {
       if (!c || typeof c.t !== "string" || typeof c.k !== "string" || typeof c.at !== "number") continue;
       if (c.v && c.v.url && isSensitiveUrl(c.v.url)) continue; // B66: never, even if sent
+      if (!ensure(c.t)) continue;
       const ts = this.trailState(c.t);
       const mine = ts.items[c.k];
       if (mine && !later(c, mine)) continue;
-      if (!ensure(c.t)) continue;
       const t = store.load(c.t);
       putItem(t.data, c.k, c.v);
       ts.items[c.k] = { h: c.v === null ? "-" : hash(c.v), at: c.at, by: c.by };
       touched.add(c.t);
     }
+    const known = new Map(); // trail id -> Set of event ids already recorded as synced
     for (const { t: tid, e } of batch.events || []) {
       if (!safeEvent(e) || !ensure(tid)) continue;
       const ts = this.trailState(tid);
+      if (!known.has(tid)) known.set(tid, new Set(ts.events));
       if (store.addEvent(tid, e)) touched.add(tid);
-      if (!ts.events.includes(e.id)) ts.events.push(e.id);
+      if (!known.get(tid).has(e.id)) {
+        known.get(tid).add(e.id);
+        ts.events.push(e.id);
+      }
     }
     for (const tid of touched) {
       const t = store.load(tid);
       if (!t) continue;
-      const last = Math.max(t.data.trail.lastAt || 0, ...t.events.map((e) => e.at));
+      const last = t.events.reduce((m, e) => Math.max(m, e.at), t.data.trail.lastAt || 0);
       if (last > 0) t.data.trail.lastAt = last;
       store.save(tid);
       res.trails.add(tid);
