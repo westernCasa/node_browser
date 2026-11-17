@@ -1573,6 +1573,7 @@ async function renderSources() {
   document.getElementById("tab-sleep").value = String(settings.tabSleep ?? 30);
   document.getElementById("auto-update").checked = settings.autoUpdate !== false;
   document.getElementById("active-count").checked = settings.activeCount !== false; // B116
+  api.syncStatus?.().then(paintSync).catch(() => {});
   document.getElementById("passkeys").checked = settings.passkeys === true;
   document.getElementById("passkeys").closest(".top").hidden = document.getElementById("passkeys-help").hidden = !/Mac/.test(navigator.platform);
   fillUpdate(settings.update);
@@ -3224,7 +3225,16 @@ if (api) {
       store.set("node.survey", msg.state);
       if (!noticeEl.hidden && /survey/i.test(noticeEl.textContent)) noticeEl.hidden = true;
     } else if (msg.cmd === "notice") {
-      showNotice(msg.message, msg.file ? [{ label: "Show in folder", run: () => api.revealFile(msg.file) }] : []);
+      const acts = msg.file ? [{ label: "Show in folder", run: () => api.revealFile(msg.file) }] : [];
+      // B50: a trail deleted on another device can be brought back here.
+      if (msg.undoTrail) acts.push({ label: "Undo", run: async () => {
+        await api.trailRestore(msg.undoTrail);
+        if (api.researchGet) adoptSession(await api.researchGet());
+        refreshSideTrails(true);
+        refreshTimeline(true);
+        if (!canvasEl.hidden) openCanvas();
+      } });
+      showNotice(msg.message, acts);
     } else if (msg.cmd === "update-ready") {
       showNotice(`NODE ${msg.version} is ready to install.`, [{ label: "Restart now", run: () => api.installUpdate() }]);
     } else if (msg.cmd === "update-error") {
@@ -3906,9 +3916,124 @@ api?.onCommand?.((msg) => {
   else if (msg.cmd === "tour") startTour();
   else if (msg.cmd === "canvas") (msg.open ? openCanvas(msg) : closeCanvas());
   else if (msg.cmd === "side-over") mirrorWhileImmersive(msg.shown);
-  else if (msg.cmd === "trail-changed") refreshCanvasData();
+  else if (msg.cmd === "trail-changed") {
+    refreshCanvasData();
+    if (msg.remote) refreshSideTrails(true); // B50: names and trails from another device
+  } else if (msg.cmd === "sync-status") paintSync(msg);
   else if (msg.cmd === "session-reloaded") api.researchGet?.().then((s) => s && adoptSession(s));
 });
+
+// ---- Sync (B50) ----
+// Settings → Sync: pair with a QR code (or a pasted code), the paired devices,
+// Sync now, Stop syncing. main.js does the work (sync:* channels).
+const syncEls = (id) => document.getElementById(id);
+const syncAgo = (t) => {
+  const s = Math.round((Date.now() - t) / 1000);
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.round(s / 60)} min ago`;
+  if (s < 86400) return `${Math.round(s / 3600)} h ago`;
+  return new Date(t).toLocaleDateString();
+};
+let syncPeerIds = null;
+function paintSync(info) {
+  if (!info || !syncEls("sync-box")) return;
+  // A device that just scanned the QR code: close the code and say so.
+  const ids = (info.peers || []).map((p) => p.id);
+  const fresh = syncPeerIds ? (info.peers || []).filter((p) => !syncPeerIds.includes(p.id)) : [];
+  syncPeerIds = ids;
+  if (fresh.length && !syncEls("sync-pair").hidden) {
+    syncEls("sync-pair-done").click();
+    showNotice(`Paired with ${fresh.map((p) => p.name).join(" and ")}. Trails now sync both ways.`);
+  }
+  const st = syncEls("sync-state");
+  const paired = info.paired;
+  st.className = `state ${info.state === "ok" ? "ok" : info.state === "unpaired" || info.state === "error" ? "bad" : ""}`;
+  st.textContent = !paired
+    ? info.state === "unpaired" ? info.message : "Off. Your trails stay on this computer."
+    : info.state === "ok" ? `On · synced ${syncAgo(info.at)}${info.pending ? ` · ${info.pending} changes waiting` : ""}`
+    : info.state === "offline" || info.state === "error" ? `On · ${info.message}` : info.state === "unpaired" ? info.message : "On · syncing…";
+  syncEls("sync-devices").hidden = !paired;
+  syncEls("sync-now-btn").hidden = syncEls("sync-stop-btn").hidden = !paired;
+  syncEls("sync-enter-btn").hidden = paired;
+  syncEls("sync-pair-btn").textContent = paired ? "Pair another device…" : "Pair a device…";
+  const nameInput = syncEls("sync-device-name");
+  if (document.activeElement !== nameInput) nameInput.value = info.device?.name || "";
+  const list = syncEls("sync-list");
+  list.innerHTML = "";
+  if (paired) {
+    const me = document.createElement("li");
+    me.innerHTML = `<span><span class="nm"></span> <span class="what">This computer</span></span>`;
+    me.querySelector(".nm").textContent = info.device?.name || "";
+    list.append(me);
+    for (const p of info.peers || []) {
+      const li = document.createElement("li");
+      li.dataset.id = p.id;
+      li.innerHTML = `<span><span class="nm"></span> <span class="what"></span></span>`;
+      li.querySelector(".nm").textContent = p.name;
+      li.querySelector(".what").textContent = `${p.kind === "phone" ? "Phone" : "Computer"} · last synced ${syncAgo(p.at)}`;
+      const rm = document.createElement("button");
+      rm.textContent = "Remove";
+      rm.title = `Stop syncing with ${p.name}. Its trails stay on it.`;
+      rm.onclick = async () => paintSync(await api.syncRemoveDevice(p.id));
+      li.append(rm);
+      list.append(li);
+    }
+    if (!(info.peers || []).length) {
+      const none = document.createElement("li");
+      none.innerHTML = `<span class="what">No other device yet. Pair one with the QR code.</span>`;
+      list.append(none);
+    }
+  }
+}
+if (syncEls("sync-box") && api?.syncStatus) {
+  syncEls("sync-pair-btn").onclick = async () => {
+    const r = await api.syncPairStart();
+    syncEls("sync-qr").innerHTML = r.qr; // NODE's own SVG (qrcode), no page content
+    syncEls("sync-qr").dataset.code = r.code;
+    syncEls("sync-pair").hidden = false;
+    syncEls("sync-enter").hidden = true;
+    paintSync(r.info);
+  };
+  syncEls("sync-copy-code").onclick = () => {
+    navigator.clipboard.writeText(syncEls("sync-qr").dataset.code || "");
+    showNotice("Copied the sync code. Paste it only on your own devices.");
+  };
+  syncEls("sync-pair-done").onclick = () => {
+    syncEls("sync-pair").hidden = true;
+    syncEls("sync-qr").innerHTML = "";
+    delete syncEls("sync-qr").dataset.code;
+  };
+  syncEls("sync-enter-btn").onclick = () => {
+    syncEls("sync-enter").hidden = false;
+    syncEls("sync-pair").hidden = true;
+    syncEls("sync-code-input").focus();
+  };
+  syncEls("sync-code-cancel").onclick = () => {
+    syncEls("sync-enter").hidden = true;
+    syncEls("sync-code-input").value = "";
+  };
+  syncEls("sync-code-join").onclick = async () => {
+    const err = syncEls("sync-enter-error");
+    err.hidden = true;
+    const r = await api.syncPairCode(syncEls("sync-code-input").value);
+    if (!r.ok) {
+      err.textContent = r.error || "Pairing didn't work. Try again.";
+      err.className = "state bad";
+      err.hidden = false;
+      return;
+    }
+    syncEls("sync-enter").hidden = true;
+    syncEls("sync-code-input").value = "";
+    paintSync(r.info);
+  };
+  syncEls("sync-now-btn").onclick = async () => paintSync(await api.syncNow());
+  syncEls("sync-stop-btn").onclick = async () => {
+    syncEls("sync-pair").hidden = true;
+    paintSync(await api.syncStop());
+    showNotice("This computer no longer syncs. Its trails stay here, and your other devices keep theirs.");
+  };
+  syncEls("sync-device-name").onchange = async (e) => paintSync(await api.syncRenameDevice(e.target.value));
+}
 
 // ---- Trail canvas (B101, B102) ----
 // The current trail's cards, groups and lines (renderer/canvas.js), in the

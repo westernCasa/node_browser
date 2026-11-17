@@ -432,6 +432,17 @@ html, body {
 .source .state.ok { color: var(--live); }
 .source .state.bad { color: var(--alert); }
 .source .actions { display: flex; gap: 6px; margin-top: 6px; }
+/* Sync (B50): the pairing QR code is dark on light, so phone
+   cameras read it; colours are the ink and surface tokens. */
+#sync-box .actions { flex-wrap: wrap; }
+.sync-qr { width: 200px; max-width: 100%; margin: 6px auto 0; }
+.sync-qr svg { display: block; width: 100%; height: auto; }
+.sync-qr .qr-bg { fill: var(--ink); }
+.sync-qr .qr-fg { stroke: var(--surface); }
+.sync-list { list-style: none; margin: 6px 0 0; padding: 0; }
+.sync-list li { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 4px 0; border-top: 1px solid var(--line); font-size: 12px; }
+.sync-list li .what { color: var(--mute); font-size: 11px; }
+.sync-list li button { border: 1px solid var(--line); background: var(--bg-3); color: var(--text); border-radius: var(--radius-sm); padding: 2px 6px; font: inherit; font-size: 11px; cursor: pointer; }
 .source .actions button, .chip.wide {
   border: 1px solid var(--line);
   background: var(--bg-3);

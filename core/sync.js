@@ -239,7 +239,7 @@ class SyncEngine {
       if (l.deleted && store.has(l.t)) {
         const name = store.get(l.t)?.trail.name || "";
         store.remove(l.t, { at: l.at });
-        res.deleted.push({ id: l.t, name });
+        res.deleted.push({ id: l.t, name, by: l.by });
       } else if (!l.deleted && deletedHere().has(l.t)) {
         store.restore(l.t, { current: false });
         res.restored.push(l.t);

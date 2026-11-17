@@ -496,6 +496,36 @@
           </div>
           <div class="rail-head rules-head">
             <div>
+              <p class="kicker">Trails</p>
+              <h1>Sync</h1>
+            </div>
+          </div>
+          <div class="source" id="sync-box">
+            <div class="state" id="sync-state">Off</div>
+            <p class="help" id="sync-help">Sync your trails with NODE on your phone or another computer. Pair once with a QR code; no account. Trails are encrypted on your devices before they are sent, so the sync server can't read them, and it deletes them once your other devices have them (30 days at most). Saved copies, screenshots and audio stay on the device that made them.</p>
+            <div id="sync-pair" hidden>
+              <div class="sync-qr" id="sync-qr" aria-label="QR code for pairing"></div>
+              <p class="help">On your phone: open NODE, then Settings → Sync → Scan code. On another computer: Settings → Sync → Enter a code, and paste this code. Anyone with this code can join your sync, so only share it with your own devices.</p>
+              <div class="actions"><button id="sync-copy-code">Copy code</button><button id="sync-pair-done">Done</button></div>
+            </div>
+            <div id="sync-enter" hidden>
+              <label class="field"><span>Code from your other device</span><input type="text" id="sync-code-input" spellcheck="false" autocomplete="off" placeholder="NODE-SYNC1:…" /></label>
+              <p class="state" id="sync-enter-error" hidden></p>
+              <div class="actions"><button id="sync-code-join">Pair</button><button id="sync-code-cancel">Cancel</button></div>
+            </div>
+            <div id="sync-devices" hidden>
+              <label class="field"><span>This computer's name on your other devices</span><input type="text" id="sync-device-name" maxlength="60" spellcheck="false" /></label>
+              <ul class="sync-list" id="sync-list" aria-label="Paired devices"></ul>
+            </div>
+            <div class="actions" id="sync-actions">
+              <button id="sync-pair-btn">Pair a device…</button>
+              <button id="sync-enter-btn">Enter a code…</button>
+              <button id="sync-now-btn" hidden>Sync now</button>
+              <button id="sync-stop-btn" hidden>Stop syncing on this computer</button>
+            </div>
+          </div>
+          <div class="rail-head rules-head">
+            <div>
               <p class="kicker">Startup</p>
               <h1>Tabs</h1>
             </div>
