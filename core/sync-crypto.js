@@ -16,12 +16,35 @@
 const { xchacha20poly1305 } = require("@noble/ciphers/chacha");
 const { hkdf } = require("@noble/hashes/hkdf");
 const { sha256 } = require("@noble/hashes/sha256");
-const { randomBytes, bytesToHex, utf8ToBytes } = require("@noble/hashes/utils");
+const { randomBytes, bytesToHex } = require("@noble/hashes/utils");
 
 const PREFIX = "NODE-SYNC1:";
 const MAGIC = [0x4e, 0x53, 0x31]; // "NS1"
-const enc = new TextEncoder();
-const dec = new TextDecoder();
+// UTF-8 without TextEncoder or TextDecoder, which not every phone runtime has.
+function utf8(str) {
+  const out = [];
+  for (const ch of String(str)) {
+    let c = ch.codePointAt(0);
+    if (c < 0x80) out.push(c);
+    else if (c < 0x800) out.push(0xc0 | (c >> 6), 0x80 | (c & 63));
+    else if (c < 0x10000) out.push(0xe0 | (c >> 12), 0x80 | ((c >> 6) & 63), 0x80 | (c & 63));
+    else out.push(0xf0 | (c >> 18), 0x80 | ((c >> 12) & 63), 0x80 | ((c >> 6) & 63), 0x80 | (c & 63));
+  }
+  return Uint8Array.from(out);
+}
+function fromUtf8(b) {
+  let s = "";
+  for (let i = 0; i < b.length; ) {
+    const x = b[i];
+    let c;
+    if (x < 0x80) c = b[i++];
+    else if (x < 0xe0) c = ((x & 31) << 6) | (b[i + 1] & 63), (i += 2);
+    else if (x < 0xf0) c = ((x & 15) << 12) | ((b[i + 1] & 63) << 6) | (b[i + 2] & 63), (i += 3);
+    else c = ((x & 7) << 18) | ((b[i + 1] & 63) << 12) | ((b[i + 2] & 63) << 6) | (b[i + 3] & 63), (i += 4);
+    s += String.fromCodePoint(c);
+  }
+  return s;
+}
 
 const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 function b64url(bytes) {
@@ -64,15 +87,15 @@ function parsePairingCode(text) {
 function keysFrom(code) {
   const secret = typeof code === "string" ? parsePairingCode(code) : code;
   if (!secret) throw new Error("This is not a NODE sync code.");
-  const derive = (label, n) => hkdf(sha256, secret, undefined, utf8ToBytes(label), n);
+  const derive = (label, n) => hkdf(sha256, secret, undefined, utf8(label), n);
   return { group: bytesToHex(derive("node-sync-group", 16)), auth: bytesToHex(derive("node-sync-auth", 32)), key: derive("node-sync-key", 32) };
 }
 // What the relay stores to check the auth token.
-const authHash = (auth) => bytesToHex(sha256(utf8ToBytes(auth)));
+const authHash = (auth) => bytesToHex(sha256(utf8(auth)));
 
 function seal(obj, key) {
   const nonce = randomBytes(24);
-  const body = xchacha20poly1305(key, nonce).encrypt(enc.encode(JSON.stringify(obj)));
+  const body = xchacha20poly1305(key, nonce).encrypt(utf8(JSON.stringify(obj)));
   const out = new Uint8Array(3 + 24 + body.length);
   out.set(MAGIC, 0);
   out.set(nonce, 3);
@@ -88,9 +111,9 @@ function open(bytes, key) {
   } catch {
     throw new Error("A sync batch could not be decrypted (wrong key or changed on the way).");
   }
-  return JSON.parse(dec.decode(plain));
+  return JSON.parse(fromUtf8(plain));
 }
 // A random device id (not derived from anything about the device).
 const newDeviceId = () => bytesToHex(randomBytes(8));
 
-module.exports = { newPairingCode, parsePairingCode, keysFrom, authHash, seal, open, newDeviceId, b64url, fromB64url, PREFIX };
+module.exports = { utf8, fromUtf8, newPairingCode, parsePairingCode, keysFrom, authHash, seal, open, newDeviceId, b64url, fromB64url, PREFIX };

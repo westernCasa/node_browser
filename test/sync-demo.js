@@ -281,6 +281,7 @@ assert.ok(mac.store.has(other));
   };
   const mbp = dev("desktop", "Sven's MacBook Pro");
   const iphone = dev("phone", "Sven's iPhone");
+  iphone.client.text = true; // as on the phone: batches as base64url text
   const t1 = mbp.store.current().trail.id;
   mbp.store.rename(t1, "Levain");
   mbp.store.freeNote(t1, { x: 0, y: 0, text: "Feed at 25°C" });

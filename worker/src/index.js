@@ -102,6 +102,19 @@ const SYNC_DEVICE = /^[0-9a-f]{16}$/;
 const SYNC_BATCH = /^\d{13}-[A-Za-z0-9]{8}-[0-9a-f]{16}$/;
 const SYNC_MAGIC = [0x4e, 0x53, 0x31]; // "NS1"
 const SYNC_DAYS = 30;
+const toB64url = (bytes) => toBase64(bytes).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+function fromB64urlBytes(text) {
+  const t = String(text).trim();
+  if (!/^[A-Za-z0-9_-]*$/.test(t) || t.length > (MAX_BYTES * 4) / 3 + 4) return null;
+  try {
+    const bin = atob(t.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((t.length + 3) % 4));
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  } catch {
+    return null;
+  }
+}
 async function listAll(env, prefix, { startAfter, max = 5000 } = {}) {
   const out = [];
   let cursor;
@@ -185,8 +198,11 @@ async function sync(request, env, url, group, rest) {
   if (rest === "batches" && method === "POST") {
     const length = Number(request.headers.get("content-length") || 0);
     if (length > MAX_BYTES) return fail(413, "Batch too large.");
-    const body = new Uint8Array(await request.arrayBuffer());
-    if (body.length > MAX_BYTES) return fail(413, "Batch too large.");
+    // Phones send the bytes as base64url text (not every phone fetch sends
+    // binary bodies reliably).
+    const text = /x-node-sync-b64url/.test(request.headers.get("content-type") || "");
+    const body = text ? fromB64urlBytes(await request.text()) : new Uint8Array(await request.arrayBuffer());
+    if (!body || body.length > MAX_BYTES) return fail(body ? 413 : 400, body ? "Batch too large." : "Not an encrypted NODE sync batch.");
     if (body.length < 3 + 24 + 16 || SYNC_MAGIC.some((b, i) => body[i] !== b)) return fail(400, "Not an encrypted NODE sync batch.");
     const name = `${String(Date.now()).padStart(13, "0")}-${randomString(8)}-${device}`;
     await env.TRAILS.put(`s/b/${group}/${name}`, body, { httpMetadata: { contentType: "application/octet-stream" } });
@@ -206,6 +222,7 @@ async function sync(request, env, url, group, rest) {
   if (one && method === "GET") {
     const o = await env.TRAILS.get(`s/b/${group}/${one[1]}`);
     if (!o || Date.now() - Number(one[1].slice(0, 13)) > SYNC_DAYS * DAY_MS) return fail(404, "That batch is gone.");
+    if (url.searchParams.get("as") === "b64url") return new Response(toB64url(new Uint8Array(await o.arrayBuffer())), { headers: { "content-type": "text/plain", "cache-control": "no-store" } });
     return new Response(o.body, { headers: { "content-type": "application/octet-stream", "cache-control": "no-store" } });
   }
   if (rest === "ack" && method === "POST") {

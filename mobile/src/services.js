@@ -3,11 +3,13 @@
 import { Directory, Paths } from "expo-file-system";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
+import { Platform } from "react-native";
 
 const core = require("../../core");
 const AIPolicy = require("./aiPolicy");
 const { TrailStore, migrateSessions, sessionStorageOver } = require("../../core/trail");
 const appConfig = require("../app.json");
+const { createSync, CODE_KEY: SYNC_CODE_KEY } = require("./sync");
 
 const PREFIX = "scout:";
 const SECRET_KEYS = { brave: "scout.brave.key", grok: "scout.grok.key", unpaywallEmail: "node.unpaywall.email", openalex: "node.openalex.key" };
@@ -92,6 +94,15 @@ export async function createServices() {
   const flow = core.createSuggest({ registry, getAISettings: () => AIPolicy.aiForQueries(settings.ai, settings.aiConsent), ttl: net.ttl });
   const { preview } = core.createPreview({ getText: net.getText });
   const { trails, research } = openTrails(storage);
+  // Sync with NODE on a computer (B50): the pairing code in the keychain.
+  const sync = createSync({
+    storage,
+    trails,
+    research,
+    secret: { get: (k) => SecureStore.getItemAsync(k), set: (k, v) => SecureStore.setItemAsync(k, v), del: (k) => SecureStore.deleteItemAsync(k) },
+    fetch: (...args) => fetch(...args),
+    defaultName: Platform.OS === "ios" ? (Platform.isPad ? "NODE on iPad" : "NODE on iPhone") : "NODE on Android",
+  });
   const history = new core.HistoryStore(storage);
   const bookmarks = new core.BookmarkStore(storage);
   const rules = core.validate(core.DEFAULT_FILE).rules; // default rules for now; editing comes later (M-backlog)
@@ -129,6 +140,7 @@ export async function createServices() {
     net,
     research,
     trails,
+    sync,
     storage,
     history,
     bookmarks,
@@ -136,6 +148,8 @@ export async function createServices() {
     // Settings → Delete all NODE data: trails, history, settings, keys and
     // capture thumbnails on this phone. NODE keeps no copy anywhere else.
     clearAll: async () => {
+      await sync.stop().catch(() => {}); // B50: leaves the sync group first
+      await SecureStore.deleteItemAsync(SYNC_CODE_KEY).catch(() => {});
       const keys = (await AsyncStorage.getAllKeys()).filter((k) => k.startsWith(PREFIX));
       await AsyncStorage.multiRemove(keys);
       for (const k of Object.values(SECRET_KEYS)) await SecureStore.deleteItemAsync(k).catch(() => {});

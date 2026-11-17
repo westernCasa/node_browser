@@ -94,7 +94,7 @@ Phase 5 starts building after the desktop Phase 4 gate passes. M01-M02 can run a
 | M06 | Find in page (injected highlighter with next/previous) | P2 | M | Not started |
 | M07 | History screen and address-bar suggestions | P2 | S | Not started |
 | M08 | Unload tabs that have been hidden for a while and reload them when opened, to save memory | P1 | M | Not started |
-| M09 | Move sessions, pins and rules between desktop and mobile: export/import file first, sync later | P2 | L | Not started |
+| M09 | Move sessions, pins and rules between desktop and mobile: export/import file first, sync later | P2 | L | Trails sync both ways since B50 (PRs #84-#87): Settings → Sync → Scan code. Pins sync as part of each trail; site rules don't sync yet |
 | M10 | Design pass: phone layout, swipe between tabs, tablet layout with the page and suggestions side by side | P1 | M | Not started |
 | M11 | App icon, splash screen, store listing | P2 | S | Not started |
 | M12 | TestFlight (iOS) and Google Play closed test (12 testers for 14 days) | P1 | M | Not started |
