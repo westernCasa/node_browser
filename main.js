@@ -40,6 +40,7 @@ const Prov = require("./core/provenance");
 const { recall, recallIndex } = require("./core/recall");
 const ShareCheck = require("./core/share-check");
 const Citations = require("./core/citations");
+const QRCode = require("qrcode");
 const Replay = require("./core/replay");
 const { Usage } = require("./core/usage");
 const { HistoryStore } = require("./core/history");
@@ -1327,6 +1328,192 @@ function startActiveCount() {
   setInterval(sendActiveCount, 15 * 60 * 1000);
   app.on("browser-window-focus", () => setTimeout(sendActiveCount, 5000));
 }
+
+// ---- Sync (B50) ----
+// Trails sync both ways between devices paired with a QR code: core/sync.js
+// decides what changed and merges, core/sync-crypto.js encrypts, the share
+// Worker relays (core/sync-relay.js). Kept in userData/sync/: device.json
+// (this device's random id and name), pairing.json (the pairing code,
+// encrypted with the system keychain when it can be), state.json (what was
+// synced), relay.json (how far this device has read, the other devices'
+// names). The code is never sent; the relay gets a group id and a token
+// derived from it.
+const SyncCrypto = require("./core/sync-crypto");
+const { SyncEngine } = require("./core/sync");
+const { RelayClient, SyncError, syncOnce } = require("./core/sync-relay");
+const SYNC_EVERY_MS = 20 * 1000;
+let sync = null; // { code, keys, engine, client, relay }
+let syncBusy = null;
+let syncStatus = { state: "off" }; // off | ok | offline | unpaired | error
+const syncDir = () => path.join(app.getPath("userData"), "sync");
+const syncFile = (name) => path.join(syncDir(), name);
+function syncReadJson(name) {
+  try {
+    return JSON.parse(fs.readFileSync(syncFile(name), "utf8"));
+  } catch (_) {
+    return null;
+  }
+}
+function syncWriteJson(name, value) {
+  fs.mkdirSync(syncDir(), { recursive: true });
+  fs.writeFileSync(syncFile(name), JSON.stringify(value));
+}
+// "Svens-MacBook-Pro.local" → "Svens MacBook Pro".
+const defaultDeviceName = () => String(require("os").hostname() || "This computer").replace(/\.(local|lan|home)$/i, "").replace(/[-_]+/g, " ").trim().slice(0, 60) || "This computer";
+function syncDevice() {
+  let d = syncReadJson("device.json");
+  if (!d?.id || !/^[0-9a-f]{16}$/.test(d.id)) {
+    d = { id: SyncCrypto.newDeviceId(), name: defaultDeviceName() };
+    syncWriteJson("device.json", d);
+  }
+  return d;
+}
+function syncCode() {
+  const saved = syncReadJson("pairing.json");
+  return saved ? decryptSecret(saved) : "";
+}
+function syncSetup() {
+  const code = syncCode();
+  if (!code || !SyncCrypto.parsePairingCode(code) || !trailStore) {
+    sync = null;
+    return null;
+  }
+  const device = syncDevice();
+  const keys = SyncCrypto.keysFrom(code);
+  sync = {
+    code,
+    keys,
+    engine: new SyncEngine(trailStore, fsStorage(syncDir()), { device: device.id }),
+    client: new RelayClient({ api: ShareLink.API_BASE, group: keys.group, auth: keys.auth, device: device.id }),
+    relay: { ...(syncReadJson("relay.json") || {}), joined: 0 }, // join again after each start
+  };
+  return sync;
+}
+function syncInfo() {
+  const device = syncDevice();
+  const peers = sync?.relay.peers || {};
+  return {
+    paired: Boolean(sync),
+    ...syncStatus,
+    device,
+    peers: Object.entries(peers).map(([id, p]) => ({ id, name: p.name || "Unnamed device", kind: p.kind, at: p.at })),
+    pending: sync ? sync.engine.pending() : 0,
+  };
+}
+function setSyncStatus(next) {
+  syncStatus = next;
+  sendUi("sync-status", syncInfo());
+}
+async function syncNow() {
+  if (!sync) return syncInfo();
+  if (syncBusy) return syncBusy;
+  syncBusy = (async () => {
+    research.saveNow();
+    const before = currentTrail();
+    const peersBefore = JSON.stringify(sync.relay.peers || {});
+    try {
+      const device = syncDevice();
+      const res = await syncOnce({ engine: sync.engine, client: sync.client, key: sync.keys.key, state: sync.relay, me: { name: device.name, kind: "desktop" } });
+      syncWriteJson("relay.json", { cursor: sync.relay.cursor || "", peers: sync.relay.peers || {} });
+      syncApplied(res, before);
+      setSyncStatus({ state: "ok", at: Date.now(), received: res.received, sent: res.sent });
+      if (JSON.stringify(sync.relay.peers || {}) !== peersBefore) sendUi("sync-status", syncInfo());
+    } catch (err) {
+      if (err instanceof SyncError && err.unpaired) setSyncStatus({ state: "unpaired", message: "This computer was removed from sync on another device. Pair again to sync." });
+      else if (err instanceof SyncError && err.status === 0) setSyncStatus({ state: "offline", at: syncStatus.at, message: "Can't reach the sync server. Changes are kept and sent later." });
+      else {
+        log().warn(`sync: ${err.message}`);
+        setSyncStatus({ state: "error", at: syncStatus.at, message: err.message });
+      }
+    } finally {
+      syncBusy = null;
+    }
+    return syncInfo();
+  })();
+  return syncBusy;
+}
+// What arrived: reload the open trail, close tabs of trails deleted elsewhere
+// (with Undo), refresh the switcher.
+function syncApplied(res, before) {
+  const peerName = (id) => sync?.relay.peers?.[id]?.name || "another device";
+  for (const d of res.deleted) {
+    for (const t of [...tabs.values()].filter((x) => x.trail === d.id)) closeTab(t.id);
+    sendUi("notice", { message: `“${d.name || "A trail"}” was deleted on ${peerName(d.by)}.`, undoTrail: d.id });
+  }
+  if (res.deleted.some((d) => d.id === before)) changeTrail(() => research.switchTo(trailStore.index.current));
+  else if (res.trails.includes(before) || res.restored.length) {
+    research.reload();
+    sendUi("session-reloaded");
+  }
+  if (res.trails.length || res.added.length || res.deleted.length || res.restored.length) sendUi("trail-changed", { trail: currentTrail(), remote: true });
+}
+function startSync() {
+  syncSetup();
+  if (sync) setTimeout(syncNow, 3000);
+  setInterval(() => sync && syncNow(), SYNC_EVERY_MS).unref?.();
+  app.on("browser-window-focus", () => sync && setTimeout(syncNow, 1000));
+}
+// Pairing: this computer makes the code (shown as a QR code), or takes one
+// from another device. A computer already in a group shows that group's code,
+// to add another device.
+async function syncQr(code) {
+  const svg = await QRCode.toString(code, { type: "svg", margin: 2, errorCorrectionLevel: "M" });
+  // Colours come from the window's tokens (styles.css .sync-qr).
+  return svg.replace(/fill="#ffffff"/, 'class="qr-bg"').replace(/stroke="#000000"/, 'class="qr-fg"');
+}
+ipcMain.handle("sync:status", () => syncInfo());
+ipcMain.handle("sync:pair-start", async () => {
+  if (!sync) {
+    syncWriteJson("pairing.json", encryptSecret(SyncCrypto.newPairingCode()));
+    syncSetup();
+    syncNow();
+  }
+  return { code: sync.code, qr: await syncQr(sync.code), info: syncInfo() };
+});
+ipcMain.handle("sync:pair-code", async (_e, text) => {
+  const code = String(text || "").trim();
+  if (!SyncCrypto.parsePairingCode(code)) return { ok: false, error: "That isn't a NODE sync code. Copy it again from the other device (Settings → Sync)." };
+  if (sync && sync.code === code) return { ok: true, info: syncInfo() };
+  if (sync) return { ok: false, error: "This computer already syncs with other devices. Stop syncing first to join another group." };
+  fs.rmSync(syncFile("state.json"), { force: true });
+  fs.rmSync(syncFile("relay.json"), { force: true });
+  syncWriteJson("pairing.json", encryptSecret(code));
+  syncSetup();
+  const info = await syncNow();
+  return { ok: info.state !== "unpaired" && info.state !== "error", info, error: info.message };
+});
+ipcMain.handle("sync:now", () => syncNow());
+ipcMain.handle("sync:rename-device", (_e, name) => {
+  const d = syncDevice();
+  d.name = String(name || "").trim().slice(0, 60) || defaultDeviceName();
+  syncWriteJson("device.json", d);
+  return syncInfo();
+});
+// Another device: unpaired at the relay; it learns on its next sync.
+ipcMain.handle("sync:remove-device", async (_e, id) => {
+  if (!sync || !/^[0-9a-f]{16}$/.test(String(id))) return syncInfo();
+  try {
+    await sync.client.leave(String(id));
+  } catch (err) {
+    return { ...syncInfo(), message: err.message };
+  }
+  delete sync.relay.peers?.[id];
+  syncWriteJson("relay.json", { cursor: sync.relay.cursor || "", peers: sync.relay.peers || {} });
+  return syncInfo();
+});
+// This computer stops syncing. Its trails stay here; other devices keep theirs.
+ipcMain.handle("sync:stop", async () => {
+  if (sync) {
+    await syncBusy;
+    try {
+      await sync.client.leave();
+    } catch (_) {} // removed already, or offline: the relay drops it after 30 days
+  }
+  for (const f of ["pairing.json", "state.json", "relay.json"]) fs.rmSync(syncFile(f), { force: true });
+  sync = null;
+  setSyncStatus({ state: "off" });
+  return syncInfo();
+});
 
 function usageSummary() {
   return usage().summary({ version: app.getVersion(), os: systemName() });
@@ -3058,6 +3245,7 @@ app.whenReady().then(() => {
   updater.start();
   log().info(`NODE ${app.getVersion()} started (Electron ${process.versions.electron}, ${process.platform} ${process.arch})`);
   research = openTrails();
+  startSync(); // B50
   historyStore = new HistoryStore(fsStorage(app.getPath("userData")));
   companion = createCompanion({
     userData: app.getPath("userData"),
