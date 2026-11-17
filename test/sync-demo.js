@@ -1,0 +1,239 @@
+// Sync between paired devices (B50): core/sync.js and core/sync-crypto.js.
+// Two trail stores (a Mac and a phone) sync through sealed batches, as they
+// would through the relay.
+// Run: npm run test:sync
+const assert = require("assert");
+const { TrailStore } = require("../core/trail");
+const { memoryStorage } = require("../core/storage");
+const { SyncEngine } = require("../core/sync");
+const Crypto = require("../core/sync-crypto");
+
+let n = 0;
+const ok = (name) => console.log(`ok ${++n} - ${name}`);
+
+// ---- pairing and encryption ----
+const code = Crypto.newPairingCode();
+{
+  assert.match(code, /^NODE-SYNC1:[A-Za-z0-9_-]{43}$/);
+  const a = Crypto.keysFrom(code);
+  const b = Crypto.keysFrom(` ${code}\n`.trim());
+  assert.strictEqual(a.group, b.group);
+  assert.strictEqual(a.auth, b.auth);
+  assert.deepStrictEqual([...a.key], [...b.key]);
+  assert.match(a.group, /^[0-9a-f]{32}$/);
+  assert.match(a.auth, /^[0-9a-f]{64}$/);
+  assert.notStrictEqual(a.group, a.auth.slice(0, 32));
+  assert.strictEqual(Crypto.authHash(a.auth).length, 64);
+  assert.notStrictEqual(Crypto.keysFrom(Crypto.newPairingCode()).group, a.group, "each code is its own group");
+  assert.strictEqual(Crypto.parsePairingCode("NODE-SYNC1:short"), null);
+  assert.strictEqual(Crypto.parsePairingCode("https://example.com"), null);
+  assert.throws(() => Crypto.keysFrom("nonsense"), /not a NODE sync code/);
+  const bytes = Crypto.seal({ hello: "rye", n: [1, 2] }, a.key);
+  assert.deepStrictEqual(Crypto.open(bytes, a.key), { hello: "rye", n: [1, 2] });
+  assert.ok(!Buffer.from(bytes).toString("latin1").includes("rye"), "the server sees no text");
+  assert.throws(() => Crypto.open(bytes, Crypto.keysFrom(Crypto.newPairingCode()).key), /could not be decrypted/);
+  const bad = Uint8Array.from(bytes);
+  bad[40] ^= 1;
+  assert.throws(() => Crypto.open(bad, a.key), /could not be decrypted/);
+  ok("a pairing code gives the same group, token and key on both devices; batches are sealed and checked");
+}
+
+// ---- two devices ----
+const keys = Crypto.keysFrom(code);
+let clock = new Date(2026, 10, 16, 20, 0).getTime();
+const now = () => clock;
+const mkDevice = (device, sid) => {
+  const store = new TrailStore(memoryStorage(), { device, now });
+  const syncStorage = memoryStorage();
+  return { store, syncStorage, engine: new SyncEngine(store, syncStorage, { device: sid, now }) };
+};
+const mac = mkDevice("desktop", "aaaa");
+const phone = mkDevice("phone", "bbbb");
+phone.store.current(); // the phone has its own trail open
+// The relay: sealed batches, in order, never back to the sender.
+const relay = [];
+const push = (d) => {
+  for (const b of d.engine.outgoing()) relay.push({ from: d.engine.device, bytes: Crypto.seal(b, keys.key) });
+  d.engine.sent();
+};
+const pull = (d, seen) => {
+  const out = [];
+  for (let i = seen.n; i < relay.length; i++) if (relay[i].from !== d.engine.device) out.push(d.engine.apply(Crypto.open(relay[i].bytes, keys.key)));
+  seen.n = relay.length;
+  return out;
+};
+const macSeen = { n: 0 };
+const phoneSeen = { n: 0 };
+const syncBoth = () => {
+  push(mac);
+  pull(phone, phoneSeen);
+  push(phone);
+  return pull(mac, macSeen);
+};
+const tick = (ms = 60000) => (clock += ms);
+
+// The Mac has a trail with pages, a link, a group and a note.
+const rye = mac.store.current().trail.id;
+mac.store.rename(rye, "Rye breads");
+const visit = (d, tid, url, title, card = true) => {
+  d.store.visit(tid, url, { title });
+  tick(30000);
+  if (card) return d.store.placePage(tid, url, { title, x: 0, y: 0 });
+  d.store.bounce(tid, url, 30000);
+  return null;
+};
+const p1 = visit(mac, rye, "https://example.com/hydration", "Hydration for rye");
+const p2 = visit(mac, rye, "https://example.com/enzymes", "Rye and enzymes");
+visit(mac, rye, "https://example.com/quick", "Quick look", false);
+const ln = mac.store.link(rye, p1.id, p2.id, { kind: "you", label: "supports" });
+const g = mac.store.groupAround(rye, { x: -20, y: -20, w: 700, h: 400 }, { label: "Science" });
+mac.store.freeNote(rye, { x: 400, y: 400, text: "Try 80% hydration" });
+mac.store.setView(rye, { x: 120, y: -40, z: 0.5 });
+{
+  const before = JSON.stringify(mac.store.snapshot(rye).cards);
+  syncBoth();
+  const got = phone.store.snapshot(rye);
+  assert.ok(phone.store.has(rye), "the phone has the trail");
+  assert.strictEqual(got.trail.name, "Rye breads");
+  assert.strictEqual(JSON.stringify(got.cards), before, "the same cards, in the same order");
+  assert.deepStrictEqual(got.lines.find((l) => l.id === ln.id)?.label, "supports");
+  assert.strictEqual(got.groups.find((x) => x.id === g.id)?.label, "Science");
+  assert.deepStrictEqual(phone.store.events(rye).map((e) => e.id), mac.store.events(rye).map((e) => e.id), "every event, same ids");
+  assert.ok(phone.store.timeline(rye).flatMap((s) => s.items).some((i) => i.title === "Quick look" && i.timelineOnly), "timeline-only visits too");
+  assert.deepStrictEqual(phone.store.view(rye).z, 1, "the canvas position and zoom stay per device");
+  assert.notStrictEqual(phone.store.index.current, rye, "the phone stays on the trail it had open");
+  ok("a trail on the Mac arrives on the phone: cards, lines, groups, notes, events, timeline; not the view");
+}
+{
+  const before = relay.length;
+  const out = syncBoth();
+  assert.strictEqual(mac.engine.pending(), 0);
+  assert.strictEqual(relay.length, before, `nothing new to send: ${relay.length - before}`);
+  assert.deepStrictEqual(out, []);
+  ok("nothing changed: nothing is sent, and nothing echoes back");
+}
+// Both sides work offline, then sync.
+tick();
+const phonePage = visit(phone, rye, "https://example.com/phone-find", "Found on the phone");
+phone.store.renameGroup(rye, g.id, "Enzymes and acids");
+tick();
+mac.store.freeNote(rye, { x: 800, y: 0, text: "Ask the miller" });
+tick();
+mac.store.renameGroup(rye, g.id, "Acids (Mac, later)");
+{
+  syncBoth();
+  push(mac);
+  pull(phone, phoneSeen);
+  for (const d of [mac, phone]) {
+    const s = d.store.snapshot(rye);
+    assert.ok(s.cards.some((c) => c.id === phonePage.id), `${d.store.device}: the phone's page`);
+    assert.ok(s.cards.some((c) => c.text === "Ask the miller"), `${d.store.device}: the Mac's note`);
+    assert.strictEqual(s.groups.find((x) => x.id === g.id).label, "Acids (Mac, later)", `${d.store.device}: the later rename wins`);
+  }
+  const byId = (d) => d.store.snapshot(rye).cards.slice().sort((a, b) => (a.id < b.id ? -1 : 1));
+  assert.deepStrictEqual(byId(mac), byId(phone), "both end with the same cards");
+  assert.ok(phone.store.timeline(rye).some((s) => s.device === "phone") && mac.store.timeline(rye).some((s) => s.device === "phone"), "the phone's visits show as phone sessions on the Mac");
+  ok("both sides offline: new things from both are kept; the same group renamed on both: the later edit wins");
+}
+// The same card moved on both: the later move wins, and a local edit made
+// after the remote one is not overwritten.
+{
+  tick();
+  phone.store.moveCard(rye, p1.id, 10, 10);
+  tick();
+  mac.store.moveCard(rye, p1.id, 500, 500);
+  push(phone); // the phone's earlier move reaches the relay first
+  pull(mac, macSeen);
+  assert.strictEqual(mac.store.card(rye, p1.id).x, 500, "the Mac's later move is kept");
+  push(mac);
+  pull(phone, phoneSeen);
+  assert.strictEqual(phone.store.card(rye, p1.id).x, 500, "and wins on the phone");
+  ok("a card moved on both devices ends where it was moved last");
+}
+// Deleting a trail deletes it everywhere; Undo brings it back everywhere.
+const other = phone.store.create("Starters").trail.id;
+visit(phone, other, "https://example.com/starter", "Starter smells");
+syncBoth();
+assert.ok(mac.store.has(other));
+{
+  tick();
+  mac.store.remove(other);
+  syncBoth();
+  const res = pull(phone, phoneSeen);
+  assert.ok(!phone.store.has(other), "deleted on the phone too");
+  assert.ok(phone.store.deletedIds().includes(other), "kept until purge, for Undo");
+  tick();
+  mac.store.restore(other);
+  push(mac);
+  const back = pull(phone, phoneSeen);
+  assert.ok(phone.store.has(other) && back.some((r) => r.restored.includes(other)), JSON.stringify(back));
+  assert.notStrictEqual(phone.store.index.current, other, "brought back, not opened");
+  // The phone had already purged the files: the Mac sends everything again.
+  tick();
+  mac.store.remove(other);
+  push(mac);
+  pull(phone, phoneSeen);
+  phone.store.purge();
+  assert.ok(!phone.store.get(other), "files gone on the phone");
+  tick();
+  mac.store.restore(other);
+  push(mac);
+  pull(phone, phoneSeen);
+  assert.strictEqual(phone.store.get(other)?.trail.name, "Starters");
+  assert.ok(phone.store.snapshot(other).cards.some((c) => c.title === "Starter smells"));
+  assert.ok(res !== undefined);
+  ok("deleting a trail deletes it on the other device; Undo brings it back, even after its files were removed");
+}
+// Changes made while a trail is deleted elsewhere do not bring it back.
+{
+  tick();
+  phone.store.remove(other);
+  push(phone);
+  tick();
+  mac.store.freeNote(other, { x: 0, y: 0, text: "late note" });
+  pull(mac, macSeen);
+  assert.ok(!mac.store.has(other), "deleted on the Mac, though it had a newer note");
+  push(mac);
+  pull(phone, phoneSeen);
+  assert.ok(!phone.store.has(other));
+  ok("a trail deleted on one device stays deleted, even with later edits elsewhere");
+}
+// A third device paired later gets everything.
+{
+  const ipad = mkDevice("phone", "cccc");
+  mac.engine.resetAll();
+  push(mac);
+  const seen = { n: 0 };
+  pull(ipad, seen);
+  assert.strictEqual(ipad.store.get(rye)?.trail.name, "Rye breads");
+  const sorted = (d) => d.store.snapshot(rye).cards.slice().sort((a, b) => (a.id < b.id ? -1 : 1));
+  assert.deepStrictEqual(sorted(ipad), sorted(mac));
+  assert.ok(!ipad.store.has(other), "not the deleted trail");
+  ok("a newly paired device gets every trail from a full resend");
+}
+// Nothing unsafe arrives, and the outbox survives a restart.
+{
+  const bad = { changes: [{ t: rye, k: "c:x1", v: { id: "x1", kind: "page", url: "https://accounts.google.com/signin", x: 0, y: 0, w: 1, h: 1 }, at: clock + 9e9, by: "zzzz" }], events: [{ t: rye, e: { id: "e-bad", at: clock, type: "opened", data: { url: "https://accounts.google.com/x" } } }, { t: rye, e: { id: "e-odd", at: clock, type: "deleted-everything" } }], life: [] };
+  mac.engine.apply(bad);
+  assert.ok(!mac.store.card(rye, "x1"), "a sign-in page never becomes a card (B66)");
+  assert.ok(!mac.store.events(rye).some((e) => e.id === "e-bad" || e.id === "e-odd"));
+  tick();
+  mac.store.freeNote(rye, { x: 0, y: 900, text: "not sent yet" });
+  mac.engine.collect();
+  const again = new SyncEngine(mac.store, mac.syncStorage, { device: "aaaa", now });
+  assert.ok(again.pending() > 0, "the stamped change is still waiting after a restart");
+  const batches = again.outgoing();
+  assert.ok(batches.some((b) => b.changes.some((c) => c.v?.text === "not sent yet")));
+  ok("sign-in pages and unknown events from another device are refused; unsent changes survive a restart");
+}
+// Big trails go in several batches.
+{
+  const big = mac.store.create("Big").trail.id;
+  for (let i = 0; i < 1500; i++) mac.store.freeNote(big, { x: i, y: 0, text: `note ${i} ${"x".repeat(200)}` });
+  const batches = mac.engine.outgoing();
+  assert.ok(batches.length > 1, String(batches.length));
+  assert.ok(batches.every((b) => JSON.stringify(b).length < 450 * 1024));
+  mac.engine.sent();
+  ok(`a big trail goes in ${batches.length} batches, each under 450 KB`);
+}
+console.log(`\n${n} checks passed`);
