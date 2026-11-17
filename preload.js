@@ -125,6 +125,13 @@ contextBridge.exposeInMainWorld("scout", {
   trailCopyOpen: (sha) => ipcRenderer.invoke("trail:copy-open", sha),
   trailKeepCopies: (id, on) => ipcRenderer.invoke("trail:keep-copies", id, on),
   trailExportCitations: (id) => ipcRenderer.invoke("trail:export-citations", id),
+  syncStatus: () => ipcRenderer.invoke("sync:status"),
+  syncPairStart: () => ipcRenderer.invoke("sync:pair-start"),
+  syncPairCode: (code) => ipcRenderer.invoke("sync:pair-code", code),
+  syncNow: () => ipcRenderer.invoke("sync:now"),
+  syncRenameDevice: (name) => ipcRenderer.invoke("sync:rename-device", name),
+  syncRemoveDevice: (id) => ipcRenderer.invoke("sync:remove-device", id),
+  syncStop: () => ipcRenderer.invoke("sync:stop"),
   // B86: contact details in what would be shared.
   trailShareCheck: (opts) => ipcRenderer.invoke("trail:share-check", opts),
   historyClear: () => ipcRenderer.invoke("history:clear"),

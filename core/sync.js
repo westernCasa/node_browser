@@ -131,8 +131,13 @@ class SyncEngine {
   }
   // Forget what was synced, so the next collect() sends everything again
   // (after pairing a new device, or when another device asks).
+  // Items keep their times, so an old copy sent again never beats a newer
+  // edit made elsewhere.
   resetAll() {
-    this.state.trails = {};
+    for (const ts of Object.values(this.state.trails)) {
+      ts.resend = true;
+      ts.events = [];
+    }
     this.state.outbox = { changes: [], events: [], life: [] };
     this.saveState();
   }
@@ -161,12 +166,17 @@ class SyncEngine {
         ts.life = { deleted: gone, at: when, by };
         out.life.push({ t: tid, deleted: gone, at: when, by });
         if (!gone) {
-          // Brought back: send it all again.
-          ts.items = {};
+          // Brought back: send it all again (each item with its own time),
+          // in case another device already removed its files.
+          ts.resend = true;
           ts.events = [];
         }
       }
-      if (gone) continue;
+      if (gone) {
+        if (ts.resend && ts.life) out.life.push({ t: tid, ...ts.life });
+        delete ts.resend;
+        continue;
+      }
       const t = store.load(tid);
       if (!t) continue;
       const items = itemsOf(t.data);
@@ -177,9 +187,16 @@ class SyncEngine {
         const key = e.card ? `c:${e.card}` : e.group ? `g:${e.group}` : e.line ? `l:${e.line}` : e.type === "renamed" ? "trail" : "";
         if (key && e.device === store.device && !(edited.get(key) >= e.at)) edited.set(key, e.at);
       }
+      const resend = ts.resend;
+      delete ts.resend;
+      if (resend && ts.life) out.life.push({ t: tid, ...ts.life });
       for (const [key, value] of Object.entries(items)) {
         const h = hash(value);
-        if (ts.items[key]?.h === h) continue;
+        if (ts.items[key]?.h === h) {
+          // Sent again with the time it was last changed.
+          if (resend) out.changes.push({ t: tid, k: key, v: value, at: ts.items[key].at, by: ts.items[key].by });
+          continue;
+        }
         const ev = edited.get(key);
         const when = ev && ev > (ts.items[key]?.at || 0) && ev <= at ? ev : at;
         ts.items[key] = { h, at: when, by };
@@ -223,7 +240,7 @@ class SyncEngine {
       if (l.deleted && store.has(l.t)) {
         const name = store.get(l.t)?.trail.name || "";
         store.remove(l.t, { at: l.at });
-        res.deleted.push({ id: l.t, name });
+        res.deleted.push({ id: l.t, name, by: l.by });
       } else if (!l.deleted && deletedHere().has(l.t)) {
         store.restore(l.t, { current: false });
         res.restored.push(l.t);
@@ -234,31 +251,40 @@ class SyncEngine {
       if (store.has(tid)) return true;
       if (deletedHere().has(tid) || this.state.trails[tid]?.life?.deleted) return false;
       store.create("", { id: tid, current: false });
+      // A new copy here (or files removed after a delete): take every item.
+      const ts = this.trailState(tid);
+      ts.items = {};
+      ts.events = [];
       res.added.push(tid);
       return true;
     };
     for (const c of batch.changes || []) {
       if (!c || typeof c.t !== "string" || typeof c.k !== "string" || typeof c.at !== "number") continue;
       if (c.v && c.v.url && isSensitiveUrl(c.v.url)) continue; // B66: never, even if sent
+      if (!ensure(c.t)) continue;
       const ts = this.trailState(c.t);
       const mine = ts.items[c.k];
       if (mine && !later(c, mine)) continue;
-      if (!ensure(c.t)) continue;
       const t = store.load(c.t);
       putItem(t.data, c.k, c.v);
       ts.items[c.k] = { h: c.v === null ? "-" : hash(c.v), at: c.at, by: c.by };
       touched.add(c.t);
     }
+    const known = new Map(); // trail id -> Set of event ids already recorded as synced
     for (const { t: tid, e } of batch.events || []) {
       if (!safeEvent(e) || !ensure(tid)) continue;
       const ts = this.trailState(tid);
+      if (!known.has(tid)) known.set(tid, new Set(ts.events));
       if (store.addEvent(tid, e)) touched.add(tid);
-      if (!ts.events.includes(e.id)) ts.events.push(e.id);
+      if (!known.get(tid).has(e.id)) {
+        known.get(tid).add(e.id);
+        ts.events.push(e.id);
+      }
     }
     for (const tid of touched) {
       const t = store.load(tid);
       if (!t) continue;
-      const last = Math.max(t.data.trail.lastAt || 0, ...t.events.map((e) => e.at));
+      const last = t.events.reduce((m, e) => Math.max(m, e.at), t.data.trail.lastAt || 0);
       if (last > 0) t.data.trail.lastAt = last;
       store.save(tid);
       res.trails.add(tid);

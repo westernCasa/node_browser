@@ -25,7 +25,8 @@ function memoryBucket() {
 }
 
 (async () => {
-  const { default: worker, MAX_BYTES } = await import("../worker/src/index.js");
+  const { default: worker } = await import("../worker/src/index.js");
+  const MAX_BYTES = 1024 * 1024; // as in the Worker
   const env = { TRAILS: memoryBucket() };
   const call = (path, init) => worker.fetch(new Request("https://node-share.example.workers.dev" + path, init), env);
   const sealed = new Uint8Array([0x4e, 0x54, 0x31, ...new Uint8Array(12 + 40).fill(7)]);
@@ -110,6 +111,86 @@ function memoryBucket() {
   env.COUNT_LIMIT = { limit: async () => ({ success: false }) };
   assert.strictEqual((await countReq({ v: "0.11.0", os: "mac", w: true, m: true })).status, 429);
   ok("the count limit");
+
+  // ---- Sync relay (B50) ----
+  {
+    const Crypto = require("../core/sync-crypto");
+    const keys = Crypto.keysFrom(Crypto.newPairingCode());
+    const G = keys.group;
+    const auth = { authorization: `Bearer ${keys.auth}`, "content-type": "application/json" };
+    const mac = "aaaaaaaaaaaaaaaa";
+    const phone = "bbbbbbbbbbbbbbbb";
+    const sjson = async (path, init) => {
+      const res = await call(`/api/sync/${G}/${path}`, init);
+      return { status: res.status, body: res.headers.get("content-type")?.includes("json") ? await res.json() : null, res };
+    };
+    const join = (device, headers = auth) => sjson("join", { method: "POST", headers, body: JSON.stringify({ device }) });
+    let j = await join(mac);
+    assert.deepStrictEqual([j.status, j.body.devices, j.body.joined, j.body.missed], [200, 1, true, false]);
+    const stored = JSON.stringify([...env.TRAILS.items].filter(([k]) => k.startsWith("s/")));
+    assert.ok(!stored.includes(keys.auth), "the token itself is not stored");
+    assert.strictEqual((await join(phone, { ...auth, authorization: `Bearer ${"0".repeat(64)}` })).status, 403);
+    j = await join(phone);
+    assert.deepStrictEqual([j.status, j.body.devices], [200, 2]);
+    ok("sync: the first join makes the group; another device joins with the same token; a wrong token is refused");
+
+    const sealed = (obj) => Crypto.seal(obj, keys.key);
+    const post = (device, bytes) => sjson(`batches?device=${device}`, { method: "POST", headers: { authorization: auth.authorization }, body: bytes });
+    const b1 = await post(mac, sealed({ hello: 1 }));
+    const b2 = await post(mac, sealed({ hello: 2 }));
+    const b3 = await post(phone, sealed({ hello: 3 }));
+    assert.ok(b1.status === 201 && /^\d{13}-[A-Za-z0-9]{8}-a{16}$/.test(b1.body.batch), JSON.stringify(b1.body));
+    assert.strictEqual((await post(mac, new TextEncoder().encode('{"plain":"text"}'))).status, 400, "only sealed batches");
+    assert.strictEqual((await post("cccccccccccccccc", sealed({}))).status, 403, "only paired devices");
+    ok("sync: paired devices post sealed batches; plain text and unknown devices are refused");
+
+    let list = await sjson(`batches?device=${phone}`, { headers: auth });
+    assert.deepStrictEqual(list.body.batches.slice().sort(), [b1.body.batch, b2.body.batch].sort(), "the phone sees the Mac's batches, not its own");
+    assert.strictEqual(list.body.last, [b1.body.batch, b2.body.batch, b3.body.batch].sort().at(-1));
+    const got = await call(`/api/sync/${G}/batches/${b2.body.batch}?device=${phone}`, { headers: auth });
+    assert.deepStrictEqual(Crypto.open(new Uint8Array(await got.arrayBuffer()), keys.key), { hello: 2 });
+    ok("sync: a device lists the other devices' batches and gets the bytes back");
+
+    let ack = await sjson(`ack?device=${phone}`, { method: "POST", headers: auth, body: JSON.stringify({ upTo: list.body.last }) });
+    assert.strictEqual(ack.body.deleted, 2, "the Mac's two batches: the only other device has them");
+    assert.ok(env.TRAILS.items.has(`s/b/${G}/${b3.body.batch}`), "the phone's own batch waits for the Mac");
+    list = await sjson(`batches?device=${mac}`, { headers: auth });
+    assert.deepStrictEqual(list.body.batches, [b3.body.batch]);
+    ack = await sjson(`ack?device=${mac}`, { method: "POST", headers: auth, body: JSON.stringify({ upTo: list.body.last }) });
+    assert.strictEqual(ack.body.deleted, 1);
+    assert.strictEqual([...env.TRAILS.items.keys()].filter((k) => k.startsWith(`s/b/${G}/`)).length, 0);
+    list = await sjson(`batches?device=${phone}`, { headers: auth });
+    assert.deepStrictEqual(list.body.batches, []);
+    ok("sync: a batch is deleted once every other device has it");
+
+    // A device away for over 30 days is told it missed batches.
+    const rec = env.TRAILS.items.get(`s/d/${G}/${phone}`);
+    rec.customMetadata.seen = String(Date.now() - 31 * 864e5);
+    j = await join(phone);
+    assert.strictEqual(j.body.missed, true);
+    // An old batch is refused even if the lifecycle rule has not run yet.
+    const oldName = `${String(Date.now() - 31 * 864e5)}-AAAAAAAA-${mac}`;
+    env.TRAILS.items.set(`s/b/${G}/${oldName}`, { bytes: sealed({ old: 1 }) });
+    assert.strictEqual((await call(`/api/sync/${G}/batches/${oldName}?device=${phone}`, { headers: auth })).status, 404);
+    assert.deepStrictEqual((await sjson(`batches?device=${phone}`, { headers: auth })).body.batches, []);
+    ok("sync: a device back after 30 days is told it missed batches; batches over 30 days old are gone");
+
+    const devs = await sjson(`devices?device=${mac}`, { headers: auth });
+    assert.deepStrictEqual(devs.body.devices.map((d) => d.id).sort(), [mac, phone]);
+    assert.ok(!JSON.stringify(devs.body).includes("cursor"));
+    assert.strictEqual((await call(`/api/sync/${G}/devices/${phone}?device=${mac}`, { method: "DELETE", headers: auth })).status, 204);
+    assert.strictEqual((await post(phone, sealed({}))).status, 403, "an unpaired device can't post");
+    await post(mac, sealed({ x: 1 }));
+    assert.strictEqual((await call(`/api/sync/${G}/devices/${mac}?device=${mac}`, { method: "DELETE", headers: auth })).status, 204);
+    assert.strictEqual([...env.TRAILS.items.keys()].filter((k) => k.includes(G)).length, 0, "the last device leaving removes the group");
+    ok("sync: unpairing removes a device; when the last one leaves, nothing of the group is kept");
+
+    env.SYNC_LIMIT = { limit: async () => ({ success: false }) };
+    assert.strictEqual((await join(mac)).status, 429);
+    delete env.SYNC_LIMIT;
+    assert.strictEqual((await call(`/api/sync/not-a-group/join`, { method: "POST" })).status, 404);
+    ok("sync: the rate limit; bad group ids are not found");
+  }
 })().catch((e) => {
   console.error(e);
   process.exit(1);

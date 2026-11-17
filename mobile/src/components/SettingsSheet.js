@@ -6,6 +6,7 @@ import Button from "./Button";
 import Sheet from "./Sheet";
 import { FullTextDisclaimer, FullTextTutorial } from "./FullTextSheet";
 import { MosaicLayoutList } from "./MosaicLayoutPicker";
+import SyncSettings from "./SyncSettings";
 
 const F = require("../fulltext");
 const P = require("../aiPolicy");
@@ -67,6 +68,8 @@ export default function SettingsSheet({ visible, onClose, services, mosaicLayout
       </Text>
       <Text style={ui.help}>Also: press and hold the Mosaic button. Changes apply right away.</Text>
       <MosaicLayoutList value={mosaicLayout} onChange={onMosaicLayout} wide={wide} />
+
+      {services.sync ? <SyncSettings sync={services.sync} /> : null}
 
       <Text style={ui.kicker} accessibilityRole="header">
         Search

@@ -52,3 +52,5 @@ NODE has no accounts, so Apple 5.1.1(v) and Google's account deletion rule don't
 ## Export compliance (Apple)
 
 NODE only uses encryption built into iOS (HTTPS, Keychain). `ITSAppUsesNonExemptEncryption` is set to NO in app.json, so App Store Connect won't ask.
+
+**To decide before the next store build (B50 sync, 2026-11-16):** sync encrypts trails in the app itself (XChaCha20-Poly1305 from `@noble/ciphers`, a standard algorithm), not only with encryption built into iOS. The answer above may no longer hold. Check Apple's export compliance questions (and whether the mass-market exemption applies) and change `usesNonExemptEncryption` in app.json if needed. Sync data also goes to NODE's own server, end-to-end encrypted so NODE can't read it: confirm how App Privacy and Data safety treat that before submitting.

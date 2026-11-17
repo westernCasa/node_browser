@@ -2,6 +2,10 @@
 const HOME_URL = "https://en.wikipedia.org/wiki/Main_Page";
 // The beta survey (B65): anonymous Google Form, no account needed.
 const SURVEY_URL = "https://forms.gle/XuMGZUzScNYPyP319";
+// NODE's share server (share links, sync, the active count): the Cloudflare
+// Worker on the account's workers.dev name (sven-f70, chosen by Cloudflare on
+// 2026-11-09). Change it here and in site/vercel.json together.
+const SHARE_API = "https://node-share.sven-f70.workers.dev";
 // Searches typed in the address bar go to Brave Search.
 const SEARCH_URL = "https://search.brave.com/search?q=";
 
@@ -40,4 +44,4 @@ function isSensitiveUrl(url) {
   return SENSITIVE.test(u.hostname + u.pathname) || SESSION_PATH.test(u.pathname);
 }
 
-module.exports = { HOME_URL, SEARCH_URL, SURVEY_URL, normalizeUrl, hostOf, SENSITIVE, isSensitiveUrl };
+module.exports = { SHARE_API, HOME_URL, SEARCH_URL, SURVEY_URL, normalizeUrl, hostOf, SENSITIVE, isSensitiveUrl };

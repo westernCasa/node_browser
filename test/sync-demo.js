@@ -211,6 +211,25 @@ assert.ok(mac.store.has(other));
   assert.ok(!ipad.store.has(other), "not the deleted trail");
   ok("a newly paired device gets every trail from a full resend");
 }
+
+// A full resend keeps each item's time: an old copy doesn't beat a newer edit.
+{
+  tick();
+  phone.store.renameGroup(rye, g.id, "Phone, newest");
+  push(phone);
+  pull(mac, macSeen);
+  tick();
+  phone.store.renameGroup(rye, g.id, "Phone, newer still");
+  // The Mac resends everything before it has the phone's last rename.
+  mac.engine.resetAll();
+  push(mac);
+  pull(phone, phoneSeen);
+  assert.strictEqual(phone.store.get(rye).groups.find((x) => x.id === g.id).label, "Phone, newer still");
+  push(phone);
+  pull(mac, macSeen);
+  assert.strictEqual(mac.store.get(rye).groups.find((x) => x.id === g.id).label, "Phone, newer still");
+  ok("a full resend sends items with their own times, so it never undoes a newer edit");
+}
 // Nothing unsafe arrives, and the outbox survives a restart.
 {
   const bad = { changes: [{ t: rye, k: "c:x1", v: { id: "x1", kind: "page", url: "https://accounts.google.com/signin", x: 0, y: 0, w: 1, h: 1 }, at: clock + 9e9, by: "zzzz" }], events: [{ t: rye, e: { id: "e-bad", at: clock, type: "opened", data: { url: "https://accounts.google.com/x" } } }, { t: rye, e: { id: "e-odd", at: clock, type: "deleted-everything" } }], life: [] };
@@ -236,4 +255,70 @@ assert.ok(mac.store.has(other));
   mac.engine.sent();
   ok(`a big trail goes in ${batches.length} batches, each under 450 KB`);
 }
-console.log(`\n${n} checks passed`);
+
+// Through the relay itself: the Worker's code with an in-memory bucket.
+(async () => {
+  const { RelayClient, syncOnce } = require("../core/sync-relay");
+  const { default: worker } = await import("../worker/src/index.js");
+  const items = new Map();
+  const bucket = {
+    async put(k, body, o) { items.set(k, { bytes: new Uint8Array(body), customMetadata: o?.customMetadata }); },
+    async get(k) { const it = items.get(k); return it ? { customMetadata: it.customMetadata, body: new Blob([it.bytes]).stream(), arrayBuffer: async () => it.bytes.buffer.slice(0) } : null; },
+    async delete(k) { items.delete(k); },
+    async list({ prefix = "", startAfter } = {}) { return { objects: [...items.keys()].filter((k) => k.startsWith(prefix) && (!startAfter || k > startAfter)).sort().map((key) => ({ key })), truncated: false }; },
+  };
+  const env = { TRAILS: bucket };
+  const fetchVia = (url, init = {}) => worker.fetch(new Request(url, init), env);
+  const pairing = Crypto.newPairingCode();
+  const k = Crypto.keysFrom(pairing);
+  const dev = (kind, name) => {
+    const id = Crypto.newDeviceId();
+    const d = mkDevice(kind === "phone" ? "phone" : "desktop", id);
+    d.client = new RelayClient({ api: "https://relay.test", group: k.group, auth: k.auth, device: id, fetch: fetchVia });
+    d.relayState = {};
+    d.round = () => syncOnce({ engine: d.engine, client: d.client, key: k.key, state: d.relayState, me: { name, kind }, now });
+    return d;
+  };
+  const mbp = dev("desktop", "Sven's MacBook Pro");
+  const iphone = dev("phone", "Sven's iPhone");
+  iphone.client.text = true; // as on the phone: batches as base64url text
+  const t1 = mbp.store.current().trail.id;
+  mbp.store.rename(t1, "Levain");
+  mbp.store.freeNote(t1, { x: 0, y: 0, text: "Feed at 25°C" });
+  iphone.store.current();
+  const iphoneOwn = iphone.store.create("On the bus").trail.id;
+  iphone.store.freeNote(iphoneOwn, { x: 0, y: 0, text: "Look up rye malt" });
+
+  // The Mac pairs first (alone: nothing to keep), then the phone scans.
+  let r = await mbp.round();
+  assert.ok(r.sent >= 1);
+  r = await iphone.round(); // joins, sends everything and asks for everything
+  r = await mbp.round();
+  assert.ok(mbp.store.snapshot(iphoneOwn)?.cards.some((c) => c.text === "Look up rye malt"), "the phone's own trail reached the Mac");
+  assert.deepStrictEqual(mbp.relayState.peers[iphone.engine.device], { name: "Sven's iPhone", kind: "phone", at: clock });
+  r = await iphone.round();
+  assert.ok(iphone.store.get(t1)?.trail.name === "Levain" && r.added.includes(t1), JSON.stringify(r));
+  assert.strictEqual(iphone.relayState.peers[mbp.engine.device].name, "Sven's MacBook Pro");
+  ok("through the relay: pairing sends everything both ways, with each device's name (encrypted)");
+
+  tick();
+  iphone.store.rename(iphoneOwn, "On the bus, renamed");
+  await iphone.round();
+  r = await mbp.round();
+  assert.strictEqual(mbp.store.get(iphoneOwn).trail.name, "On the bus, renamed");
+  assert.deepStrictEqual(r.trails, [iphoneOwn]);
+  const left = [...items.keys()].filter((key) => key.startsWith("s/b/"));
+  await iphone.round();
+  assert.ok([...items.keys()].filter((key) => key.startsWith("s/b/")).length <= left.length, "batches every device has are deleted");
+  const stored = Buffer.concat([...items.values()].map((v) => Buffer.from(v.bytes))).toString("latin1") + JSON.stringify([...items].map(([key, v]) => [key, v.customMetadata]));
+  assert.ok(!/Levain|rye malt|MacBook|iPhone/.test(stored), "the relay holds no names, notes or titles");
+  ok("a rename on the phone reaches the Mac; the relay holds nothing readable");
+
+  await iphone.client.leave(mbp.engine.device);
+  await assert.rejects(mbp.round().then(() => mbp.client.post(Crypto.seal({}, k.key))), (e) => e.unpaired === true);
+  ok("an unpaired device is told to pair again");
+  console.log(`\n${n} checks passed`);
+})().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

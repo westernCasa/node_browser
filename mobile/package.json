@@ -3,9 +3,13 @@
   "version": "0.1.0",
   "main": "index.js",
   "dependencies": {
+    "@noble/ciphers": "1.3.0",
+    "@noble/hashes": "1.8.0",
     "@react-native-async-storage/async-storage": "2.2.0",
     "expo": "~58.0.23",
     "expo-build-properties": "~58.0.12",
+    "expo-camera": "~58.0.14",
+    "expo-crypto": "~58.0.8",
     "expo-dev-client": "~58.0.18",
     "expo-document-picker": "~58.0.4",
     "expo-file-system": "~58.0.13",
@@ -26,7 +30,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "bundle:check": "expo export --platform android --platform ios --output-dir dist-check",
-    "test": "node test/trail-flow.test.js && node test/capture.test.js && node test/fulltext.test.js && node test/mosaic-layout.test.js && node test/trail-edit.test.js && node test/ai-policy.test.js && node test/page-messages.test.js"
+    "test": "node test/trail-flow.test.js && node test/capture.test.js && node test/fulltext.test.js && node test/mosaic-layout.test.js && node test/trail-edit.test.js && node test/ai-policy.test.js && node test/page-messages.test.js && node test/sync.test.js"
   },
   "private": true
 }

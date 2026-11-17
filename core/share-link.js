@@ -11,9 +11,8 @@ const MAGIC = Buffer.from("NT1");
 const MAX_BYTES = 1024 * 1024;
 // Links are on the NODE website, which passes /t/… to the share server.
 const LINK_BASE = "https://noderesearch.app";
-// The share Worker on the Cloudflare account's workers.dev name (sven-f70, chosen
-// by Cloudflare on 2026-11-09). Change it here and in site/vercel.json together.
-const API_BASE = process.env.NODE_SHARE_API || "https://node-share.sven-f70.workers.dev";
+// The share Worker (core/urls.js SHARE_API); tests point it elsewhere.
+const API_BASE = process.env.NODE_SHARE_API || require("./urls").SHARE_API;
 
 const b64url = (buf) => Buffer.from(buf).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 const fromB64url = (s) => Buffer.from(s.replace(/-/g, "+").replace(/_/g, "/"), "base64");
