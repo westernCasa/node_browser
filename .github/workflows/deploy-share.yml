@@ -29,6 +29,9 @@ jobs:
             echo "::error::Add CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID in Settings → Secrets and variables → Actions."
             exit 1
           fi
+      # The Worker test also checks sync batches, which uses @noble (B50).
+      - name: Install packages for the test
+        run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Test the Worker
         run: node test/share-worker-demo.js
       - name: Create the bucket (first run only)
