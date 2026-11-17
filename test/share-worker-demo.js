@@ -25,7 +25,8 @@ function memoryBucket() {
 }
 
 (async () => {
-  const { default: worker, MAX_BYTES } = await import("../worker/src/index.js");
+  const { default: worker } = await import("../worker/src/index.js");
+  const MAX_BYTES = 1024 * 1024; // as in the Worker
   const env = { TRAILS: memoryBucket() };
   const call = (path, init) => worker.fetch(new Request("https://node-share.example.workers.dev" + path, init), env);
   const sealed = new Uint8Array([0x4e, 0x54, 0x31, ...new Uint8Array(12 + 40).fill(7)]);

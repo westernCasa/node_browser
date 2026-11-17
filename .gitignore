@@ -10,3 +10,4 @@ docs/media/src/site/video/
 browser/work/
 browser/extension/dist/
 browser/extension/manifest.inc
+worker/.wrangler/

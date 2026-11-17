@@ -29,8 +29,10 @@
 // counts can't be read here). Nothing else is stored: no names, no addresses,
 // no logs of what is inside.
 
-export const MAX_BYTES = 1024 * 1024;
-export const DAYS = 30;
+// Only the default export may be exported: newer Cloudflare runtimes refuse a
+// Worker with other named exports ("Incorrect type for map entry").
+const MAX_BYTES = 1024 * 1024;
+const DAYS = 30;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const ID = /^[A-Za-z0-9]{16}$/;
 const MAGIC = [0x4e, 0x54, 0x31]; // "NT1": NODE trail, format 1
