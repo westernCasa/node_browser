@@ -26,4 +26,4 @@ Scripts in pages: NODE injects scripts that are bundled in the app. They read th
 
 Data: NODE has no accounts and no analytics. Trails and settings stay on the device. Settings → Your data → Delete all NODE data removes everything.
 
-Contact: [CONTACT EMAIL]
+Contact: sven@western.casa
