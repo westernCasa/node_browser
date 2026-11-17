@@ -21,7 +21,7 @@ export default function SuggestionsSheet({ visible, onClose, state, controller, 
       <Text style={ui.help}>Tap a keyword to pin it. Press and hold to hide it.</Text>
       <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 8 }}>
         {pins.map((k) => (
-          <Pressable key={"p" + k} style={[ui.chip, { borderColor: colors.accent }]} onPress={() => controller.togglePin(k)} accessibilityRole="button" accessibilityLabel={`${k}, pinned`} accessibilityHint="Unpins this keyword">
+          <Pressable key={"p" + k} hitSlop={4} style={[ui.chip, { borderColor: colors.accent }]} onPress={() => controller.togglePin(k)} accessibilityRole="button" accessibilityLabel={`${k}, pinned`} accessibilityHint="Unpins this keyword">
             <Text style={[ui.chipText, { color: colors.accent }]}>📌 {k}</Text>
           </Pressable>
         ))}
@@ -29,6 +29,7 @@ export default function SuggestionsSheet({ visible, onClose, state, controller, 
           <Pressable
             key={"a" + k}
             style={ui.chip}
+            hitSlop={4}
             onPress={() => controller.togglePin(k)}
             onLongPress={() => controller.hide(k)}
             accessibilityRole="button"

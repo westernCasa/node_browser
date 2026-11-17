@@ -159,9 +159,10 @@ export default function TrailHome({ services, controller, onBrowse, onOpenUrl, o
         <Button label="Share" a11yLabel={readonly ? "Share this file" : "Share this trail as a file"} small onPress={() => (readonly ? openOnDesktop() : setSharing(true))} />
       </View>
       {list.length > 1 ? (
-        <View style={{ flexDirection: "row", justifyContent: "center", gap: 6, paddingBottom: 6 }}>
+        <View style={{ flexDirection: "row", justifyContent: "center", alignItems: "center", marginTop: -6 }}>
           {list.slice(0, MAX_DOTS).map((t) => (
-            <Pressable key={t.id} onPress={() => show(t.id)} hitSlop={6} accessibilityRole="button" accessibilityLabel={`Trail: ${t.name}`} accessibilityState={{ selected: t.id === id }}>
+            // Each dot sits in its own 44 × 44 pt touch area.
+            <Pressable key={t.id} onPress={() => show(t.id)} style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }} accessibilityRole="button" accessibilityLabel={`Trail: ${t.name}`} accessibilityState={{ selected: t.id === id }}>
               <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: t.id === id ? colors.accent : colors.line }} />
             </Pressable>
           ))}
@@ -191,7 +192,7 @@ export default function TrailHome({ services, controller, onBrowse, onOpenUrl, o
 
       <View style={{ flexDirection: "row", marginHorizontal: 14, borderWidth: 1, borderColor: colors.line, borderRadius: 8, overflow: "hidden" }}>
         {tabs.map(([k, label]) => (
-          <Pressable key={k} onPress={() => setTab(k)} accessibilityRole="tab" accessibilityState={{ selected: tab === k }} accessibilityLabel={label} style={{ flex: 1, paddingVertical: 7, alignItems: "center", backgroundColor: tab === k ? colors.bg3 : "transparent" }}>
+          <Pressable key={k} onPress={() => setTab(k)} accessibilityRole="tab" accessibilityState={{ selected: tab === k }} accessibilityLabel={label} style={{ flex: 1, minHeight: 40, justifyContent: "center", alignItems: "center", backgroundColor: tab === k ? colors.bg3 : "transparent" }} hitSlop={{ top: 2, bottom: 2 }}>
             <Text style={{ color: tab === k ? colors.accent : colors.mute, fontSize: 13, fontWeight: "600" }}>{label}</Text>
           </Pressable>
         ))}
@@ -227,7 +228,7 @@ export default function TrailHome({ services, controller, onBrowse, onOpenUrl, o
               keywords.length ? (
                 <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 4 }}>
                   {keywords.map((t) => (
-                    <Pressable key={t.term} style={ui.chip} onPress={() => controller.togglePin(t.term)}>
+                    <Pressable key={t.term} style={ui.chip} hitSlop={4} onPress={() => controller.togglePin(t.term)}>
                       <Text style={ui.chipText}>
                         {t.term} · {t.pages}
                       </Text>

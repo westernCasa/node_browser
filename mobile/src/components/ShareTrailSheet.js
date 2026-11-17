@@ -70,7 +70,7 @@ function Body({ onClose, store, trailId, displayName, onDisplayName }) {
                 setStartHere(c.id);
                 setPicking(false);
               }}
-              style={{ padding: 10, borderTopWidth: c.id ? 1 : 0, borderColor: colors.line }}
+              style={{ paddingHorizontal: 10, minHeight: 44, justifyContent: "center", borderTopWidth: c.id ? 1 : 0, borderColor: colors.line }}
             >
               <Text style={{ color: c.id === startHere ? colors.accent : colors.text }} numberOfLines={1}>
                 {c.title}

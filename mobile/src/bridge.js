@@ -65,9 +65,23 @@ export const BRIDGE = `(function () {
   };
   ["play", "playing", "pause", "ended", "emptied"].forEach(function (ev) { document.addEventListener(ev, media, true); });
   window.addEventListener("load", media);
+  // Scroll direction, for hiding NODE's bars while reading (as Safari does):
+  // posted when the direction changes after 24 px, and at the top of the page.
+  var lastY = window.scrollY || 0, lastDir = "", sent = 0;
   window.addEventListener("scroll", function () {
     clearTimeout(t2);
     t2 = setTimeout(function () { post({ type: "scroll" }); }, 1200);
+    var y = window.scrollY || 0;
+    if (y <= 4) {
+      if (lastDir !== "top") { lastDir = "top"; post({ type: "scrolldir", dir: "up", top: true }); }
+      lastY = y;
+      return;
+    }
+    if (Math.abs(y - lastY) < 24) return;
+    var dir = y > lastY ? "down" : "up";
+    lastY = y;
+    var now = Date.now();
+    if (dir !== lastDir || now - sent > 1500) { lastDir = dir; sent = now; post({ type: "scrolldir", dir: dir, top: false }); }
   }, { passive: true });
 })();
 true;`;

@@ -34,6 +34,8 @@ test("fields are typed and trimmed", () => {
   assert.ok(!("extra" in m));
   assert.deepStrictEqual(checkMessage(J({ type: "media", playing: "yes" }), ctx("tabA")), { type: "media", playing: false });
   assert.strictEqual(checkMessage(J({ type: "selection", text: "s".repeat(9000) }), ctx("tabA")).text.length, 5000);
+  assert.deepStrictEqual(checkMessage(J({ type: "scrolldir", dir: "sideways", top: 1 }), ctx("tabA")), { type: "scrolldir", dir: "up", top: false });
+  assert.deepStrictEqual(checkMessage(J({ type: "scrolldir", dir: "down" }), ctx("tabA")), { type: "scrolldir", dir: "down", top: false });
 });
 
 console.log(`\n${passed} passed`);

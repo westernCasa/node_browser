@@ -10,7 +10,7 @@
 // can't start a network request. No React Native imports (tested in Node).
 
 const MAX_RAW = 400000; // a whole page's text is ~ 200 KB at most
-const TYPES = new Set(["extract", "capinfo", "media", "syspause", "selection", "scroll"]);
+const TYPES = new Set(["extract", "capinfo", "media", "syspause", "selection", "scroll", "scrolldir"]);
 const str = (v, max) => (typeof v === "string" ? v.slice(0, max) : "");
 
 // pendingFor(id) -> the tab id a request was sent to, or null.
@@ -52,6 +52,8 @@ function checkMessage(raw, { tabId, pendingFor = () => null }) {
       return { type: "selection", text: str(m.text, 5000) };
     case "scroll":
       return { type: "scroll" };
+    case "scrolldir":
+      return { type: "scrolldir", dir: m.dir === "down" ? "down" : "up", top: m.top === true };
     default:
       return null;
   }
