@@ -325,12 +325,13 @@ class TrailStore {
     this.saveIndex();
     return { deleted: id, current: this.index.current };
   }
-  // Undo: back in the list, and current again.
-  restore(id) {
+  // Undo: back in the list, and current again (current: false when another
+  // device undid it, B50).
+  restore(id, { current = true } = {}) {
     if (!(this.index.deleted || []).some((d) => d.id === id) || !this.get(id)) return null;
     this.index.deleted = this.index.deleted.filter((d) => d.id !== id);
     this.index.order = [id, ...this.index.order.filter((x) => x !== id)];
-    this.index.current = id;
+    if (current) this.index.current = id;
     this.saveIndex();
     return this.get(id);
   }
@@ -396,6 +397,7 @@ class TrailStore {
     for (const k of ["card", "line", "group"]) if (ev[k]) e[k] = ev[k];
     if (ev.data && Object.keys(ev.data).length) e.data = ev.data;
     t.events.push(e);
+    t.eventIds?.add(e.id);
     if (t.events.length > 1 && t.events.at(-2).at > e.at) t.events.sort((a, b) => a.at - b.at);
     this.appendLine(`${id}/events.jsonl`, JSON.stringify(e));
     if (e.at > t.data.trail.lastAt) t.data.trail.lastAt = e.at;
@@ -403,6 +405,22 @@ class TrailStore {
   }
   events(id = this.index.current) {
     return this.load(id)?.events.slice() || [];
+  }
+  // An event recorded on another device (B50), kept with its own id, time and
+  // device. Returns false if this trail already has it.
+  addEvent(id, e) {
+    const t = this.load(id);
+    if (!t || !e?.id || !EVENT_TYPES.has(e.type)) return false;
+    if (!t.eventIds) t.eventIds = new Set(t.events.map((x) => x.id));
+    if (t.eventIds.has(e.id)) return false;
+    const ev = { id: e.id, at: Number(e.at), device: String(e.device || "desktop"), actor: String(e.actor || "me"), type: e.type };
+    for (const k of ["card", "line", "group"]) if (typeof e[k] === "string") ev[k] = e[k];
+    if (e.data && typeof e.data === "object") ev.data = e.data;
+    t.events.push(ev);
+    t.eventIds.add(ev.id);
+    t.events.sort((a, b) => a.at - b.at);
+    this.appendLine(`${id}/events.jsonl`, JSON.stringify(ev));
+    return true;
   }
 
   // ---- cards, groups, lines ----
