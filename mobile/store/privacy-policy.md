@@ -1,7 +1,7 @@
 # NODE Research Browser: Privacy Policy (iPhone, iPad and Android)
 
-Effective date: [DATE OF FIRST RELEASE]
-Contact: [CONTACT EMAIL]
+Effective date: November 16, 2026
+Contact: sven@western.casa
 
 NODE is a web browser for research. This policy covers the NODE apps for iPhone, iPad and Android.
 

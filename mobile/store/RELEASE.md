@@ -5,10 +5,8 @@ Steps in order. Commands run on the Mac in `~/Projects/scout-mobile/mobile` (the
 ## Before the first build (once)
 
 1. **Google Play account:** play.google.com/console, personal account, $25, ID check and device check in the Play Console app.
-2. **Fill in the blanks** in this folder and in `app.json`:
-   - `app.json` → `expo.extra.reportEmail`: where AI reports go. The ⚑ Report button opens an email to this address.
-   - `privacy-policy.md` and `review-notes.md`: `[CONTACT EMAIL]` and `[DATE OF FIRST RELEASE]`.
-3. **Publish the privacy policy** at a public web address, for example with GitHub Pages. Both stores ask for the link.
+2. **Contact details (done 2026-11-16):** AI reports and the privacy policy use sven@western.casa (`app.json` → `expo.extra.reportEmail`).
+3. **Privacy policy link for both stores:** https://westerncasa.github.io/node_browser/privacy/ (the page is on the `gh-pages` branch. Turn it on once: repo Settings → Pages → Source "Deploy from a branch" → `gh-pages`, folder `/ (root)`. To change the policy, edit `store/privacy-policy.md` and update that page).
 4. **Install the build tools:**
    ```
    npm install -g eas-cli
