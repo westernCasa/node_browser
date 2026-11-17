@@ -22,5 +22,11 @@ name = "COUNT_LIMIT"
 namespace_id = "1002"
 simple = { limit = 5, period = 60 }
 
+# At most 120 sync requests a minute from one network address (B50).
+[[ratelimits]]
+name = "SYNC_LIMIT"
+namespace_id = "1003"
+simple = { limit = 120, period = 60 }
+
 [observability]
 enabled = false
