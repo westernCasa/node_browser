@@ -69,6 +69,14 @@ const chip = (ui, label) => ui.evaluateHandle((l) => [...document.querySelectorA
   // Rename a trail that isn't current, from "…".
   await more(ui, "Scoring");
   await ui.screenshot({ path: path.join(OUT, "49-actions.png") });
+  const drop = await ui.evaluate(() => {
+    const m = document.querySelector("#sb-switch-menu .sb-menu-acts");
+    return m && { role: m.getAttribute("role"), floats: getComputedStyle(m).position === "absolute", items: [...m.querySelectorAll("[role=menuitem]")].map((b) => b.textContent), focus: document.activeElement?.textContent };
+  });
+  check("… opens a small drop-down menu: Rename, Keep copies, Export citations, Delete", drop?.role === "menu" && drop.floats && drop.items.join("|") === "Rename|Keep copies: Off|Export citations…|Delete…" && drop.focus === "Rename", JSON.stringify(drop));
+  await ui.keyboard.press("ArrowDown");
+  check("↓ moves down the drop-down", (await ui.evaluate(() => document.activeElement?.textContent)) === "Keep copies: Off");
+  await ui.keyboard.press("ArrowUp");
   await (await chip(ui, "Rename")).click();
   await sleep(200);
   check("Rename shows a text field with the name selected", await ui.evaluate(() => document.activeElement?.classList.contains("sb-menu-rename") && document.activeElement.value === "Scoring" && document.activeElement.selectionEnd - document.activeElement.selectionStart === 7));
