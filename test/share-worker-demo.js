@@ -134,8 +134,8 @@ function memoryBucket() {
     assert.deepStrictEqual([j.status, j.body.devices], [200, 2]);
     ok("sync: the first join makes the group; another device joins with the same token; a wrong token is refused");
 
-    const sealed = (obj) => Crypto.seal(obj, keys.key);
-    const post = (device, bytes) => sjson(`batches?device=${device}`, { method: "POST", headers: { authorization: auth.authorization }, body: bytes });
+    const sealed = (obj) => Crypto.seal(obj, keys.key); // a promise; awaited where used
+    const post = async (device, bytes) => sjson(`batches?device=${device}`, { method: "POST", headers: { authorization: auth.authorization }, body: await bytes });
     const b1 = await post(mac, sealed({ hello: 1 }));
     const b2 = await post(mac, sealed({ hello: 2 }));
     const b3 = await post(phone, sealed({ hello: 3 }));
@@ -148,7 +148,7 @@ function memoryBucket() {
     assert.deepStrictEqual(list.body.batches.slice().sort(), [b1.body.batch, b2.body.batch].sort(), "the phone sees the Mac's batches, not its own");
     assert.strictEqual(list.body.last, [b1.body.batch, b2.body.batch, b3.body.batch].sort().at(-1));
     const got = await call(`/api/sync/${G}/batches/${b2.body.batch}?device=${phone}`, { headers: auth });
-    assert.deepStrictEqual(Crypto.open(new Uint8Array(await got.arrayBuffer()), keys.key), { hello: 2 });
+    assert.deepStrictEqual(await Crypto.open(new Uint8Array(await got.arrayBuffer()), keys.key), { hello: 2 });
     ok("sync: a device lists the other devices' batches and gets the bytes back");
 
     let ack = await sjson(`ack?device=${phone}`, { method: "POST", headers: auth, body: JSON.stringify({ upTo: list.body.last }) });
@@ -170,7 +170,7 @@ function memoryBucket() {
     assert.strictEqual(j.body.missed, true);
     // An old batch is refused even if the lifecycle rule has not run yet.
     const oldName = `${String(Date.now() - 31 * 864e5)}-AAAAAAAA-${mac}`;
-    env.TRAILS.items.set(`s/b/${G}/${oldName}`, { bytes: sealed({ old: 1 }) });
+    env.TRAILS.items.set(`s/b/${G}/${oldName}`, { bytes: await sealed({ old: 1 }) });
     assert.strictEqual((await call(`/api/sync/${G}/batches/${oldName}?device=${phone}`, { headers: auth })).status, 404);
     assert.deepStrictEqual((await sjson(`batches?device=${phone}`, { headers: auth })).body.batches, []);
     ok("sync: a device back after 30 days is told it missed batches; batches over 30 days old are gone");

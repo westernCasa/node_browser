@@ -98,7 +98,7 @@ async function syncOnce({ engine, client, key, state, me = {}, now = () => Date.
   const head = { name: String(me.name || "").slice(0, 80), kind: me.kind || "desktop" };
   const send = async (batches) => {
     for (const b of batches) {
-      await client.post(Crypto.seal({ ...b, ...head }, key));
+      await client.post(await Crypto.seal({ ...b, ...head }, key));
       out.sent++;
     }
   };
@@ -118,7 +118,7 @@ async function syncOnce({ engine, client, key, state, me = {}, now = () => Date.
     for (const name of l.batches || []) {
       let batch;
       try {
-        batch = Crypto.open(await client.get(name), key);
+        batch = await Crypto.open(await client.get(name), key);
       } catch (e) {
         if (e instanceof SyncError) throw e;
         continue; // not readable with this key: skipped

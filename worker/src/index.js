@@ -93,7 +93,7 @@ async function upload(request, env) {
 //   s/g/<group>             the token's SHA-256 (written at the first join)
 //   s/d/<group>/<device>    a paired device: when it joined, was last seen,
 //                           and the last batch it has (cursor)
-//   s/b/<group>/<time>-<random>-<device>   a batch, as the device sealed it
+//   s/b/<group>/<time>-<random>-<device>   a batch, as the device sealed it ("NS2")
 // A batch is deleted once every other device has it, and after 30 days at
 // most (lifecycle rule on s/b/, and a date check here). A device not seen for
 // 30 days is told it missed batches, and asks the others to send everything.
@@ -102,7 +102,7 @@ async function upload(request, env) {
 const SYNC_GROUP = /^[0-9a-f]{32}$/;
 const SYNC_DEVICE = /^[0-9a-f]{16}$/;
 const SYNC_BATCH = /^\d{13}-[A-Za-z0-9]{8}-[0-9a-f]{16}$/;
-const SYNC_MAGIC = [0x4e, 0x53, 0x31]; // "NS1"
+const SYNC_MAGIC = [0x4e, 0x53, 0x32]; // "NS2": AES-256-GCM (core/sync-crypto.js)
 const SYNC_DAYS = 30;
 const toB64url = (bytes) => toBase64(bytes).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 function fromB64urlBytes(text) {
@@ -205,7 +205,7 @@ async function sync(request, env, url, group, rest) {
     const text = /x-node-sync-b64url/.test(request.headers.get("content-type") || "");
     const body = text ? fromB64urlBytes(await request.text()) : new Uint8Array(await request.arrayBuffer());
     if (!body || body.length > MAX_BYTES) return fail(body ? 413 : 400, body ? "Batch too large." : "Not an encrypted NODE sync batch.");
-    if (body.length < 3 + 24 + 16 || SYNC_MAGIC.some((b, i) => body[i] !== b)) return fail(400, "Not an encrypted NODE sync batch.");
+    if (body.length < 3 + 12 + 16 || SYNC_MAGIC.some((b, i) => body[i] !== b)) return fail(400, "Not an encrypted NODE sync batch.");
     const name = `${String(Date.now()).padStart(13, "0")}-${randomString(8)}-${device}`;
     await env.TRAILS.put(`s/b/${group}/${name}`, body, { httpMetadata: { contentType: "application/octet-stream" } });
     return json({ batch: name }, 201);
