@@ -22,7 +22,7 @@ export default function TabsSheet({ visible, onClose, tabs, activeId, onActivate
             accessibilityLabel={`${t.title || "New tab"}${t.id === activeId ? ", current tab" : ""}`}
             accessibilityActions={[{ name: "close", label: "Close tab" }]}
             onAccessibilityAction={(e) => e.nativeEvent.actionName === "close" && onCloseTab(t.id)}
-            style={{ flexDirection: "row", alignItems: "center", borderTopWidth: 1, borderColor: colors.line, paddingVertical: 10 }}
+            style={{ flexDirection: "row", alignItems: "center", borderTopWidth: 1, borderColor: colors.line, minHeight: 48 }}
           >
             <View style={{ flex: 1 }}>
               <Text style={{ color: t.id === activeId ? colors.accent : colors.text, fontWeight: "600" }} numberOfLines={1}>
@@ -42,7 +42,7 @@ export default function TabsSheet({ visible, onClose, tabs, activeId, onActivate
           {bookmarks.search("", 100).length === 0 ? <Text style={ui.help}>No bookmarks yet. Tap ☆ next to the address bar to add the page you are on.</Text> : null}
           {bookmarks.search("", 100).map((b) => (
             <SwipeRow key={"b" + b.url} label="Remove" onSwipe={() => onRemoveBookmark(b.url)}>
-              <Pressable onPress={() => onOpenBookmark(b.url)} accessibilityRole="link" style={{ borderTopWidth: 1, borderColor: colors.line, paddingVertical: 10 }}>
+              <Pressable onPress={() => onOpenBookmark(b.url)} accessibilityRole="link" style={{ borderTopWidth: 1, borderColor: colors.line, minHeight: 44, justifyContent: "center" }}>
                 <Text style={{ color: colors.text, fontWeight: "600" }} numberOfLines={1}>★ {b.title || b.url}</Text>
                 <Text style={ui.help} numberOfLines={1}>{b.url}</Text>
               </Pressable>

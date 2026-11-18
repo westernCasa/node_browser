@@ -258,7 +258,7 @@ export default function CanvasEditor({ snap, editor, onChanged, onOpenUrl }) {
                   run(editor.labelLine(labelFor, l.id));
                   setLabelFor(null);
                 }}
-                style={{ paddingVertical: 11, borderTopWidth: 1, borderColor: colors.line }}
+                style={{ minHeight: 44, justifyContent: "center", borderTopWidth: 1, borderColor: colors.line }}
               >
                 <Text style={{ color: colors.text }}>{l.label}</Text>
               </Pressable>

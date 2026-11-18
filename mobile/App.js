@@ -2,7 +2,7 @@
 // browser behind it keeps its tabs of WebViews, address bar, and the shared
 // suggestion engine from core/.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AccessibilityInfo, ActivityIndicator, AppState, BackHandler, Keyboard, PanResponder, Platform, Pressable, Text, TextInput, View, useWindowDimensions } from "react-native";
+import { AccessibilityInfo, ActivityIndicator, AppState, BackHandler, Keyboard, LayoutAnimation, PanResponder, Platform, Pressable, Text, TextInput, View, useWindowDimensions } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
@@ -23,6 +23,8 @@ import FullTextSheet from "./src/components/FullTextSheet";
 import { captureRef } from "react-native-view-shot";
 import { Directory, File, Paths } from "expo-file-system";
 import SettingsSheet from "./src/components/SettingsSheet";
+import IconButton from "./src/components/IconButton";
+import Sheet from "./src/components/Sheet";
 import MosaicLayoutSheet from "./src/components/MosaicLayoutPicker";
 const { layoutRects, isLayout } = require("./src/mosaicLayout");
 
@@ -97,6 +99,29 @@ function Browser({ services }) {
   const [sheet, setSheet] = useState(null); // "suggest" | "tabs" | "ask" | "settings"
   const [address, setAddress] = useState("");
   const [editing, setEditing] = useState(false);
+  // The bars hide while you read (scrolling down) and come back when you
+  // scroll up, reach the top, open a page or tap the address line (Sven,
+  // 2026-11-17). They stay put while typing, in Mosaic, with a sheet open, and
+  // for screen reader users.
+  const [barsHidden, setBarsHidden] = useState(false);
+  const barsRef = useRef({ hidden: false, keep: false, still: false, reduce: false });
+  useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled?.().then((v) => (barsRef.current.reduce = v)).catch(() => {});
+    AccessibilityInfo.isScreenReaderEnabled?.().then((v) => (barsRef.current.still = v)).catch(() => {});
+    const sub = AccessibilityInfo.addEventListener?.("screenReaderChanged", (v) => {
+      barsRef.current.still = v;
+      if (v) setBars(false);
+    });
+    return () => sub?.remove?.();
+  }, []);
+  function setBars(hidden) {
+    const b = barsRef.current;
+    if (hidden && (b.keep || b.still)) return;
+    if (b.hidden === hidden) return;
+    b.hidden = hidden;
+    if (!b.reduce) LayoutAnimation.configureNext(LayoutAnimation.create(180, "easeInEaseOut", "opacity"));
+    setBarsHidden(hidden);
+  }
   const [typed, setTyped] = useState(false); // typed since focusing the address bar
   const [bookmarkVersion, setBookmarkVersion] = useState(0); // re-render after bookmark changes
   const [ctrlState, setCtrlState] = useState(null);
@@ -269,6 +294,10 @@ function Browser({ services }) {
         lastSelection.current = { tabId, url: tab?.url || "", text: msg.text };
         controller.onPage(tab, "selection", msg.text);
       }
+      if (msg.type === "scrolldir") {
+        if (tabId === activeRef.current) setBars(msg.dir === "down" && !msg.top);
+        return;
+      }
       if (msg.type === "scroll") {
         controller.onPage(tab, "scroll");
         engagement.current.engage(tabId, "scroll"); // scrolling counts as engaging (B104)
@@ -286,6 +315,7 @@ function Browser({ services }) {
     }
     // Single-page sites (m.youtube.com and similar) change address without a
     // new load, so onLoadEnd does not run: start the new page's media here.
+    if (tabId === activeRef.current && nav.loading && before && nav.url !== before.url) setBars(false); // a new page: show the bars
     if (before && !nav.loading && before.url && nav.url !== before.url) {
       if (lastSelection.current.tabId === tabId) lastSelection.current = { tabId: null, url: "", text: "" };
       updateTab(tabId, { doi: "", pmid: "" });
@@ -397,6 +427,7 @@ function Browser({ services }) {
     refs.current.get(id)?.injectJavaScript(UNMUTE);
     setActiveId(id);
     activeRef.current = id;
+    setBars(false);
     // A tab paused by the playback limit resumes when it becomes active.
     if (playback.activated(id)) refs.current.get(id)?.injectJavaScript(RESUME);
     const tab = withRule(tabById(id));
@@ -489,17 +520,37 @@ function Browser({ services }) {
   onScreenRef.current = home ? [] : showMosaic ? [...tiledIds] : active ? [active.id] : [];
   const rects = layoutRects(layout, tiled.length, { active: Math.max(0, tiled.findIndex((t) => t.id === active?.id)), wide });
 
+  barsRef.current.keep = editing || Boolean(sheet) || showMosaic;
+  useEffect(() => {
+    if (barsRef.current.keep) setBars(false);
+  }, [editing, sheet, showMosaic]);
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg2 }} edges={["top", "bottom"]}>
       <StatusBar style="light" />
-      {/* Address bar, with suggestions from history and Wikipedia while typing */}
+      {/* Address bar, with suggestions from history and Wikipedia while typing.
+          Hidden while reading: a thin line with the site's name stays; tap it
+          to bring the bars back. */}
       <View style={{ zIndex: 20, elevation: 20 }}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, padding: 8, borderBottomWidth: 1, borderColor: colors.line }} {...addressPan.panHandlers}>
-        <Button label="‹" a11yLabel="Back" small onPress={() => refs.current.get(activeId)?.goBack()} style={!active?.canGoBack && { opacity: 0.4 }} />
-        <Button label="›" a11yLabel="Forward" small onPress={() => refs.current.get(activeId)?.goForward()} style={!active?.canGoForward && { opacity: 0.4 }} />
+      {barsHidden && !editing ? (
+        <Pressable
+          onPress={() => setBars(false)}
+          hitSlop={{ top: 10, bottom: 14 }}
+          accessibilityRole="button"
+          accessibilityLabel={`${hostOf(active?.url) || "Page"}. Show the address bar and buttons`}
+          style={{ height: 22, alignItems: "center", justifyContent: "center" }}
+        >
+          <Text style={{ color: colors.mute, fontSize: 12 }} numberOfLines={1}>
+            {active?.loading ? "Loading… " : ""}
+            {hostOf(active?.url) || ""}
+          </Text>
+        </Pressable>
+      ) : (
+      <View style={{ paddingHorizontal: 8, paddingTop: 2, paddingBottom: 6 }} {...addressPan.panHandlers}>
         <TextInput
-          style={[ui.input, { flex: 1, paddingVertical: 6 }]}
-          value={editing ? address : active?.url || ""}
+          style={[ui.input, { textAlign: editing ? "left" : "center", backgroundColor: colors.bg3, borderRadius: 12 }]}
+          value={editing ? address : hostOf(active?.url) || active?.url || ""}
+          accessibilityLabel="Address"
           onFocus={() => {
             setEditing(true);
             setTyped(false);
@@ -514,24 +565,17 @@ function Browser({ services }) {
             setEditing(false);
             navigate(normalizeUrl(address));
           }}
+          placeholder="Search or enter address"
+          placeholderTextColor={colors.mute}
           autoCapitalize="none"
           autoCorrect={false}
           keyboardType="url"
           returnKeyType="go"
           selectTextOnFocus
         />
-        <Button
-          label={active && services.bookmarks.has(active.url) ? "★" : "☆"}
-          small
-          onPress={() => {
-            if (!active || !/^https?:/i.test(active.url || "")) return;
-            services.bookmarks.toggle(active.url, active.title);
-            setBookmarkVersion((v) => v + 1);
-          }}
-        />
-        {/* Tap: tab list. Press and hold: new tab. */}
-        <Button label={String(tabs.length)} a11yLabel={`${tabs.length} ${tabs.length === 1 ? "tab" : "tabs"}, open the tab list`} a11yHint="Press and hold for a new tab" small onPress={() => setSheet("tabs")} onLongPress={() => addTab(HOME_URL)} />
+        {active?.loading && !editing ? <ActivityIndicator size="small" color={colors.mute} style={{ position: "absolute", right: 20, top: 14 }} /> : null}
       </View>
+      )}
       {editing ? (
         <AddressSuggestions
           query={typed ? address : ""}
@@ -595,31 +639,60 @@ function Browser({ services }) {
         })}
       </View>
 
-      {/* Bottom bar */}
-      <View style={{ flexDirection: "row", gap: 6, padding: 8, borderTopWidth: 1, borderColor: colors.line, alignItems: "center" }}>
-        <Button label={`Suggest${state.results.length ? ` (${state.results.length})` : ""}`} active={state.busy} onPress={() => setSheet("suggest")} />
-        <Button label="Capture" a11yHint="Saves this page, the selected text and a thumbnail into the trail" onPress={capture} />
-        <Button
-          label="Mosaic"
-          active={mosaic}
-          a11yHint="Press and hold to change the layout"
-          onPress={() => {
-            const on = !mosaic;
-            setMosaic(on);
-            // Once: say how to change the layout.
-            if (on && tabs.length > 1 && !mosaicHinted()) {
-              services.storage.write("mosaic.json", JSON.stringify({ layout, hinted: true }));
-              showToast({ text: "Press and hold Mosaic to change the layout." });
-            }
-          }}
-          onLongPress={() => setSheet("layout")}
-        />
-        <Button label="Trail" onPress={() => setHome(true)} />
-        <Button label="⚙︎" a11yLabel="Settings" onPress={() => setSheet("settings")} />
-        <Text style={[ui.help, { flex: 1 }]} numberOfLines={1}>
-          {state.busy ? "Searching…" : ""}
-        </Text>
-      </View>
+      {/* Bottom bar: 44 pt icon buttons. Hidden while reading. */}
+      {barsHidden ? null : (
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 4, borderTopWidth: 1, borderColor: colors.line }}>
+          <IconButton icon="chevron-back" label="Back" disabled={!active?.canGoBack} onPress={() => refs.current.get(activeId)?.goBack()} />
+          <IconButton icon="chevron-forward" label="Forward" disabled={!active?.canGoForward} onPress={() => refs.current.get(activeId)?.goForward()} />
+          <IconButton
+            icon="sparkles-outline"
+            label={`Suggestions${state.results.length ? `, ${state.results.length}` : ""}${state.busy ? ", searching" : ""}`}
+            active={state.busy}
+            badge={state.results.length}
+            onPress={() => setSheet("suggest")}
+          />
+          <IconButton icon="scan-outline" label="Capture" a11yHint="Saves this page, the selected text and a thumbnail into the trail" onPress={capture} />
+          <IconButton
+            icon="grid-outline"
+            label="Mosaic"
+            active={mosaic}
+            a11yHint="Press and hold to change the layout"
+            onPress={() => {
+              const on = !mosaic;
+              setMosaic(on);
+              // Once: say how to change the layout.
+              if (on && tabs.length > 1 && !mosaicHinted()) {
+                services.storage.write("mosaic.json", JSON.stringify({ layout, hinted: true }));
+                showToast({ text: "Press and hold Mosaic to change the layout." });
+              }
+            }}
+            onLongPress={() => setSheet("layout")}
+          />
+          {/* Tap: tab list. Press and hold: new tab. */}
+          <IconButton text={String(tabs.length)} label={`${tabs.length} ${tabs.length === 1 ? "tab" : "tabs"}, open the tab list`} a11yHint="Press and hold for a new tab" onPress={() => setSheet("tabs")} onLongPress={() => addTab(HOME_URL)} />
+          <IconButton icon="git-network-outline" label="Trail" onPress={() => setHome(true)} />
+          <IconButton icon="ellipsis-horizontal" label="More" a11yHint="Bookmark, Mosaic layout, Settings" onPress={() => setSheet("more")} />
+        </View>
+      )}
+
+      {sheet === "more" ? (
+        <Sheet visible onClose={() => setSheet(null)} title={active?.title || hostOf(active?.url) || "This page"} kicker={hostOf(active?.url) || "More"}>
+          <View style={{ gap: 8 }}>
+            <Button
+              label={active && services.bookmarks.has(active.url) ? "★ Remove bookmark" : "☆ Add bookmark"}
+              onPress={() => {
+                if (active && /^https?:/i.test(active.url || "")) {
+                  services.bookmarks.toggle(active.url, active.title);
+                  setBookmarkVersion((v) => v + 1);
+                }
+                setSheet(null);
+              }}
+            />
+            <Button label="Mosaic layout…" onPress={() => setSheet("layout")} />
+            <Button label="Settings" onPress={() => setSheet("settings")} />
+          </View>
+        </Sheet>
+      ) : null}
 
       <SuggestionsSheet visible={sheet === "suggest"} onClose={() => setSheet(null)} state={state} controller={controller} onOpen={openResult} onAsk={() => setSheet("ask")} />
       <AskSheet
@@ -717,4 +790,10 @@ function Browser({ services }) {
       ) : null}
     </SafeAreaView>
   );
+}
+
+// "en.wikipedia.org" from an address, for the compact address bar.
+function hostOf(url) {
+  const m = /^https?:\/\/([^/?#:]+)/i.exec(String(url || ""));
+  return m ? m[1].replace(/^www\./, "") : "";
 }
