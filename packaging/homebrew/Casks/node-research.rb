@@ -1,9 +1,9 @@
 cask "node-research" do
   arch arm: "arm64", intel: "x64"
 
-  version "0.11.0"
-  sha256 arm:   "21629b2903111ba092c43cc0c94c316ba7886e90026dc164c5ad2e89ce791f63",
-         intel: "f30db29842d5bac91bd402966d25ed3e0db3e4b151a7b1d6c5a312778a212bae"
+  version "0.12.0"
+  sha256 arm:   "d8f16bdd4bdeaf55fd8730e20e34bf7cfc6eb67a6a7b052819608d0f543be316",
+         intel: "cf6daba4d0db279562a737bd44e8748f67139c555928beafcb759a63a8048ea7"
 
   url "https://github.com/westernCasa/node_browser/releases/download/v#{version}/NODE-#{version}-mac-#{arch}.dmg",
       verified: "github.com/westernCasa/node_browser/"
