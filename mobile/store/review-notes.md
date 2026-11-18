@@ -20,10 +20,13 @@ AI (optional):
 
 Permissions:
 - Local network: requested only if the person adds a model server on their own network. Reviewers don't need to test this.
-- Camera, microphone and location are used only when a website asks; the system asks first.
+- Camera: used to scan the sync pairing code (Settings → Sync → Scan code), only while the scanner is open, and when a website asks; the system asks first.
+- Microphone and location are used only when a website asks; the system asks first.
 
 Scripts in pages: NODE injects scripts that are bundled in the app. They read the page's keywords, DOI and selected text, center and mute videos, and report scrolling. NODE does not download or run code from a server. Messages from pages are checked against a fixed list of types and can't reach files, keys or settings.
 
-Data: NODE has no accounts and no analytics. Trails and settings stay on the device. Settings → Your data → Delete all NODE data removes everything.
+Sync (optional, off by default): Settings → Sync pairs the phone with NODE on a computer by scanning a QR code the computer shows; no account. Trails are encrypted on the device with AES-256-GCM (the system's own encryption) using a key from the pairing code, so the developer's server can't read them. Reviewers don't need a computer to review the app; everything else works without sync.
+
+Data: NODE has no accounts and no analytics. Trails and settings stay on the device unless the person turns on sync (end-to-end encrypted, above). Settings → Your data → Delete all NODE data removes everything and stops syncing.
 
 Contact: sven@western.casa

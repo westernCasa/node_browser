@@ -11,6 +11,7 @@ const Crypto = require("../core/sync-crypto");
 let n = 0;
 const ok = (name) => console.log(`ok ${++n} - ${name}`);
 
+(async () => {
 // ---- pairing and encryption ----
 const code = Crypto.newPairingCode();
 {
@@ -28,13 +29,13 @@ const code = Crypto.newPairingCode();
   assert.strictEqual(Crypto.parsePairingCode("NODE-SYNC1:short"), null);
   assert.strictEqual(Crypto.parsePairingCode("https://example.com"), null);
   assert.throws(() => Crypto.keysFrom("nonsense"), /not a NODE sync code/);
-  const bytes = Crypto.seal({ hello: "rye", n: [1, 2] }, a.key);
-  assert.deepStrictEqual(Crypto.open(bytes, a.key), { hello: "rye", n: [1, 2] });
+  const bytes = await Crypto.seal({ hello: "rye", n: [1, 2] }, a.key);
+  assert.deepStrictEqual(await Crypto.open(bytes, a.key), { hello: "rye", n: [1, 2] });
   assert.ok(!Buffer.from(bytes).toString("latin1").includes("rye"), "the server sees no text");
-  assert.throws(() => Crypto.open(bytes, Crypto.keysFrom(Crypto.newPairingCode()).key), /could not be decrypted/);
+  await assert.rejects(Crypto.open(bytes, Crypto.keysFrom(Crypto.newPairingCode()).key), /could not be decrypted/);
   const bad = Uint8Array.from(bytes);
   bad[40] ^= 1;
-  assert.throws(() => Crypto.open(bad, a.key), /could not be decrypted/);
+  await assert.rejects(Crypto.open(bad, a.key), /could not be decrypted/);
   ok("a pairing code gives the same group, token and key on both devices; batches are sealed and checked");
 }
 
@@ -52,23 +53,23 @@ const phone = mkDevice("phone", "bbbb");
 phone.store.current(); // the phone has its own trail open
 // The relay: sealed batches, in order, never back to the sender.
 const relay = [];
-const push = (d) => {
-  for (const b of d.engine.outgoing()) relay.push({ from: d.engine.device, bytes: Crypto.seal(b, keys.key) });
+const push = async (d) => {
+  for (const b of d.engine.outgoing()) relay.push({ from: d.engine.device, bytes: await Crypto.seal(b, keys.key) });
   d.engine.sent();
 };
-const pull = (d, seen) => {
+const pull = async (d, seen) => {
   const out = [];
-  for (let i = seen.n; i < relay.length; i++) if (relay[i].from !== d.engine.device) out.push(d.engine.apply(Crypto.open(relay[i].bytes, keys.key)));
+  for (let i = seen.n; i < relay.length; i++) if (relay[i].from !== d.engine.device) out.push(d.engine.apply(await Crypto.open(relay[i].bytes, keys.key)));
   seen.n = relay.length;
   return out;
 };
 const macSeen = { n: 0 };
 const phoneSeen = { n: 0 };
-const syncBoth = () => {
-  push(mac);
-  pull(phone, phoneSeen);
-  push(phone);
-  return pull(mac, macSeen);
+const syncBoth = async () => {
+  await push(mac);
+  await pull(phone, phoneSeen);
+  await push(phone);
+  return await pull(mac, macSeen);
 };
 const tick = (ms = 60000) => (clock += ms);
 
@@ -91,7 +92,7 @@ mac.store.freeNote(rye, { x: 400, y: 400, text: "Try 80% hydration" });
 mac.store.setView(rye, { x: 120, y: -40, z: 0.5 });
 {
   const before = JSON.stringify(mac.store.snapshot(rye).cards);
-  syncBoth();
+  await syncBoth();
   const got = phone.store.snapshot(rye);
   assert.ok(phone.store.has(rye), "the phone has the trail");
   assert.strictEqual(got.trail.name, "Rye breads");
@@ -106,7 +107,7 @@ mac.store.setView(rye, { x: 120, y: -40, z: 0.5 });
 }
 {
   const before = relay.length;
-  const out = syncBoth();
+  const out = await syncBoth();
   assert.strictEqual(mac.engine.pending(), 0);
   assert.strictEqual(relay.length, before, `nothing new to send: ${relay.length - before}`);
   assert.deepStrictEqual(out, []);
@@ -121,9 +122,9 @@ mac.store.freeNote(rye, { x: 800, y: 0, text: "Ask the miller" });
 tick();
 mac.store.renameGroup(rye, g.id, "Acids (Mac, later)");
 {
-  syncBoth();
-  push(mac);
-  pull(phone, phoneSeen);
+  await syncBoth();
+  await push(mac);
+  await pull(phone, phoneSeen);
   for (const d of [mac, phone]) {
     const s = d.store.snapshot(rye);
     assert.ok(s.cards.some((c) => c.id === phonePage.id), `${d.store.device}: the phone's page`);
@@ -142,43 +143,43 @@ mac.store.renameGroup(rye, g.id, "Acids (Mac, later)");
   phone.store.moveCard(rye, p1.id, 10, 10);
   tick();
   mac.store.moveCard(rye, p1.id, 500, 500);
-  push(phone); // the phone's earlier move reaches the relay first
-  pull(mac, macSeen);
+  await push(phone); // the phone's earlier move reaches the relay first
+  await pull(mac, macSeen);
   assert.strictEqual(mac.store.card(rye, p1.id).x, 500, "the Mac's later move is kept");
-  push(mac);
-  pull(phone, phoneSeen);
+  await push(mac);
+  await pull(phone, phoneSeen);
   assert.strictEqual(phone.store.card(rye, p1.id).x, 500, "and wins on the phone");
   ok("a card moved on both devices ends where it was moved last");
 }
 // Deleting a trail deletes it everywhere; Undo brings it back everywhere.
 const other = phone.store.create("Starters").trail.id;
 visit(phone, other, "https://example.com/starter", "Starter smells");
-syncBoth();
+await syncBoth();
 assert.ok(mac.store.has(other));
 {
   tick();
   mac.store.remove(other);
-  syncBoth();
-  const res = pull(phone, phoneSeen);
+  await syncBoth();
+  const res = await pull(phone, phoneSeen);
   assert.ok(!phone.store.has(other), "deleted on the phone too");
   assert.ok(phone.store.deletedIds().includes(other), "kept until purge, for Undo");
   tick();
   mac.store.restore(other);
-  push(mac);
-  const back = pull(phone, phoneSeen);
+  await push(mac);
+  const back = await pull(phone, phoneSeen);
   assert.ok(phone.store.has(other) && back.some((r) => r.restored.includes(other)), JSON.stringify(back));
   assert.notStrictEqual(phone.store.index.current, other, "brought back, not opened");
   // The phone had already purged the files: the Mac sends everything again.
   tick();
   mac.store.remove(other);
-  push(mac);
-  pull(phone, phoneSeen);
+  await push(mac);
+  await pull(phone, phoneSeen);
   phone.store.purge();
   assert.ok(!phone.store.get(other), "files gone on the phone");
   tick();
   mac.store.restore(other);
-  push(mac);
-  pull(phone, phoneSeen);
+  await push(mac);
+  await pull(phone, phoneSeen);
   assert.strictEqual(phone.store.get(other)?.trail.name, "Starters");
   assert.ok(phone.store.snapshot(other).cards.some((c) => c.title === "Starter smells"));
   assert.ok(res !== undefined);
@@ -188,13 +189,13 @@ assert.ok(mac.store.has(other));
 {
   tick();
   phone.store.remove(other);
-  push(phone);
+  await push(phone);
   tick();
   mac.store.freeNote(other, { x: 0, y: 0, text: "late note" });
-  pull(mac, macSeen);
+  await pull(mac, macSeen);
   assert.ok(!mac.store.has(other), "deleted on the Mac, though it had a newer note");
-  push(mac);
-  pull(phone, phoneSeen);
+  await push(mac);
+  await pull(phone, phoneSeen);
   assert.ok(!phone.store.has(other));
   ok("a trail deleted on one device stays deleted, even with later edits elsewhere");
 }
@@ -202,9 +203,9 @@ assert.ok(mac.store.has(other));
 {
   const ipad = mkDevice("phone", "cccc");
   mac.engine.resetAll();
-  push(mac);
+  await push(mac);
   const seen = { n: 0 };
-  pull(ipad, seen);
+  await pull(ipad, seen);
   assert.strictEqual(ipad.store.get(rye)?.trail.name, "Rye breads");
   const sorted = (d) => d.store.snapshot(rye).cards.slice().sort((a, b) => (a.id < b.id ? -1 : 1));
   assert.deepStrictEqual(sorted(ipad), sorted(mac));
@@ -216,17 +217,17 @@ assert.ok(mac.store.has(other));
 {
   tick();
   phone.store.renameGroup(rye, g.id, "Phone, newest");
-  push(phone);
-  pull(mac, macSeen);
+  await push(phone);
+  await pull(mac, macSeen);
   tick();
   phone.store.renameGroup(rye, g.id, "Phone, newer still");
   // The Mac resends everything before it has the phone's last rename.
   mac.engine.resetAll();
-  push(mac);
-  pull(phone, phoneSeen);
+  await push(mac);
+  await pull(phone, phoneSeen);
   assert.strictEqual(phone.store.get(rye).groups.find((x) => x.id === g.id).label, "Phone, newer still");
-  push(phone);
-  pull(mac, macSeen);
+  await push(phone);
+  await pull(mac, macSeen);
   assert.strictEqual(mac.store.get(rye).groups.find((x) => x.id === g.id).label, "Phone, newer still");
   ok("a full resend sends items with their own times, so it never undoes a newer edit");
 }
@@ -257,7 +258,6 @@ assert.ok(mac.store.has(other));
 }
 
 // Through the relay itself: the Worker's code with an in-memory bucket.
-(async () => {
   const { RelayClient, syncOnce } = require("../core/sync-relay");
   const { default: worker } = await import("../worker/src/index.js");
   const items = new Map();
@@ -315,7 +315,7 @@ assert.ok(mac.store.has(other));
   ok("a rename on the phone reaches the Mac; the relay holds nothing readable");
 
   await iphone.client.leave(mbp.engine.device);
-  await assert.rejects(mbp.round().then(() => mbp.client.post(Crypto.seal({}, k.key))), (e) => e.unpaired === true);
+  await assert.rejects(mbp.round().then(async () => mbp.client.post(await Crypto.seal({}, k.key))), (e) => e.unpaired === true);
   ok("an unpaired device is told to pair again");
   console.log(`\n${n} checks passed`);
 })().catch((e) => {

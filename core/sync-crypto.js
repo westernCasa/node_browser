@@ -1,6 +1,10 @@
 // Sync pairing and encryption (B50). No Electron, DOM or Node-only imports:
-// the phone app uses it too. Uses @noble (audited, pure JavaScript) and the
-// platform's crypto.getRandomValues.
+// the phone app uses it too. Key derivation uses @noble/hashes (HKDF-SHA256,
+// pure JavaScript; hashing, not encryption). Encryption is AES-256-GCM done by
+// the platform itself: WebCrypto on desktop (Electron, Node), and on the phone
+// iOS CryptoKit and Android's javax.crypto through expo-crypto (setAes). Using
+// only the operating system's encryption keeps the phone app exempt from
+// export documentation on the App Store (decided 2026-11-18).
 //
 // Pairing: one device makes a 32-byte secret and shows it as a QR code
 // ("NODE-SYNC1:<base64url>"); the other scans it. From the secret, each device
@@ -11,15 +15,15 @@
 //   - key:   the encryption key (32 bytes). Never sent anywhere.
 // The relay never sees the secret or the key, so it cannot read a batch.
 //
-// A sealed batch: "NS1" | 24-byte nonce | XChaCha20-Poly1305(JSON).
+// A sealed batch: "NS2" | 12-byte nonce | AES-256-GCM(JSON) with its 16-byte
+// tag at the end.
 
-const { xchacha20poly1305 } = require("@noble/ciphers/chacha");
 const { hkdf } = require("@noble/hashes/hkdf");
 const { sha256 } = require("@noble/hashes/sha256");
 const { randomBytes, bytesToHex } = require("@noble/hashes/utils");
 
 const PREFIX = "NODE-SYNC1:";
-const MAGIC = [0x4e, 0x53, 0x31]; // "NS1"
+const MAGIC = [0x4e, 0x53, 0x32]; // "NS2"
 // UTF-8 without TextEncoder or TextDecoder, which not every phone runtime has.
 function utf8(str) {
   const out = [];
@@ -93,21 +97,46 @@ function keysFrom(code) {
 // What the relay stores to check the auth token.
 const authHash = (auth) => bytesToHex(sha256(utf8(auth)));
 
-function seal(obj, key) {
-  const nonce = randomBytes(24);
-  const body = xchacha20poly1305(key, nonce).encrypt(utf8(JSON.stringify(obj)));
-  const out = new Uint8Array(3 + 24 + body.length);
+// AES-256-GCM: { encrypt(key, nonce, plain) → ciphertext + tag,
+// decrypt(key, nonce, ciphertextAndTag) → plain }, all Uint8Array, async.
+let aesImpl = null;
+function setAes(impl) {
+  aesImpl = impl;
+}
+function webCryptoAes() {
+  const subtle = globalThis.crypto && globalThis.crypto.subtle;
+  if (!subtle) return null;
+  const keyFor = (key, use) => subtle.importKey("raw", key, { name: "AES-GCM" }, false, [use]);
+  return {
+    async encrypt(key, nonce, plain) {
+      return new Uint8Array(await subtle.encrypt({ name: "AES-GCM", iv: nonce }, await keyFor(key, "encrypt"), plain));
+    },
+    async decrypt(key, nonce, body) {
+      return new Uint8Array(await subtle.decrypt({ name: "AES-GCM", iv: nonce }, await keyFor(key, "decrypt"), body));
+    },
+  };
+}
+function aes() {
+  if (!aesImpl) aesImpl = webCryptoAes();
+  if (!aesImpl) throw new Error("No AES-GCM on this device.");
+  return aesImpl;
+}
+
+async function seal(obj, key) {
+  const nonce = randomBytes(12);
+  const body = await aes().encrypt(key, nonce, utf8(JSON.stringify(obj)));
+  const out = new Uint8Array(3 + 12 + body.length);
   out.set(MAGIC, 0);
   out.set(nonce, 3);
-  out.set(body, 27);
+  out.set(body, 15);
   return out;
 }
-function open(bytes, key) {
+async function open(bytes, key) {
   const b = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
-  if (b.length < 27 + 16 || b[0] !== MAGIC[0] || b[1] !== MAGIC[1] || b[2] !== MAGIC[2]) throw new Error("Not a NODE sync batch.");
+  if (b.length < 15 + 16 || b[0] !== MAGIC[0] || b[1] !== MAGIC[1] || b[2] !== MAGIC[2]) throw new Error("Not a NODE sync batch.");
   let plain;
   try {
-    plain = xchacha20poly1305(key, b.subarray(3, 27)).decrypt(b.subarray(27));
+    plain = await aes().decrypt(key, b.slice(3, 15), b.slice(15));
   } catch {
     throw new Error("A sync batch could not be decrypted (wrong key or changed on the way).");
   }
@@ -116,4 +145,4 @@ function open(bytes, key) {
 // A random device id (not derived from anything about the device).
 const newDeviceId = () => bytesToHex(randomBytes(8));
 
-module.exports = { utf8, fromUtf8, newPairingCode, parsePairingCode, keysFrom, authHash, seal, open, newDeviceId, b64url, fromB64url, PREFIX };
+module.exports = { setAes, utf8, fromUtf8, newPairingCode, parsePairingCode, keysFrom, authHash, seal, open, newDeviceId, b64url, fromB64url, PREFIX };
