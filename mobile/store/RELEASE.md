@@ -11,7 +11,7 @@ Steps in order. Commands run on the Mac in `~/Projects/scout-mobile/mobile` (the
    ```
    npm install -g eas-cli
    eas login            # your Expo account (svenm3)
-   eas init             # links this app to an Expo project; writes the project id into app.json
+   eas init             # links this app to an Expo project (done: id 8e40d533-abe7-46e4-b2e4-5075b399a74e, in app.json)
    ```
    If `eas login` fails like `expo login` did, set `EXPO_TOKEN` from expo.dev → Access tokens first (see the README).
 

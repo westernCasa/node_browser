@@ -97,7 +97,10 @@
     ],
     "backgroundColor": "#121212",
     "extra": {
-      "reportEmail": "sven@western.casa"
+      "reportEmail": "sven@western.casa",
+      "eas": {
+        "projectId": "8e40d533-abe7-46e4-b2e4-5075b399a74e"
+      }
     },
     "runtimeVersion": {
       "policy": "fingerprint"
