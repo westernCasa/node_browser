@@ -8,13 +8,13 @@ table{border-collapse:collapse;width:100%;margin:12px 0;font-size:.95em} th,td{b
 @media (prefers-color-scheme:dark){body{background:#111;color:#eee} th{background:#222} th,td{border-color:#333} a{color:#8ab4ff}}
 </style></head><body>
 <h1>NODE Research Browser: Privacy Policy (iPhone, iPad and Android)</h1>
-<p>Effective date: November 16, 2026
+<p>Effective date: November 18, 2026
 Contact: sven@western.casa</p>
 <p>NODE is a web browser for research. This policy covers the NODE apps for iPhone, iPad and Android.</p>
 <h2>The short version</h2>
 <ul>
 <li>NODE has no accounts, no ads, no analytics and no tracking.</li>
-<li>Your trails, history, bookmarks, captures and settings are kept on your phone. We (the NODE developer) never receive them.</li>
+<li>Your trails, history, bookmarks, captures and settings are kept on your phone. We (the NODE developer) never receive them in a form we can read. If you turn on sync, your trails go to your other devices encrypted with a key only your devices have (see Sync below).</li>
 <li>Your API keys and your Unpaywall email are kept in your phone's secure storage (iOS Keychain, Android Keystore). We never receive them.</li>
 <li>Some features send data to other services, but only when you use them. Each is listed below.</li>
 </ul>
@@ -104,7 +104,15 @@ Contact: sven@western.casa</p>
 </tr>
 </tbody>
 </table>
-<p>Each of these services handles the data under its own privacy policy. NODE sends no data to the NODE developer.</p>
+<p>Each of these services handles the data under its own privacy policy. Apart from sync (below), NODE sends no data to the NODE developer.</p>
+<h2>Sync (off until you pair a device)</h2>
+<p>If you pair NODE on your phone with NODE on your computer (Settings → Sync), your trails sync between your devices: cards, links, groups, notes, questions and the timeline. Screenshots, capture thumbnails and audio stay on the device that made them.</p>
+<ul>
+<li>Trails are encrypted on your device (AES-256-GCM, done by your phone's own encryption) with a key made from the pairing code. The key never leaves your devices, so NODE's sync server can't read your trails.</li>
+<li>The sync server passes the encrypted batches between your devices and deletes each one once your other devices have it, after 30 days at most.</li>
+<li>The server keeps a random id for each paired device (made by the app, not linked to you or your phone), when it joined and last synced, and how far it has read. Your network address is used only to limit how many requests one address can make, and is not stored.</li>
+<li>No account is needed. To stop: Settings → Sync → Stop syncing on this phone. Delete all NODE data stops syncing too. The last device to stop removes everything the server kept for your devices.</li>
+</ul>
 <p>The Demo AI runs on your phone and sends nothing.</p>
 <h2>Reporting an AI answer</h2>
 <p>If you tap Report on an AI answer, NODE opens an email to us with the question, the answer, the page address and the app version. You can read and change it before sending. We use these reports only to fix problems.</p>
@@ -122,7 +130,11 @@ Contact: sven@western.casa</p>
 <td>Only if you add an AI model server on your own network</td>
 </tr>
 <tr>
-<td>Camera, microphone, location</td>
+<td>Camera</td>
+<td>To scan the pairing code for sync, only while the scanner is open; and when a website you visit asks, after your phone asks you</td>
+</tr>
+<tr>
+<td>Microphone, location</td>
 <td>Only when a website you visit asks; your phone asks you first</td>
 </tr>
 </tbody>
