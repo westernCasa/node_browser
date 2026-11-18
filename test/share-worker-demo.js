@@ -163,6 +163,23 @@ function memoryBucket() {
     assert.deepStrictEqual(list.body.batches, []);
     ok("sync: a batch is deleted once every other device has it");
 
+    // A check with nothing new is one read of the "newest batch" marker, not a
+    // list; full=1 lists anyway; a new batch is seen at once.
+    let lists = 0;
+    const realList = env.TRAILS.list;
+    env.TRAILS.list = (o) => (lists++, realList.call(env.TRAILS, o));
+    list = await sjson(`batches?device=${phone}`, { headers: auth });
+    assert.deepStrictEqual([list.body.batches, lists], [[], 0]);
+    await sjson(`batches?device=${phone}&full=1`, { headers: auth });
+    assert.strictEqual(lists, 1, "full=1 lists anyway");
+    const b4 = await post(mac, Crypto.seal({ hello: 4 }, keys.key));
+    list = await sjson(`batches?device=${phone}`, { headers: auth });
+    assert.deepStrictEqual(list.body.batches, [b4.body.batch]);
+    env.TRAILS.list = realList;
+    ack = await sjson(`ack?device=${phone}`, { method: "POST", headers: auth, body: JSON.stringify({ upTo: list.body.last }) });
+    assert.strictEqual(ack.body.deleted, 1);
+    ok("sync: a check with nothing new reads one marker instead of listing; a new batch shows at once");
+
     // A device away for over 30 days is told it missed batches.
     const rec = env.TRAILS.items.get(`s/d/${G}/${phone}`);
     rec.customMetadata.seen = String(Date.now() - 31 * 864e5);

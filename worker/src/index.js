@@ -94,6 +94,8 @@ async function upload(request, env) {
 //   s/d/<group>/<device>    a paired device: when it joined, was last seen,
 //                           and the last batch it has (cursor)
 //   s/b/<group>/<time>-<random>-<device>   a batch, as the device sealed it ("NS2")
+//   s/h/<group>             the newest batch's name, so a check with nothing
+//                           new is one read, not a list (devices check often)
 // A batch is deleted once every other device has it, and after 30 days at
 // most (lifecycle rule on s/b/, and a date check here). A device not seen for
 // 30 days is told it missed batches, and asks the others to send everything.
@@ -134,6 +136,11 @@ async function syncDevices(env, group) {
     if (o) out.push({ id: key.split("/").pop(), joined: Number(o.customMetadata?.joined || 0), seen: Number(o.customMetadata?.seen || 0), cursor: o.customMetadata?.cursor || "" });
   }
   return out;
+}
+async function syncDevice(env, group, id) {
+  if (!SYNC_DEVICE.test(id)) return null;
+  const o = await env.TRAILS.get(`s/d/${group}/${id}`);
+  return o ? { id, joined: Number(o.customMetadata?.joined || 0), seen: Number(o.customMetadata?.seen || 0), cursor: o.customMetadata?.cursor || "" } : null;
 }
 const putDevice = (env, group, d) => env.TRAILS.put(`s/d/${group}/${d.id}`, new Uint8Array(0), { customMetadata: { joined: String(d.joined), seen: String(d.seen), cursor: d.cursor || "" } });
 // Deletes the batches every other device has (devices not seen for 30 days
@@ -183,19 +190,20 @@ async function sync(request, env, url, group, rest) {
   }
   if (!g || g.customMetadata?.auth !== hash) return fail(403, "Pair this device again.");
   const device = url.searchParams.get("device") || "";
-  const devices = await syncDevices(env, group);
-  const me = devices.find((d) => d.id === device);
-  if (rest === "devices" && method === "GET") return json({ devices: devices.map(({ id, joined, seen }) => ({ id, joined, seen })) });
+  if (rest === "devices" && method === "GET") return json({ devices: (await syncDevices(env, group)).map(({ id, joined, seen }) => ({ id, joined, seen })) });
   const leave = rest.match(/^devices\/([0-9a-f]{16})$/);
   if (leave && method === "DELETE") {
     await env.TRAILS.delete(`s/d/${group}/${leave[1]}`);
-    const left = devices.filter((d) => d.id !== leave[1]);
+    const left = (await syncDevices(env, group)).filter((d) => d.id !== leave[1]);
     if (!left.length) {
       for (const key of await listAll(env, `s/b/${group}/`)) await env.TRAILS.delete(key);
+      await env.TRAILS.delete(`s/h/${group}`);
       await env.TRAILS.delete(`s/g/${group}`);
     } else await syncClean(env, group, left);
     return new Response(null, { status: 204 });
   }
+  // One read for this device, not a list of all of them.
+  const me = await syncDevice(env, group, device);
   if (!me) return fail(403, "This device was unpaired. Pair it again to sync.");
   if (rest === "batches" && method === "POST") {
     const length = Number(request.headers.get("content-length") || 0);
@@ -208,14 +216,20 @@ async function sync(request, env, url, group, rest) {
     if (body.length < 3 + 12 + 16 || SYNC_MAGIC.some((b, i) => body[i] !== b)) return fail(400, "Not an encrypted NODE sync batch.");
     const name = `${String(Date.now()).padStart(13, "0")}-${randomString(8)}-${device}`;
     await env.TRAILS.put(`s/b/${group}/${name}`, body, { httpMetadata: { contentType: "application/octet-stream" } });
+    await env.TRAILS.put(`s/h/${group}`, new Uint8Array(0), { customMetadata: { last: name } });
     return json({ batch: name }, 201);
   }
   if (rest === "batches" && method === "GET") {
     const after = url.searchParams.get("after") || me.cursor || "";
-    const keys = await listAll(env, `s/b/${group}/`, { startAfter: after ? `s/b/${group}/${after}` : undefined, max: 200 });
-    const names = keys.map((k) => k.split("/").pop()).filter((n) => SYNC_BATCH.test(n) && Date.now() - Number(n.slice(0, 13)) <= SYNC_DAYS * DAY_MS);
     // "Last seen" is written at most once an hour, to keep writes down.
     if (Date.now() - me.seen > 60 * 60 * 1000) await putDevice(env, group, { ...me, seen: Date.now() });
+    // Nothing newer than this device's cursor: answer without listing. Two
+    // batches sent at once can leave the marker one behind, so devices ask
+    // for a full list now and then (full=1).
+    const head = url.searchParams.get("full") ? null : await env.TRAILS.get(`s/h/${group}`);
+    if (head && after && String(head.customMetadata?.last || "") <= after) return json({ batches: [], last: "", more: false });
+    const keys = await listAll(env, `s/b/${group}/`, { startAfter: after ? `s/b/${group}/${after}` : undefined, max: 200 });
+    const names = keys.map((k) => k.split("/").pop()).filter((n) => SYNC_BATCH.test(n) && Date.now() - Number(n.slice(0, 13)) <= SYNC_DAYS * DAY_MS);
     // The last name is returned even for the device's own batches, so its
     // cursor can move past them.
     return json({ batches: names.filter((n) => !n.endsWith(`-${device}`)).slice(0, 100), last: names.slice(0, 100).at(-1) || "", more: names.length > 100 });
@@ -238,7 +252,7 @@ async function sync(request, env, url, group, rest) {
     if (!SYNC_BATCH.test(upTo)) return fail(400, "Not an ack.");
     const updated = { ...me, seen: Date.now(), cursor: upTo > me.cursor ? upTo : me.cursor };
     await putDevice(env, group, updated);
-    const deleted = await syncClean(env, group, devices.map((d) => (d.id === me.id ? updated : d)));
+    const deleted = await syncClean(env, group, (await syncDevices(env, group)).map((d) => (d.id === me.id ? updated : d)));
     return json({ deleted });
   }
   return fail(404, "Not found.");

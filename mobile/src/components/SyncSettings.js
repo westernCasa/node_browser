@@ -69,6 +69,20 @@ export default function SyncSettings({ sync }) {
   const [msg, setMsg] = useState("");
   const [name, setName] = useState(() => sync.info().device?.name || "");
   useEffect(() => sync.on((_e, i) => setInfo(i)), [sync]);
+  // "Syncing…": at once after Sync now; for background rounds only past
+  // 400 ms, so the line doesn't flicker every 10 s.
+  const [manual, setManual] = useState(false);
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    if (!info.busy) {
+      setSlow(false);
+      setManual(false);
+      return undefined;
+    }
+    const t = setTimeout(() => setSlow(true), 400);
+    return () => clearTimeout(t);
+  }, [info.busy]);
+  const syncing = info.paired && info.busy && (manual || slow);
 
   const pair = async (text) => {
     setScanning(false);
@@ -87,7 +101,7 @@ export default function SyncSettings({ sync }) {
       <Text style={ui.kicker} accessibilityRole="header">
         Sync
       </Text>
-      <Text style={[ui.help, { color: info.state === "ok" ? colors.ok : info.state === "unpaired" || info.state === "error" ? colors.bad : colors.mute }]}>{stateText(info)}</Text>
+      <Text style={[ui.help, { color: info.state === "ok" ? colors.ok : info.state === "unpaired" || info.state === "error" ? colors.bad : colors.mute }]}>{syncing ? "On · syncing…" : stateText(info)}</Text>
       <Text style={[ui.help, { marginTop: 4 }]}>
         Sync your trails with NODE on your computer. Pair once with the QR code; no account. Trails are encrypted on your devices before they are sent, so the sync server can't read them, and it deletes them once your other devices have them (30 days at most). Screenshots and audio stay on the device that made them.
       </Text>
@@ -128,7 +142,7 @@ export default function SyncSettings({ sync }) {
           ))}
           {!info.peers.length ? <Text style={[ui.help, { marginTop: 6 }]}>No other device yet. Waiting for your computer to sync.</Text> : null}
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
-            <Button label="Sync now" small onPress={async () => setInfo(await sync.now())} />
+            <Button label={syncing ? "Syncing…" : "Sync now"} small disabled={syncing} onPress={async () => (setManual(true), setInfo(await sync.now()))} />
             <Button label="Stop syncing on this phone" small onPress={async () => (setInfo(await sync.stop()), setMsg("This phone no longer syncs. Its trails stay here, and your other devices keep theirs."))} />
           </View>
         </>

@@ -106,12 +106,24 @@ const now = () => clock;
   ok("a trail deleted on the Mac goes here, with the Mac's name for the notice");
 
   // Restart: pairing and progress are kept.
-  sync = createSync({ storage, trails, research, secret, fetch: phoneFetch, api: "https://relay.test", now });
+  sync = createSync({ storage, trails, research, secret, fetch: phoneFetch, api: "https://relay.test", now, afterEditMs: 20 });
   info = await sync.start();
   assert.ok(info.paired && info.peers.length === 1);
   await sync.now();
   assert.strictEqual(sync.info().state, "ok");
   ok("after a restart the phone is still paired");
+
+  // An edit goes out by itself, shortly after; info.busy while a round runs.
+  const open = research.current.id;
+  const seen = [];
+  const offBusy = sync.on((_e, i) => seen.push(i.busy));
+  trails.freeNote(open, { x: 0, y: 0, text: "sent without Sync now" });
+  await new Promise((res) => setTimeout(res, 300));
+  offBusy();
+  await macRound();
+  assert.ok(macStore.snapshot(open).cards.some((c) => c.text === "sent without Sync now"));
+  assert.ok(seen.includes(true) && seen.at(-1) === false && seen.length <= 4, JSON.stringify(seen));
+  ok("an edit is sent by itself a moment later; the round shows as busy, then done");
 
   // Removed on the Mac: told to scan again. Stop syncing clears the code.
   await mac.client.leave(info.device.id);

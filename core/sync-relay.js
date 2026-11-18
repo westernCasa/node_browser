@@ -70,8 +70,10 @@ class RelayClient {
   async join() {
     return (await this.call("join", { method: "POST", json: { device: this.device } })).json();
   }
-  async list(after = "") {
-    return (await this.call(`batches${after ? `?after=${encodeURIComponent(after)}` : ""}`)).json();
+  // full: list even when the relay's "newest batch" marker says nothing is new.
+  async list(after = "", { full = false } = {}) {
+    const q = [after && `after=${encodeURIComponent(after)}`, full && "full=1"].filter(Boolean).join("&");
+    return (await this.call(`batches${q ? `?${q}` : ""}`)).json();
   }
   async get(name) {
     if (this.text) return Crypto.fromB64url(await (await this.call(`batches/${name}?as=b64url`)).text());
@@ -91,8 +93,9 @@ class RelayClient {
   }
 }
 
-// state: { cursor, joined, peers: { id: { name, kind, at } } }, kept by the
-// caller (desktop: userData/sync/relay.json).
+// state: { cursor, joined, rounds, peers: { id: { name, kind, at } } }, kept
+// by the caller (desktop: userData/sync/relay.json).
+const FULL_EVERY = 6; // every 6th round lists the batches in full
 async function syncOnce({ engine, client, key, state, me = {}, now = () => Date.now() }) {
   const out = { received: 0, sent: 0, trails: new Set(), added: [], deleted: [], restored: [], peers: false };
   const head = { name: String(me.name || "").slice(0, 80), kind: me.kind || "desktop" };
@@ -112,9 +115,10 @@ async function syncOnce({ engine, client, key, state, me = {}, now = () => Date.
       engine.sent();
     }
   }
-  // 2. Read.
+  // 2. Read. Most rounds are one cheap check; every few rounds lists in full.
+  state.rounds = ((state.rounds || 0) + 1) % FULL_EVERY;
   for (let page = 0; page < 20; page++) {
-    const l = await client.list(state.cursor || "");
+    const l = await client.list(state.cursor || "", { full: state.rounds === 0 || page > 0 });
     for (const name of l.batches || []) {
       let batch;
       try {

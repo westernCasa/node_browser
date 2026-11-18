@@ -3935,6 +3935,17 @@ const syncAgo = (t) => {
   return new Date(t).toLocaleDateString();
 };
 let syncPeerIds = null;
+// "Syncing…" while a round runs. Background rounds usually take a moment, so
+// they show it only past 400 ms (no flicker every 10 s); Sync now shows it at
+// once.
+let syncBusyTimer = null;
+let syncManual = false;
+function paintSyncBusy(on) {
+  const btn = syncEls("sync-now-btn");
+  btn.disabled = on;
+  btn.textContent = on ? "Syncing…" : "Sync now";
+  if (on) syncEls("sync-state").textContent = "On · syncing…";
+}
 function paintSync(info) {
   if (!info || !syncEls("sync-box")) return;
   // A device that just scanned the QR code: close the code and say so.
@@ -3952,6 +3963,14 @@ function paintSync(info) {
     ? info.state === "unpaired" ? info.message : "Off. Your trails stay on this computer."
     : info.state === "ok" ? `On · synced ${syncAgo(info.at)}${info.pending ? ` · ${info.pending} changes waiting` : ""}`
     : info.state === "offline" || info.state === "error" ? `On · ${info.message}` : info.state === "unpaired" ? info.message : "On · syncing…";
+  clearTimeout(syncBusyTimer);
+  if (paired && info.busy) {
+    if (syncManual) paintSyncBusy(true);
+    else syncBusyTimer = setTimeout(() => paintSyncBusy(true), 400);
+  } else {
+    syncManual = false;
+    paintSyncBusy(false);
+  }
   syncEls("sync-devices").hidden = !paired;
   syncEls("sync-now-btn").hidden = syncEls("sync-stop-btn").hidden = !paired;
   syncEls("sync-enter-btn").hidden = paired;
@@ -4026,7 +4045,11 @@ if (syncEls("sync-box") && api?.syncStatus) {
     syncEls("sync-code-input").value = "";
     paintSync(r.info);
   };
-  syncEls("sync-now-btn").onclick = async () => paintSync(await api.syncNow());
+  syncEls("sync-now-btn").onclick = async () => {
+    syncManual = true;
+    paintSyncBusy(true);
+    paintSync(await api.syncNow());
+  };
   syncEls("sync-stop-btn").onclick = async () => {
     syncEls("sync-pair").hidden = true;
     paintSync(await api.syncStop());

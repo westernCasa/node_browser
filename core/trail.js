@@ -109,6 +109,9 @@ class TrailStore {
     this.now = now;
     this.cache = new Map(); // id -> { data, events, view }
     this.index = this.readJson("index.json") || { v: FORMAT, current: "", order: [] };
+    // Called after a trail's data or events change (not its view), so sync
+    // (B50) can send changes soon. Set by the app.
+    this.onChange = null;
   }
 
   // ---- storage helpers ----
@@ -163,6 +166,7 @@ class TrailStore {
     const t = this.load(id);
     if (!t) return;
     this.writeJson(`${id}/trail.json`, t.data);
+    this.onChange?.(id);
   }
   saveView(id) {
     const t = this.load(id);
@@ -401,6 +405,7 @@ class TrailStore {
     if (t.events.length > 1 && t.events.at(-2).at > e.at) t.events.sort((a, b) => a.at - b.at);
     this.appendLine(`${id}/events.jsonl`, JSON.stringify(e));
     if (e.at > t.data.trail.lastAt) t.data.trail.lastAt = e.at;
+    this.onChange?.(id);
     return e;
   }
   events(id = this.index.current) {

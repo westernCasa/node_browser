@@ -18,7 +18,9 @@ const { SHARE_API } = require("../../core/urls");
 
 const CODE_KEY = "node.sync.code";
 
-function createSync({ storage, trails, research, secret, fetch: f = globalThis.fetch, api = SHARE_API, kind = "phone", defaultName = "NODE on a phone", now = () => Date.now() }) {
+const AFTER_EDIT_MS = 1500; // an edit is sent this long after edits pause
+
+function createSync({ storage, trails, research, secret, fetch: f = globalThis.fetch, api = SHARE_API, kind = "phone", defaultName = "NODE on a phone", now = () => Date.now(), afterEditMs = AFTER_EDIT_MS }) {
   const files = prefixedStorage(storage, "sync/");
   const readJson = (name) => {
     try {
@@ -36,6 +38,8 @@ function createSync({ storage, trails, research, secret, fetch: f = globalThis.f
   let s = null; // { code, keys, engine, client, relay }
   let status = { state: "off" };
   let busy = null;
+  let soonTimer = null;
+  let dirty = false; // an edit while a round was running
   const listeners = new Set();
   const tell = (event) => listeners.forEach((fn) => fn(event, info()));
 
@@ -60,8 +64,20 @@ function createSync({ storage, trails, research, secret, fetch: f = globalThis.f
       device,
       peers: Object.entries(peers).map(([id, p]) => ({ id, name: p.name || "Unnamed device", kind: p.kind, at: p.at })),
       pending: s ? s.engine.pending() : 0,
+      busy: Boolean(busy),
     };
   }
+  // An edit on this phone: sync shortly after, once edits pause.
+  function soon() {
+    if (!s) return;
+    if (busy) {
+      dirty = true;
+      return;
+    }
+    clearTimeout(soonTimer);
+    soonTimer = setTimeout(now_, afterEditMs);
+  }
+  trails.onChange = soon;
   async function start() {
     setup(await secret.get(CODE_KEY));
     return info();
@@ -70,7 +86,11 @@ function createSync({ storage, trails, research, secret, fetch: f = globalThis.f
   async function now_() {
     if (!s) return info();
     if (busy) return busy;
+    clearTimeout(soonTimer);
+    dirty = false;
     busy = (async () => {
+      await null; // so busy is set before anything below runs
+      tell({ type: "status" }); // "Syncing…"
       research.saveNow?.();
       const before = research.current?.id;
       try {
@@ -81,15 +101,21 @@ function createSync({ storage, trails, research, secret, fetch: f = globalThis.f
         status = { state: "ok", at: now() };
         if (res.deleted.length) tell({ type: "deleted", trails: res.deleted.map((d) => ({ ...d, byName: s.relay.peers?.[d.by]?.name || "another device" })) });
         if (res.trails.length || res.added.length || res.deleted.length || res.restored.length) tell({ type: "changed" });
-        tell({ type: "status" });
       } catch (err) {
         if (err instanceof SyncError && err.unpaired) status = { state: "unpaired", message: "This phone was removed from sync on another device. Scan the code again to sync." };
         else if (err instanceof SyncError && err.status === 0) status = { state: "offline", at: status.at, message: "Can't reach the sync server. Changes are kept and sent later." };
         else status = { state: "error", at: status.at, message: err.message };
-        tell({ type: "status" });
       } finally {
         busy = null;
       }
+      // Edits made during the round go out next; changes that arrived are
+      // not edits, so they don't start another round.
+      if (dirty && s) {
+        dirty = false;
+        s.engine.collect();
+        if (s.engine.pending()) soon();
+      }
+      tell({ type: "status" });
       return info();
     })();
     return busy;
@@ -117,6 +143,7 @@ function createSync({ storage, trails, research, secret, fetch: f = globalThis.f
     await secret.del(CODE_KEY);
     for (const name of ["state.json", "relay.json"]) files.remove?.(name);
     s = null;
+    clearTimeout(soonTimer);
     status = { state: "off" };
     tell({ type: "status" });
     return info();
