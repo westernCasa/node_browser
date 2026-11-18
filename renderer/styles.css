@@ -1689,11 +1689,21 @@ body.sb-replaying .sb-timeline { display: none; }
 .sb-menu-more[hidden] { display: none; }
 .sb-menu-rename { flex: 1 1 auto; min-width: 0; height: 40px; box-sizing: border-box; padding: 0 8px; background: var(--surface); color: var(--ink); border: 1px solid var(--signal); border-radius: var(--radius-sm); font: 14px var(--sans); }
 .sb-menu-rename:focus-visible { outline: none; }
-.sb-menu-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 8px 8px 42px; }
-.sb-menu-acts .chip { height: 28px; padding: 0 10px; font-size: 11px; }
-.sb-menu-acts .chip.danger { color: var(--alert); border-color: var(--alert); }
-.sb-menu-acts .chip:disabled { color: var(--ink-muted); cursor: default; }
-.sb-menu-confirm { flex: 1 0 100%; margin: 0; font-size: 13px; line-height: 18px; color: var(--ink); }
+/* B121: the trail's actions as a small drop-down under its "…" button. */
+.sb-menu-row { position: relative; }
+.sb-menu-acts { position: absolute; z-index: 6; top: calc(100% - 2px); right: 0; width: 196px; box-sizing: border-box; display: flex; flex-direction: column; padding: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm); animation: sb-acts-in var(--motion-fast) var(--ease-enter); }
+.sb-menu-acts .chip { all: unset; box-sizing: border-box; display: flex; align-items: center; height: 28px; padding: 0 8px; border-radius: var(--radius-sm); font: 13px var(--sans); color: var(--ink); cursor: pointer; white-space: nowrap; }
+.sb-menu-acts .chip:hover, .sb-menu-acts .chip:focus-visible { background: var(--surface-raised); }
+.sb-menu-acts .chip:focus-visible { outline: 2px solid var(--signal); outline-offset: -2px; }
+.sb-menu-acts .chip.danger { color: var(--alert); }
+.sb-menu-acts .chip.sep { margin-top: 4px; box-shadow: 0 -1px 0 0 var(--line); border-radius: 0 0 var(--radius-sm) var(--radius-sm); }
+.sb-menu-acts .chip:disabled { color: var(--ink-muted); cursor: default; background: none; }
+.sb-menu-acts.confirm { flex-direction: row; flex-wrap: wrap; gap: 4px; padding: 8px; }
+.sb-menu-acts.confirm .chip { flex: 1 1 0; justify-content: center; border: 1px solid var(--line); }
+.sb-menu-acts.confirm .chip.danger { border-color: var(--alert); }
+.sb-menu-confirm { flex: 1 0 100%; margin: 0 0 4px; font-size: 13px; line-height: 18px; color: var(--ink); white-space: normal; }
+@keyframes sb-acts-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .sb-menu-acts { animation: none; } }
 .sb-undo { display: flex; align-items: center; gap: 8px; padding: 6px 8px; margin-top: 6px; border: 1px solid var(--line); border-radius: var(--radius-sm); font-size: 13px; animation: sb-undo-in var(--motion-base) var(--ease-enter); }
 .sb-undo[hidden] { display: none; }
 .sb-undo span { flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }

@@ -4924,16 +4924,20 @@ switchName.addEventListener("dblclick", (e) => {
 // ---- B115: rename and delete trails from the switcher ----
 const plainName = (t) => `“${t.name}”`;
 function trailActions(row, t, more) {
-  const open = row.nextElementSibling?.classList.contains("sb-menu-acts");
+  const open = Boolean(row.querySelector(".sb-menu-acts"));
   for (const x of switchMenu.querySelectorAll(".sb-menu-acts")) x.remove();
   for (const x of switchMenu.querySelectorAll(".sb-menu-more")) x.setAttribute("aria-expanded", "false");
   if (open) return;
   more.setAttribute("aria-expanded", "true");
+  // B121: a small drop-down menu under the "…" button.
   const acts = document.createElement("div");
   acts.className = "sb-menu-acts";
+  acts.setAttribute("role", "menu");
+  acts.setAttribute("aria-label", `${t.name} actions`);
   const btn = (label, cls, run, disabled, title) => {
     const b = document.createElement("button");
     b.type = "button";
+    b.setAttribute("role", "menuitem");
     b.className = `chip ${cls || ""}`;
     b.textContent = label;
     if (disabled) b.disabled = true;
@@ -4964,8 +4968,8 @@ function trailActions(row, t, more) {
     closeSwitchMenu();
     api.trailExportCitations(t.id);
   }, false, "Save this trail's pages as a reference list: BibTeX for Overleaf, or CSL-JSON for Zotero.");
-  const del = btn("Delete…", "", () => confirmDelete(acts, t));
-  row.after(acts);
+  const del = btn("Delete…", "danger sep", () => confirmDelete(acts, t));
+  row.append(acts);
   (t.readonly ? del : first).focus();
 }
 function renameRow(row, t) {
@@ -5078,7 +5082,22 @@ switchMenu.addEventListener("keydown", (e) => {
     if (e.key === "F2") return renameRow(row, t);
     if (e.key === "ArrowRight") return more.focus();
     trailActions(row, t, more);
-    return confirmDelete(row.nextElementSibling, t);
+    return confirmDelete(row.querySelector(".sb-menu-acts"), t);
+  }
+  // B121: ↑ ↓ move within a trail's drop-down menu; Esc closes it.
+  const acts = document.activeElement?.closest?.(".sb-menu-acts");
+  if (acts && ["ArrowDown", "ArrowUp", "Escape"].includes(e.key)) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.key === "Escape") {
+      const more = acts.parentElement.querySelector(".sb-menu-more");
+      acts.remove();
+      more?.setAttribute("aria-expanded", "false");
+      return more?.focus();
+    }
+    const list = [...acts.querySelectorAll("button:not([disabled])")];
+    const i = list.indexOf(document.activeElement);
+    return list[(i + (e.key === "ArrowDown" ? 1 : -1) + list.length) % list.length]?.focus();
   }
   if (e.key === "Escape") {
     closeSwitchMenu();
