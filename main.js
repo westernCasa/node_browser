@@ -1341,9 +1341,12 @@ function startActiveCount() {
 const SyncCrypto = require("./core/sync-crypto");
 const { SyncEngine } = require("./core/sync");
 const { RelayClient, SyncError, syncOnce } = require("./core/sync-relay");
-const SYNC_EVERY_MS = 20 * 1000;
+const SYNC_EVERY_MS = 10 * 1000; // checks for other devices' changes
+const SYNC_AFTER_EDIT_MS = 1500; // sends this computer's changes soon after an edit
 let sync = null; // { code, keys, engine, client, relay }
 let syncBusy = null;
+let syncSoonTimer = null;
+let syncDirty = false; // an edit while a round was running
 let syncStatus = { state: "off" }; // off | ok | offline | unpaired | error
 const syncDir = () => path.join(app.getPath("userData"), "sync");
 const syncFile = (name) => path.join(syncDir(), name);
@@ -1398,7 +1401,18 @@ function syncInfo() {
     device,
     peers: Object.entries(peers).map(([id, p]) => ({ id, name: p.name || "Unnamed device", kind: p.kind, at: p.at })),
     pending: sync ? sync.engine.pending() : 0,
+    busy: Boolean(syncBusy),
   };
+}
+// An edit here: sync shortly after, once edits pause.
+function syncSoon() {
+  if (!sync) return;
+  if (syncBusy) {
+    syncDirty = true;
+    return;
+  }
+  clearTimeout(syncSoonTimer);
+  syncSoonTimer = setTimeout(syncNow, SYNC_AFTER_EDIT_MS);
 }
 function setSyncStatus(next) {
   syncStatus = next;
@@ -1407,7 +1421,11 @@ function setSyncStatus(next) {
 async function syncNow() {
   if (!sync) return syncInfo();
   if (syncBusy) return syncBusy;
+  clearTimeout(syncSoonTimer);
+  syncDirty = false;
   syncBusy = (async () => {
+    await null; // so syncBusy is set before anything below runs
+    sendUi("sync-status", syncInfo()); // "Syncing…"
     research.saveNow();
     const before = currentTrail();
     const peersBefore = JSON.stringify(sync.relay.peers || {});
@@ -1428,6 +1446,14 @@ async function syncNow() {
     } finally {
       syncBusy = null;
     }
+    // Edits made during the round go out next. Changes that arrived in the
+    // round are not edits, so they don't start another round.
+    if (syncDirty && sync) {
+      syncDirty = false;
+      sync.engine.collect();
+      if (sync.engine.pending()) syncSoon();
+    }
+    sendUi("sync-status", syncInfo());
     return syncInfo();
   })();
   return syncBusy;
@@ -1448,6 +1474,7 @@ function syncApplied(res, before) {
   if (res.trails.length || res.added.length || res.deleted.length || res.restored.length) sendUi("trail-changed", { trail: currentTrail(), remote: true });
 }
 function startSync() {
+  trailStore.onChange = syncSoon;
   syncSetup();
   if (sync) setTimeout(syncNow, 3000);
   setInterval(() => sync && syncNow(), SYNC_EVERY_MS).unref?.();

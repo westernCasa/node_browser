@@ -314,6 +314,20 @@ assert.ok(mac.store.has(other));
   assert.ok(!/Levain|rye malt|MacBook|iPhone/.test(stored), "the relay holds no names, notes or titles");
   ok("a rename on the phone reaches the Mac; the relay holds nothing readable");
 
+  // Edits tell the app (onChange), so it can sync right away; quiet rounds
+  // (most of them a single marker read) still see the next change.
+  const changed = [];
+  iphone.store.onChange = (id) => changed.push(id);
+  iphone.store.rename(iphoneOwn, "On the bus, again");
+  iphone.store.freeNote(iphoneOwn, { x: 9, y: 9, text: "crumb" });
+  assert.ok(changed.length >= 2 && changed.every((id) => id === iphoneOwn), JSON.stringify(changed));
+  iphone.store.onChange = null;
+  for (let i = 0; i < 7; i++) await mbp.round();
+  await iphone.round();
+  r = await mbp.round();
+  assert.ok(r.trails.includes(iphoneOwn) && mbp.store.snapshot(iphoneOwn).cards.some((c) => c.text === "crumb"));
+  ok("edits call onChange; after quiet rounds the next change still arrives");
+
   await iphone.client.leave(mbp.engine.device);
   await assert.rejects(mbp.round().then(async () => mbp.client.post(await Crypto.seal({}, k.key))), (e) => e.unpaired === true);
   ok("an unpaired device is told to pair again");

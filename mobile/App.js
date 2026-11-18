@@ -162,8 +162,8 @@ function Browser({ services }) {
       sub.remove();
     };
   }, []);
-  // Sync (B50): a round at start, every 30 s while NODE is in front, and when
-  // it comes back to the front. Trails that arrive refresh the trail view; a
+  // Sync (B50): a round at start, every 10 s while NODE is in front, when it
+  // comes back to the front, and 1.5 s after an edit (src/sync.js). Trails that arrive refresh the trail view; a
   // trail deleted on another device says so, with Undo.
   useEffect(() => {
     const sync = services.sync;
@@ -180,7 +180,7 @@ function Browser({ services }) {
       front = st === "active";
       if (front) sync.now();
     });
-    const timer = setInterval(() => front && sync.now(), 30000);
+    const timer = setInterval(() => front && sync.now(), 10000);
     return () => {
       off();
       sub.remove();

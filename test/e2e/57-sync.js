@@ -26,6 +26,7 @@ fs.writeFileSync(path.join(userData, "settings.json"), JSON.stringify({ firstRun
 async function startRelay() {
   const { default: worker } = await import("../../worker/src/index.js");
   const items = new Map();
+  const relay = { delay: 0 };
   const env = {
     TRAILS: {
       items,
@@ -39,12 +40,13 @@ async function startRelay() {
     const chunks = [];
     for await (const c of req) chunks.push(c);
     const body = chunks.length ? Buffer.concat(chunks) : undefined;
+    if (relay.delay) await sleep(relay.delay); // a slow connection
     const r = await worker.fetch(new Request(`${RELAY}${req.url}`, { method: req.method, headers: req.headers, body: req.method === "GET" || req.method === "HEAD" ? undefined : body }), env);
     res.writeHead(r.status, Object.fromEntries(r.headers));
     res.end(Buffer.from(await r.arrayBuffer()));
   });
   await new Promise((r) => server.listen(RELAY_PORT, "127.0.0.1", r));
-  return { server, items };
+  return Object.assign(relay, { server, items });
 }
 
 (async () => {
@@ -122,6 +124,25 @@ async function startRelay() {
   await phoneRound();
   const pn = phoneStore.card(levain, note.id);
   check("a rename and a move here reach the phone", phoneStore.get(levain).trail.name === "Levain notes" && pn.x === 640 && pn.y === 320, JSON.stringify({ name: phoneStore.get(levain).trail.name, x: pn.x }));
+
+  // No Sync now: an edit here goes out by itself a moment later.
+  await ui.evaluate(() => window.scout.trailNote({ x: 0, y: 400, text: "Sent by itself" }));
+  await sleep(3500);
+  await phoneRound();
+  check("an edit here reaches the phone by itself, without Sync now", phoneStore.snapshot(levain).cards.some((c) => c.text === "Sent by itself"));
+
+  // Sync now on a slow connection: "Syncing…" at once, button greyed out.
+  await ui.evaluate(() => openMenu("settings"));
+  await sleep(500);
+  relay.delay = 600;
+  await ui.click("#sync-now-btn");
+  await sleep(150);
+  const during = await ui.evaluate(() => ({ state: document.getElementById("sync-state").textContent, label: document.getElementById("sync-now-btn").textContent, disabled: document.getElementById("sync-now-btn").disabled }));
+  await sleep(3000);
+  relay.delay = 0;
+  const after = await ui.evaluate(() => ({ state: document.getElementById("sync-state").textContent, label: document.getElementById("sync-now-btn").textContent, disabled: document.getElementById("sync-now-btn").disabled }));
+  check("Sync now shows Syncing… with the button greyed out, then Synced just now", during.state === "On · syncing…" && during.label === "Syncing…" && during.disabled && /^On · synced just now/.test(after.state) && after.label === "Sync now" && !after.disabled, JSON.stringify({ during, after }));
+  await ui.evaluate(() => closeMenu());
 
   // A trail made on the phone, then deleted there.
   const bus = phoneStore.create("Bus reading", { current: false }).trail.id;
