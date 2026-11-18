@@ -5147,7 +5147,7 @@ function paintTimeline() {
       const row = document.createElement("button");
       row.type = "button";
       row.className = "sb-tl-row" + (it.timelineOnly ? " only" : "") + (isFound(it) ? " found" : "");
-      const time = new Date(it.at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+      const time = new Date(it.at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
       row.innerHTML = `<span class="t"></span><span class="nm"></span><span class="k"></span>`;
       // Timeline-only pages: drag onto the canvas, or the + button, puts them on it (B104).
       if (it.timelineOnly && it.url) {
@@ -5160,7 +5160,8 @@ function paintTimeline() {
       row.querySelector(".t").textContent = time;
       row.querySelector(".nm").textContent = (it.moment ? `Moment ${clockText(it.moment.a)}–${clockText(it.moment.b)} · ` : "") + (it.title || it.url || "Page");
       const secs = typeof it.dwell === "number" ? Math.round(it.dwell / 1000) : null;
-      row.querySelector(".k").textContent = it.timelineOnly ? (secs !== null ? `${secs} s` : it.removedFromCanvas ? "Removed" : "Timeline only") : "";
+      // B122: timeline-only rows are dimmed with a + (and say so on hover); no label.
+      row.querySelector(".k").textContent = it.timelineOnly ? (secs !== null ? `${secs} s` : it.removedFromCanvas ? "Removed" : "") : "";
       row.title = `${it.title || ""}\n${it.url || ""}${it.timelineOnly ? "\nTimeline only: not on the canvas" : ""}`;
       row.addEventListener("click", () => {
         const open = tabs.find((t) => t.url === it.url);

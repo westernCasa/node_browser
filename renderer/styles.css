@@ -1706,3 +1706,44 @@ body.sb-replaying .sb-timeline { display: none; }
 .share-check .help { margin: 0 0 6px; }
 .share-check .toggle { display: flex; align-items: flex-start; gap: 6px; margin: 4px 0; }
 .share-check .toggle span { overflow-wrap: anywhere; }
+
+/* ---- B122: a more compact sidebar (Sven, 2026-11-18: "congested when the
+   timeline is full, icons for actions are big"). Same order and parts as
+   B103; smaller rows and one row of tools. Tokens only. ---- */
+.sidebar { gap: 6px; padding: 6px 6px 6px 10px; }
+.sb-switcher { gap: 4px; padding-top: 2px; }
+.sb-switch-name { height: 36px; gap: 8px; padding: 0 6px; }
+.sb-switch-mono { width: 24px; height: 24px; font-size: 10px; }
+.sb-switch-name .sb-label { font-size: 10px; line-height: 12px; }
+.sb-switch-title { font-size: 14px; line-height: 18px; }
+.sb-switch-menu { top: 42px; }
+.sb-menu-item { height: 32px; font-size: 13px; }
+.sb-menu-item .mono { width: 20px; height: 20px; font-size: 9px; }
+.sb-menu-more { height: 32px; }
+.sb-menu-rename { height: 32px; font-size: 13px; }
+.sb-address { height: 32px; padding-left: 10px; }
+.sb-address #omni { height: 28px; font-size: 12px; }
+.sb-address .tb { width: 28px; height: 28px; }
+.sb-addr-row { height: 28px; margin-bottom: -2px; }
+.sb-nav .tb { width: 28px; height: 28px; }
+.sb-tabs-head { height: 22px; }
+.sidebar .sb-tabs-head #new-tab { width: 22px; height: 22px; }
+.sidebar .sb-label { font-size: 11px; line-height: 14px; }
+.sidebar .tab { height: 28px; gap: 6px; padding: 0 6px; font-size: 13px; }
+.sidebar .tab .mono { width: 18px; height: 18px; font-size: 8px; }
+.sidebar #canvas-tab { margin-bottom: 0; }
+.sb-tl-session { padding: 4px 6px 0; font-size: 10px; line-height: 14px; }
+.sb-tl-row { min-height: 22px; gap: 6px; padding: 0 6px; font-size: 12px; }
+.sb-tl-row .t { font-size: 10px; }
+.sb-tl-row .k { font-size: 9px; }
+.sb-tl-put { width: 22px; height: 22px; }
+/* Tools: one row of eight icons; the name shows on hover (data-tip). */
+.sb-tools { grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 4px; }
+.sb-tools .tb { height: 32px; padding: 0; gap: 0; }
+.sb-tools .tb::after { content: none; }
+.sb-tools .tb .ic { width: 16px; height: 16px; }
+.sb-tools .tb .count, .sb-tools .tb .new { top: 1px; right: 2px; font-size: 9px; line-height: 10px; }
+.sb-media { padding: 4px 6px; font-size: 11px; line-height: 16px; }
+.sidebar .tabs { min-height: 0; }
+.sb-tl-row .t { min-width: 46px; }
+.sb-tl-row .k:empty { display: none; }
