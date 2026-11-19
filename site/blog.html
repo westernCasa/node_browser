@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Building NODE · blog · NODE Research Browser</title>
+<meta name="description" content="Sven on the questions he runs into while building NODE Research Browser and what he decides, laid out as a NODE trail.">
+<link rel="canonical" href="https://noderesearch.app/blog">
+<link rel="alternate" type="application/rss+xml" title="Building NODE" href="https://noderesearch.app/blog.xml">
+<meta name="theme-color" content="#000000">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="NODE Research Browser">
+<meta property="og:title" content="Building NODE · blog">
+<meta property="og:description" content="The questions I run into while building NODE, and what I decide. Laid out as a NODE trail.">
+<meta property="og:url" content="https://noderesearch.app/blog">
+<meta property="og:image" content="https://noderesearch.app/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preload" href="/fonts/barlow-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+@font-face{font-family:"Barlow";font-weight:400;font-display:swap;src:url(/fonts/barlow-latin-400-normal.woff2) format("woff2")}
+@font-face{font-family:"Barlow";font-weight:600;font-display:swap;src:url(/fonts/barlow-latin-600-normal.woff2) format("woff2")}
+@font-face{font-family:"Barlow";font-weight:700;font-display:swap;src:url(/fonts/barlow-latin-700-normal.woff2) format("woff2")}
+@font-face{font-family:"JetBrains Mono";font-weight:400;font-display:swap;src:url(/fonts/jetbrains-mono-latin-400-normal.woff2) format("woff2")}
+/* Layout: the shared-trail view from NODE. Side panel (note, Start here, Replay) beside the canvas. Dark only, NODE brand tokens. */
+:root{
+  --surface:#000000;--surface-raised:#0e0e0f;--line:#2a2a2d;--ink:#ffffff;--ink-muted:#a1a1a6;--signal:#b18cff;
+  --sans:"Barlow","Helvetica Neue",Arial,sans-serif;--mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,monospace;
+  --space-1:4px;--space-2:8px;--space-3:16px;--space-4:24px;--space-5:40px;--radius-sm:2px;--radius-md:4px;
+  --motion-fast:120ms;--motion-base:200ms;--ease-enter:cubic-bezier(0,0,.2,1);--ease-move:cubic-bezier(.4,0,.2,1);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{background:var(--surface);color:var(--ink);font:400 16px/24px var(--sans);-webkit-font-smoothing:antialiased;display:flex;flex-direction:column}
+a{color:var(--ink);text-underline-offset:3px}
+a:focus-visible,button:focus-visible{outline:2px solid var(--signal);outline-offset:2px}
+.label{font:600 12px/16px var(--sans);letter-spacing:.12em;text-transform:uppercase}
+.tele{font:400 13px/20px var(--mono);color:var(--ink-muted);font-variant-numeric:tabular-nums}
+.btn{display:inline-flex;align-items:center;justify-content:center;height:44px;padding:0 var(--space-4);border-radius:var(--radius-sm);border:1px solid var(--ink);background:transparent;color:var(--ink);text-decoration:none;cursor:pointer;font:600 12px/16px var(--sans);letter-spacing:.12em;text-transform:uppercase;transition:background-color var(--motion-fast) var(--ease-move),color var(--motion-fast) var(--ease-move)}
+.btn.primary{background:var(--ink);color:var(--surface)}
+.btn:not(.primary):hover{background:var(--ink);color:var(--surface)}
+.btn.sm{height:32px;padding:0 var(--space-3)}
+.btn[disabled]{opacity:.4;cursor:default;pointer-events:none}
+
+header{display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);border-bottom:1px solid var(--line);
+  padding-block:var(--space-3);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header .brand{display:flex;align-items:center;gap:var(--space-3);text-decoration:none;min-width:0}
+.lockup{display:block;width:96px;height:auto;color:var(--ink);flex:none}
+header .brand .tele{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.view{flex:1;display:grid;grid-template-columns:340px minmax(0,1fr);min-height:0}
+aside{border-right:1px solid var(--line);background:var(--surface-raised);overflow:auto;display:flex;flex-direction:column;gap:var(--space-4);
+  padding-block:var(--space-4);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:var(--space-4)}
+.ro{display:flex;gap:var(--space-2);align-items:baseline}
+h1{font:700 32px/36px var(--sans);letter-spacing:.04em;text-transform:uppercase;margin:0;text-wrap:balance}
+.note{margin:0;max-width:40ch}
+.start{border:1px solid var(--line);padding:var(--space-3);display:flex;flex-direction:column;gap:var(--space-2);text-align:left;background:transparent;color:var(--ink);font:inherit;cursor:pointer;border-radius:var(--radius-sm)}
+.start:hover{border-color:var(--ink-muted)}
+.start[aria-pressed="true"]{border-color:var(--signal)}
+.replay{border-top:1px solid var(--line);padding-top:var(--space-4);display:flex;flex-direction:column;gap:var(--space-3)}
+.replay .row{display:flex;gap:var(--space-2);align-items:center;flex-wrap:wrap}
+.caption{min-height:48px;margin:0}
+.caption b{font-weight:600}
+.about{border-top:1px solid var(--line);padding-top:var(--space-4);display:flex;flex-direction:column;gap:var(--space-3);margin-top:auto}
+.about p{margin:0;color:var(--ink-muted)}
+.about .row{display:flex;gap:var(--space-2);flex-wrap:wrap}
+
+main{position:relative;min-width:0;overflow:auto;background:var(--surface);
+  background-image:radial-gradient(var(--line) 1px,transparent 1px);background-size:24px 24px}
+.zoom{position:sticky;top:var(--space-3);left:0;z-index:5;display:flex;justify-content:flex-end;gap:var(--space-2);padding-inline:var(--space-3);height:0}
+.zoom .btn{background:var(--surface)}
+.stage{position:relative;transform-origin:0 0;margin:var(--space-5)}
+.group{position:absolute;border:1px solid var(--line);border-radius:var(--radius-md);background:rgba(255,255,255,.015)}
+.group .gname{position:absolute;left:0;top:-28px}
+.group.resolved{border-style:dashed}
+svg.links{position:absolute;left:0;top:0;overflow:visible;pointer-events:none;z-index:2}
+.card{position:absolute;background:var(--surface-raised);border:1px solid var(--line);border-radius:var(--radius-md);padding:var(--space-3);
+  display:flex;flex-direction:column;gap:var(--space-2);overflow:hidden;transition:opacity var(--motion-base) var(--ease-enter),border-color var(--motion-base) var(--ease-enter)}
+.card .meta{font:400 11px/16px var(--mono);color:var(--ink-muted);text-transform:uppercase;letter-spacing:.04em}
+.card .title{font:600 16px/22px var(--sans)}
+.card .title a{text-decoration:none}
+.card .title a:hover{text-decoration:underline}
+.card .body{font:400 14px/20px var(--sans);color:var(--ink-muted);margin:0}
+.card .quote{font-style:italic;color:var(--ink)}
+.card .kw{font:400 11px/16px var(--mono);color:var(--ink-muted);margin-top:auto}
+.card.question .title::before{content:"? ";color:var(--ink-muted)}
+.card .optlabel{font:600 11px/16px var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--ink-muted);border-top:1px solid var(--line);padding-top:var(--space-2)}
+.card ol.opts{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.card .opt{display:flex;flex-direction:column;gap:2px;padding-left:10px;border-left:2px solid var(--line)}
+.card .opt .verdict{font:400 11px/14px var(--mono);text-transform:uppercase;letter-spacing:.04em;color:var(--ink-muted)}
+.card .opt .otext{font:400 14px/20px var(--sans);color:var(--ink)}
+.card .opt .owhy{font:400 13px/18px var(--sans);color:var(--ink-muted)}
+.card .opt.v-chosen,.card .opt.v-leaning{border-left-color:var(--ink)}
+.card .opt.v-chosen .verdict,.card .opt.v-leaning .verdict{color:var(--ink)}
+.card .opt.v-dropped .otext,.card .opt.v-not-possible .otext{color:var(--ink-muted)}
+.card .gtag{display:none;font:600 11px/16px var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--ink-muted)}
+.card.hidden{opacity:0;pointer-events:none}
+.card.current{border-color:var(--signal);border-width:2px;padding:calc(var(--space-3) - 1px)}
+.card.focus{border-color:var(--signal)}
+
+@media (max-width:860px){
+  body.phone-list main{height:auto;min-height:0;overflow:visible;padding:16px}
+  body.phone-list .zoom,body.phone-list svg.links,body.phone-list .group{display:none}
+  body.phone-list .stage{transform:none!important;width:auto!important;height:auto!important;margin:0!important;display:flex;flex-direction:column;gap:12px}
+  body.phone-list .card{position:static;width:auto!important;height:auto!important}
+  body.phone-list .card.hidden{display:none}
+  body.phone-list .card .gtag{display:block}
+  html,body{height:auto}
+  .view{flex:none;grid-template-columns:minmax(0,1fr);grid-template-rows:auto}
+  main{height:72vh;min-height:420px}
+  aside{overflow:visible;border-right:0;border-bottom:1px solid var(--line);padding-right:max(16px,env(safe-area-inset-right,0px))}
+  .about{margin-top:0}
+  h1{font-size:28px;line-height:32px}
+  header .brand .tele{display:none}
+}
+@media (prefers-reduced-motion:reduce){.card,.btn{transition-duration:var(--motion-fast)}}
+</style>
+<script>window.va=window.va||function(){(window.vaq=window.vaq||[]).push(arguments)};</script>
+<script defer src="/_vercel/insights/script.js"></script>
+</head>
+<body class="phone-list">
+<header>
+  <a class="brand" href="/" aria-label="NODE Research Browser home"><svg xmlns="http://www.w3.org/2000/svg" viewBox="100 100 647 140" class="lockup" aria-hidden="true"><g fill="currentColor"><g transform="translate(100,100) scale(5.83333)"><path transform="matrix(1.20193,0,0,1.20193,-1.2237,-2.42319)" d="M10.004,12.998L1.067,12.998C1.035,12.67 1.018,12.337 1.018,12C1.018,11.663 1.035,11.33 1.067,11.002L8.593,11.002L3.273,5.682C3.696,5.166 4.169,4.693 4.684,4.271L10.004,9.591L10.004,2.065C10.332,2.033 10.665,2.016 11.002,2.016C11.339,2.016 11.672,2.033 12,2.065L12,11.002L20.937,11.002C20.969,11.33 20.986,11.663 20.986,12C20.986,12.337 20.969,12.67 20.937,12.998L13.411,12.998L18.731,18.318C18.309,18.834 17.836,19.307 17.32,19.729L12,14.409L12,21.935C11.672,21.967 11.339,21.984 11.002,21.984C10.665,21.984 10.332,21.967 10.004,21.935L10.004,12.998Z"></path></g><path d="M407.85714285714283 120.0H424.57142857142856Q425.2857142857143 120.0 425.7857142857143 120.5Q426.2857142857143 121.0 426.2857142857143 121.71428571428572V218.28571428571428Q426.2857142857143 219.0 425.7857142857143 219.5Q425.2857142857143 220.0 424.57142857142856 220.0H408.42857142857144Q407.0 220.0 406.42857142857144 218.85714285714286L369.42857142857144 157.71428571428572Q369.14285714285717 157.28571428571428 368.8571428571429 157.35714285714286Q368.57142857142856 157.42857142857144 368.57142857142856 158.0L368.85714285714283 218.28571428571428Q368.85714285714283 219.0 368.35714285714283 219.5Q367.85714285714283 220.0 367.14285714285717 220.0H350.42857142857144Q349.7142857142857 220.0 349.2142857142857 219.5Q348.7142857142857 219.0 348.7142857142857 218.28571428571428V121.71428571428572Q348.7142857142857 121.0 349.2142857142857 120.5Q349.7142857142857 120.0 350.42857142857144 120.0H366.57142857142856Q368.0 120.0 368.57142857142856 121.14285714285715L405.42857142857144 182.0Q405.7142857142857 182.42857142857144 406.0 182.35714285714286Q406.2857142857143 182.28571428571428 406.2857142857143 181.71428571428572L406.1428571428571 121.71428571428572Q406.1428571428571 121.0 406.6428571428571 120.5Q407.1428571428571 120.0 407.85714285714283 120.0Z M458.85714285714283 185.28571428571428V154.71428571428572Q458.85714285714283 144.14285714285717 463.57142857142856 136.0Q468.2857142857143 127.85714285714286 476.7857142857142 123.35714285714286Q485.2857142857142 118.85714285714286 496.4285714285714 118.85714285714286Q507.71428571428567 118.85714285714286 516.2142857142857 123.35714285714286Q524.7142857142857 127.85714285714286 529.4285714285713 136.0Q534.1428571428571 144.14285714285717 534.1428571428571 154.71428571428572V185.28571428571428Q534.1428571428571 196.0 529.4285714285713 204.28571428571428Q524.7142857142857 212.57142857142858 516.2142857142857 217.07142857142858Q507.71428571428567 221.57142857142858 496.4285714285714 221.57142857142858Q485.2857142857142 221.57142857142858 476.7857142857142 217.0Q468.2857142857143 212.42857142857142 463.57142857142856 204.21428571428572Q458.85714285714283 196.0 458.85714285714283 185.28571428571428ZM514.0 186.0V154.57142857142856Q514.0 146.28571428571428 509.21428571428567 141.21428571428572Q504.4285714285714 136.14285714285717 496.4285714285714 136.14285714285717Q488.57142857142856 136.14285714285717 483.7857142857142 141.21428571428572Q478.99999999999994 146.28571428571428 478.99999999999994 154.57142857142856V186.0Q478.99999999999994 194.28571428571428 483.7857142857142 199.28571428571428Q488.57142857142856 204.28571428571428 496.4285714285714 204.28571428571428Q504.2857142857142 204.28571428571428 509.1428571428571 199.28571428571428Q514.0 194.28571428571428 514.0 186.0Z M566.7142857142857 218.28571428571428V121.71428571428572Q566.7142857142857 121.0 567.2142857142857 120.5Q567.7142857142857 120.0 568.4285714285714 120.0H604.1428571428571Q614.8571428571429 120.0 622.9285714285714 123.78571428571429Q631.0 127.57142857142858 635.4285714285714 134.42857142857144Q639.8571428571429 141.28571428571428 639.8571428571429 150.28571428571428V189.71428571428572Q639.8571428571429 198.71428571428572 635.4285714285714 205.57142857142856Q631.0 212.42857142857142 622.9285714285714 216.21428571428572Q614.8571428571429 220.0 604.1428571428571 220.0H568.4285714285714Q567.7142857142857 220.0 567.2142857142857 219.5Q566.7142857142857 219.0 566.7142857142857 218.28571428571428ZM587.5714285714286 202.71428571428572H604.8571428571429Q611.4285714285714 202.71428571428572 615.5 198.28571428571428Q619.5714285714286 193.85714285714286 619.7142857142857 186.42857142857144V153.57142857142856Q619.7142857142857 146.14285714285717 615.6428571428571 141.71428571428572Q611.5714285714286 137.28571428571428 604.7142857142857 137.28571428571428H587.5714285714286Q586.8571428571429 137.28571428571428 586.8571428571429 138.0V202.0Q586.8571428571429 202.71428571428572 587.5714285714286 202.71428571428572Z M739.8571428571429 137.28571428571428H693.0Q692.2857142857143 137.28571428571428 692.2857142857143 138.0V160.14285714285714Q692.2857142857143 160.85714285714286 693.0 160.85714285714286H723.7142857142858Q724.4285714285714 160.85714285714286 724.9285714285714 161.35714285714286Q725.4285714285714 161.85714285714286 725.4285714285714 162.57142857142858V176.42857142857144Q725.4285714285714 177.14285714285714 724.9285714285714 177.64285714285714Q724.4285714285714 178.14285714285714 723.7142857142858 178.14285714285714H693.0Q692.2857142857143 178.14285714285714 692.2857142857143 178.85714285714286V202.0Q692.2857142857143 202.71428571428572 693.0 202.71428571428572H739.8571428571429Q740.5714285714286 202.71428571428572 741.0714285714286 203.21428571428572Q741.5714285714286 203.71428571428572 741.5714285714286 204.42857142857142V218.28571428571428Q741.5714285714286 219.0 741.0714285714286 219.5Q740.5714285714286 220.0 739.8571428571429 220.0H673.8571428571429Q673.1428571428571 220.0 672.6428571428571 219.5Q672.1428571428571 219.0 672.1428571428571 218.28571428571428V121.71428571428572Q672.1428571428571 121.0 672.6428571428571 120.5Q673.1428571428571 120.0 673.8571428571429 120.0H739.8571428571429Q740.5714285714286 120.0 741.0714285714286 120.5Q741.5714285714286 121.0 741.5714285714286 121.71428571428572V135.57142857142856Q741.5714285714286 136.28571428571428 741.0714285714286 136.78571428571428Q740.5714285714286 137.28571428571428 739.8571428571429 137.28571428571428Z"></path></g></svg><span class="tele">Blog · 16 posts · updated 18 Nov 2026</span></a>
+  <a class="btn primary sm" href="/#downloads" data-track="blog-download-header">Get NODE</a>
+</header>
+
+<div class="view">
+  <aside aria-label="About this trail">
+    <div class="ro"><span class="label">Read only</span><span class="tele" id="from"></span></div>
+    <h1 id="name"></h1>
+    <p class="note" id="note"></p>
+    <button class="start" id="start" type="button" aria-pressed="false">
+      <span class="label" style="color:var(--ink-muted)">Start here</span>
+      <span id="start-title"></span>
+    </button>
+
+    <section class="replay" aria-label="Replay">
+      <div class="row">
+        <span class="label">Replay</span>
+        <span class="tele" id="step"></span>
+      </div>
+      <div class="row">
+        <button class="btn sm" id="prev" type="button" aria-label="Previous step">Back</button>
+        <button class="btn sm" id="play" type="button">Play</button>
+        <button class="btn sm" id="next" type="button" aria-label="Next step">Next</button>
+        <button class="btn sm" id="end" type="button">End</button>
+      </div>
+      <p class="caption" id="caption" aria-live="polite"></p>
+    </section>
+
+    <section class="about" aria-label="What this is">
+      <p>Each question card lists the options I looked at, and the note linked to it says what I decided and why. Press Play to see them in the order I worked through them, or Start here for what I'm working out now. Download the file to open this blog in NODE.</p>
+      <div class="row">
+        <a class="btn primary" href="/#downloads" data-track="blog-download">Get NODE</a>
+        <a class="btn" href="/blog.trail.md" download data-track="blog-file">Download the file</a>
+      </div>
+      <p class="tele">Follow along with the <a href="/blog.xml">RSS feed</a>. The file is plain Markdown.</p>
+    </section>
+  </aside>
+
+  <main id="viewport" aria-label="Trail canvas">
+    <div class="zoom"><button class="btn sm" id="fit" type="button">Fit</button><button class="btn sm" id="actual" type="button">100%</button></div>
+    <div class="stage" id="stage"></div>
+  </main>
+</div>
+
+<script>
+var T = {"name": "Building NODE", "note": "I'm Sven, and I make NODE. This blog is a NODE trail: each question I ran into is a card with the options I looked at, and my answer is the note linked to it.", "from": "Sven", "exportedAt": "2026-11-18T12:00:00Z", "startHere": "q16", "groups": [{"id": "g1", "name": "First week", "x": 0, "y": 0, "w": 1240, "h": 2620, "resolved": false}, {"id": "g2", "name": "Who it's for", "x": 1320, "y": 0, "w": 1240, "h": 858, "resolved": true}, {"id": "g3", "name": "Sharing", "x": 1320, "y": 938, "w": 1240, "h": 1344, "resolved": false}, {"id": "g4", "name": "Privacy", "x": 1320, "y": 2362, "w": 1240, "h": 1778, "resolved": false}, {"id": "g5", "name": "Engine", "x": 0, "y": 2700, "w": 1240, "h": 1118, "resolved": false}], "cards": [{"id": "q15", "type": "question", "x": 40, "y": 60, "w": 400, "h": 498, "group": "g1", "title": "How do I test these changes?", "lines": ["Status: resolved", "- Sven: Decided, 18 Nov 2026", "- Sven: Option: A/B test the three biggest changes, one at a time, on new installs. Chosen. It shows whether each change works, not just whether people like it.", "- Sven: Option: Usability tests with 5 people. Also doing. They explain why something works or doesn't, but they're too few to count.", "- Sven: Option: Ship to everyone and compare before and after. Dropped. Other changes and the time of year would mix into the numbers.", "- Sven: Option: Only count people who opt in. Dropped. Too few people, and only the most engaged ones."], "options": [{"v": "Chosen", "t": "A/B test the three biggest changes, one at a time, on new installs", "why": "It shows whether each change works, not just whether people like it."}, {"v": "Also doing", "t": "Usability tests with 5 people", "why": "They explain why something works or doesn't, but they're too few to count."}, {"v": "Dropped", "t": "Ship to everyone and compare before and after", "why": "Other changes and the time of year would mix into the numbers."}, {"v": "Dropped", "t": "Only count people who opt in", "why": "Too few people, and only the most engaged ones."}]}, {"id": "n15", "type": "note", "x": 500, "y": 60, "w": 380, "h": 416, "group": "g1", "title": "Note", "lines": ["Decided: I'll A/B test the first screen, the first-card note and the Continue page, one at a time, on new installs from 0.13. Each test only looks for a big difference, because NODE doesn't have the traffic to see small ones yet. I'll set the sample size before each test starts, decide once it's reached, and post the result here, win or not. Why: These are my biggest guesses about the first week, and I'd rather know than assume. Existing users won't be in any test, and Settings will say which version you're in, with a switch to leave. Next: First I need to decide whether NODE can send one anonymous count after your first session, with the test version and whether you reached 3 cards. That's more than it sends today, so I'll post that decision here before any test starts.", "— Sven · nov 18"]}, {"id": "q14", "type": "question", "x": 40, "y": 598, "w": 400, "h": 540, "group": "g1", "title": "What brings people back after the first day?", "lines": ["Status: open", "- Sven: Proposed, 18 Nov 2026", "- Sven: Option: A Continue page on every new tab, with your open questions and the next search. Leaning. It shows up when you're already in NODE and can act on it.", "- Sven: Option: System notifications, including one if you skip a day you usually use NODE. Later. Only after the Continue page, and under the notification limits.", "- Sven: Option: A weekly email. Dropped. It would need your email address, and NODE has no accounts.", "- Sven: Option: Nothing, and rely on tabs reopening. Dropped. It gives no reason to come back."], "options": [{"v": "Leaning", "t": "A Continue page on every new tab, with your open questions and the next search", "why": "It shows up when you're already in NODE and can act on it."}, {"v": "Later", "t": "System notifications, including one if you skip a day you usually use NODE", "why": "Only after the Continue page, and under the notification limits."}, {"v": "Dropped", "t": "A weekly email", "why": "It would need your email address, and NODE has no accounts."}, {"v": "Dropped", "t": "Nothing, and rely on tabs reopening", "why": "It gives no reason to come back."}]}, {"id": "n14", "type": "note", "x": 500, "y": 598, "w": 380, "h": 256, "group": "g1", "title": "Note", "lines": ["Plan: A Continue page that replaces the blank new tab. It shows your open trails, each with its open question and the next suggested search. Why: An open question is the best reason to come back, and the new tab is the moment you can act on it. Notifications that do the job forever, without that reason, wear thin. Next: Aiming for 0.14, as an A/B test against a blank new tab.", "— Sven · nov 18"]}, {"id": "q13", "type": "question", "x": 40, "y": 1178, "w": 400, "h": 452, "group": "g1", "title": "How should you notice your first card?", "lines": ["Status: open", "- Sven: Proposed, 18 Nov 2026", "- Sven: Option: A short note and one pulse on the Canvas tab. Leaning. It turns something that happens silently into something you see, then gets out of the way.", "- Sven: Option: Stay silent and let people find the canvas. Dropped. That's how it works now, and most people never see the main thing NODE does.", "- Sven: Option: A \"3 cards to your first trail\" checklist. Later. Unfinished tasks can pull people back, but the evidence for it is mixed and it feels like a game. I'll only try it if the note doesn't work."], "options": [{"v": "Leaning", "t": "A short note and one pulse on the Canvas tab", "why": "It turns something that happens silently into something you see, then gets out of the way."}, {"v": "Dropped", "t": "Stay silent and let people find the canvas", "why": "That's how it works now, and most people never see the main thing NODE does."}, {"v": "Later", "t": "A \"3 cards to your first trail\" checklist", "why": "Unfinished tasks can pull people back, but the evidence for it is mixed and it feels like a game. I'll only try it if the note doesn't work."}]}, {"id": "n13", "type": "note", "x": 500, "y": 1178, "w": 380, "h": 216, "group": "g1", "title": "Note", "lines": ["Plan: After about 20 seconds of reading, a short note says \"First card on your trail\" and the Canvas tab pulses once. At 3 cards, one notice offers to show the trail. Why: Today a page becomes a card with no sign at all. Next: Part of the 0.13 first run, as an A/B test against staying silent.", "— Sven · nov 18"]}, {"id": "q12", "type": "question", "x": 40, "y": 1670, "w": 400, "h": 614, "group": "g1", "title": "What should the first five minutes of NODE feel like?", "lines": ["Status: open", "- Sven: Proposed, 18 Nov 2026", "- Sven: Option: A start screen that asks \"What are you looking into?\". Leaning. Setup waits until you need it, and you get to something useful faster. Example questions help if you don't have one in mind.", "- Sven: Option: Open a finished example trail first. Also offered. Shows what a trail looks like, but it's watching instead of doing, so it's a link on the start screen, not the default.", "- Sven: Option: No start screen, just a helpful empty first tab. Fallback. Simpler. I'll test it against the start screen to see if the extra screen earns its place.", "- Sven: Option: Keep the setup form, cut to one screen with Skip. Dropped. It still asks for things before you've seen anything worth it, and most people keep the defaults anyway."], "options": [{"v": "Leaning", "t": "A start screen that asks \"What are you looking into?\"", "why": "Setup waits until you need it, and you get to something useful faster. Example questions help if you don't have one in mind."}, {"v": "Also offered", "t": "Open a finished example trail first", "why": "Shows what a trail looks like, but it's watching instead of doing, so it's a link on the start screen, not the default."}, {"v": "Fallback", "t": "No start screen, just a helpful empty first tab", "why": "Simpler. I'll test it against the start screen to see if the extra screen earns its place."}, {"v": "Dropped", "t": "Keep the setup form, cut to one screen with Skip", "why": "It still asks for things before you've seen anything worth it, and most people keep the defaults anyway."}]}, {"id": "n12", "type": "note", "x": 500, "y": 1670, "w": 380, "h": 276, "group": "g1", "title": "Note", "lines": ["Plan: I want first launch to ask \"What are you looking into?\" instead of asking for API keys. Every way in should end with a trail of 3 cards, the canvas open, and an offer to send it. Why: Right now the first screen is a setup form. The trail, the part that makes NODE different, shows up later on a screen I never point anyone to. Next: I'm aiming to build it for 0.13 and A/B test it against the empty first tab, alongside a 5-person usability test.", "— Sven · nov 18"]}, {"id": "q11", "type": "question", "x": 40, "y": 2324, "w": 400, "h": 154, "group": "g1", "title": "How far do I go to make NODE a habit?", "lines": ["Status: open", "- Sven: Proposed, 18 Nov 2026"], "options": []}, {"id": "n11", "type": "note", "x": 500, "y": 2324, "w": 380, "h": 256, "group": "g1", "title": "Note", "lines": ["Plan: No feed, no streaks and no fake urgency. Every kind of notice gets its own switch, and first-week milestones are counted only on your computer. If a change brings more visits but also more people turning notices off, I roll it back. Why: A lot of you picked NODE for privacy. And the long experiments I read, at Facebook and Pinterest, found that pushing harder loses people over a few months.", "— Sven · nov 18"]}, {"id": "q7", "type": "question", "x": 1360, "y": 60, "w": 400, "h": 312, "group": "g2", "title": "Who is NODE for?", "lines": ["Status: resolved", "- Sven: Decided, 5 Nov 2026", "- Sven: Option: A browser for one person doing niche research. Dropped. Where NODE started.", "- Sven: Option: Knowledge networking between friends and small groups. Chosen. You map what you read, and send the whole trail on."], "options": [{"v": "Dropped", "t": "A browser for one person doing niche research", "why": "Where NODE started."}, {"v": "Chosen", "t": "Knowledge networking between friends and small groups", "why": "You map what you read, and send the whole trail on."}]}, {"id": "n7", "type": "note", "x": 1820, "y": 60, "w": 380, "h": 216, "group": "g2", "title": "Note", "lines": ["Decided: Knowledge networking between friends and small groups. You map what you read, and send the whole trail to a friend or a group as one file. Why: Research usually gets passed on as a list of links, and the next person starts over. NODE already records the path, so sending it takes no copying.", "— Sven · nov 5"]}, {"id": "q6", "type": "question", "x": 1360, "y": 412, "w": 400, "h": 406, "group": "g2", "title": "What should NODE be called?", "lines": ["Status: resolved", "- Sven: Decided, 5 Nov 2026", "- Sven: Option: Scout. Dropped.", "- Sven: Option: NODE R-X Browser. Dropped. An X in the name reads as a tie to xAI.", "- Sven: Option: Node Browser. Dropped. It collides with Node.js.", "- Sven: Option: NODE Research Browser. Chosen. It says what it is."], "options": [{"v": "Dropped", "t": "Scout", "why": ""}, {"v": "Dropped", "t": "NODE R-X Browser", "why": "An X in the name reads as a tie to xAI."}, {"v": "Dropped", "t": "Node Browser", "why": "It collides with Node.js."}, {"v": "Chosen", "t": "NODE Research Browser", "why": "It says what it is."}]}, {"id": "n6", "type": "note", "x": 1820, "y": 412, "w": 380, "h": 116, "group": "g2", "title": "Note", "lines": ["Decided: NODE Research Browser. Why: \"Research Browser\" says what it is.", "— Sven · nov 5"]}, {"id": "q5", "type": "question", "x": 1360, "y": 998, "w": 400, "h": 332, "group": "g3", "title": "Do I share trails as links or as files?", "lines": ["Status: resolved", "- Sven: Decided, 5 Nov 2026", "- Sven: Option: One plain Markdown file. Chosen. Works today, anyone can read it in a text editor, and it outlives the app.", "- Sven: Option: A share link. Later. Needs the share server running for everyone first."], "options": [{"v": "Chosen", "t": "One plain Markdown file", "why": "Works today, anyone can read it in a text editor, and it outlives the app."}, {"v": "Later", "t": "A share link", "why": "Needs the share server running for everyone first."}]}, {"id": "n5", "type": "note", "x": 1820, "y": 998, "w": 380, "h": 156, "group": "g3", "title": "Note", "lines": ["Decided: As one plain Markdown file first. Links come once the share server works for everyone. Why: A file works today, anyone can read it in a text editor, and it outlives the app.", "— Sven · nov 5"]}, {"id": "q4", "type": "question", "x": 1360, "y": 1370, "w": 400, "h": 418, "group": "g3", "title": "Should two people's trails merge into one?", "lines": ["Status: open", "- Sven: Parked, 3 Nov 2026", "- Sven: Option: Merge two trails into one. Parked. I couldn't find any study on whether people understand two merged research maps.", "- Sven: Option: One person builds a trail and shares it. Chosen. The part people need first.", "- Sven: Option: Show both trails on one canvas, then add chosen cards, then full merge. Later. The order to try when merging comes back."], "options": [{"v": "Parked", "t": "Merge two trails into one", "why": "I couldn't find any study on whether people understand two merged research maps."}, {"v": "Chosen", "t": "One person builds a trail and shares it", "why": "The part people need first."}, {"v": "Later", "t": "Show both trails on one canvas, then add chosen cards, then full merge", "why": "The order to try when merging comes back."}]}, {"id": "n4", "type": "note", "x": 1820, "y": 1370, "w": 380, "h": 176, "group": "g3", "title": "Note", "lines": ["For now: Not yet. I'm focusing on one person building a trail and sharing it. Why: Git-style merging makes sense to developers, but most people researching together don't think that way.", "— Sven · nov 3"]}, {"id": "q3", "type": "question", "x": 1360, "y": 1828, "w": 400, "h": 414, "group": "g3", "title": "Is a trail a timeline or a map?", "lines": ["Status: resolved", "- Sven: Decided, 3 Nov 2026", "- Sven: Option: A timeline only. Dropped. Research doesn't happen in a straight line.", "- Sven: Option: A map only. Dropped. A bare map has no clear place to start for whoever receives it.", "- Sven: Option: A canvas with the timeline beside it, and Replay. Chosen. A map plus a replay of how it was built got 71% of the facts across at handoff, against 50%."], "options": [{"v": "Dropped", "t": "A timeline only", "why": "Research doesn't happen in a straight line."}, {"v": "Dropped", "t": "A map only", "why": "A bare map has no clear place to start for whoever receives it."}, {"v": "Chosen", "t": "A canvas with the timeline beside it, and Replay", "why": "A map plus a replay of how it was built got 71% of the facts across at handoff, against 50%."}]}, {"id": "n3", "type": "note", "x": 1820, "y": 1828, "w": 380, "h": 196, "group": "g3", "title": "Note", "lines": ["Decided: A canvas, with the timeline kept beside it and Replay for whoever receives it. NODE draws the links it already knows. Drawing your own is optional. Why: In the studies I read, people rarely draw links by hand, so NODE draws the ones it knows.", "— Sven · nov 3"]}, {"id": "q16", "type": "question", "x": 1360, "y": 2422, "w": 400, "h": 576, "group": "g4", "title": "How do I know if people come back, without tracking them?", "lines": ["Status: open", "- Sven: Open, 18 Nov 2026", "- Sven: Option: Add a \"days since install\" bucket to the anonymous daily count. Leaning. It gives a rough curve of how long people stay, but it can't tell which week someone started, so I'd label it an estimate.", "- Sven: Option: Keep first-week milestones on your computer, with an opt-in to share a summary. Leaning. It's the only way to check whether my guess about the \"aha\" moment is right, and it's off unless you turn it on.", "- Sven: Option: Usability tests with 5 people. Also doing. Good for finding out why, not for counting.", "- Sven: Option: An install id. Dropped. That's tracking, and a lot of you picked NODE for privacy."], "options": [{"v": "Leaning", "t": "Add a \"days since install\" bucket to the anonymous daily count", "why": "It gives a rough curve of how long people stay, but it can't tell which week someone started, so I'd label it an estimate."}, {"v": "Leaning", "t": "Keep first-week milestones on your computer, with an opt-in to share a summary", "why": "It's the only way to check whether my guess about the \"aha\" moment is right, and it's off unless you turn it on."}, {"v": "Also doing", "t": "Usability tests with 5 people", "why": "Good for finding out why, not for counting."}, {"v": "Dropped", "t": "An install id", "why": "That's tracking, and a lot of you picked NODE for privacy."}]}, {"id": "n16", "type": "note", "x": 1820, "y": 2422, "w": 380, "h": 236, "group": "g4", "title": "Note", "lines": ["Thinking: I haven't decided yet. I'm leaning toward the first two together, since neither one is enough alone. Why: The daily count has no id, so it can't tell a new user from an old one. Picking the moment that makes people stay without any data to check it would be a guess. Next: Until I decide, the usability test is the only way I'll know how the first week goes.", "— Sven · nov 18"]}, {"id": "q10", "type": "question", "x": 1360, "y": 3038, "w": 400, "h": 332, "group": "g4", "title": "Should syncing between devices need an account?", "lines": ["Status: resolved", "- Sven: Decided, 18 Nov 2026", "- Sven: Option: Pair devices with a code or a QR code. Chosen. Nothing about you is needed, and the code stays on your devices.", "- Sven: Option: Sign in with an account. Dropped. It would be the first thing NODE knows about you."], "options": [{"v": "Chosen", "t": "Pair devices with a code or a QR code", "why": "Nothing about you is needed, and the code stays on your devices."}, {"v": "Dropped", "t": "Sign in with an account", "why": "It would be the first thing NODE knows about you."}]}, {"id": "n10", "type": "note", "x": 1820, "y": 3038, "w": 380, "h": 216, "group": "g4", "title": "Note", "lines": ["Decided: No. You pair devices with a code or a QR code, and your trails are encrypted on your device before they're sent. The server deletes each change once your other devices have it, after 30 days at most. This shipped in 0.12.0. Why: A pairing code is enough to prove two devices belong together.", "— Sven · nov 18"]}, {"id": "p10", "type": "page", "x": 2260, "y": 3038, "w": 260, "h": 150, "group": "g4", "title": "NODE 0.12.0 release notes", "url": "https://github.com/westernCasa/node_browser/releases/tag/v0.12.0", "lines": ["Where this shipped."]}, {"id": "q9", "type": "question", "x": 1360, "y": 3410, "w": 400, "h": 154, "group": "g4", "title": "Should NODE count how many people use it?", "lines": ["Status: resolved", "- Sven: Decided, 15 Nov 2026"], "options": []}, {"id": "n9", "type": "note", "x": 1820, "y": 3410, "w": 380, "h": 196, "group": "g4", "title": "Note", "lines": ["Decided: Yes, with one anonymous count a day: the version and your operating system, with no id. You can turn it off in Settings → Help. This shipped in 0.11.0. Why: Download numbers didn't tell me whether anyone kept using NODE. Nothing about what you read or search is sent.", "— Sven · nov 15"]}, {"id": "p9", "type": "page", "x": 2260, "y": 3410, "w": 260, "h": 150, "group": "g4", "title": "NODE 0.11.0 release notes", "url": "https://github.com/westernCasa/node_browser/releases/tag/v0.11.0", "lines": ["Where this shipped."]}, {"id": "q8", "type": "question", "x": 1360, "y": 3646, "w": 400, "h": 454, "group": "g4", "title": "How many notifications should NODE send?", "lines": ["Status: resolved", "- Sven: Decided, 6 Nov 2026", "- Sven: Option: Send more to bring people back. Dropped. It raises visits for a while, then more people turn notifications off or uninstall.", "- Sven: Option: A weekly limit, only for something new, with a switch per kind. Chosen. The long experiments found this does better over months.", "- Sven: Option: Ask for permission at first launch. Dropped. Asking after a few days of use did better in the research."], "options": [{"v": "Dropped", "t": "Send more to bring people back", "why": "It raises visits for a while, then more people turn notifications off or uninstall."}, {"v": "Chosen", "t": "A weekly limit, only for something new, with a switch per kind", "why": "The long experiments found this does better over months."}, {"v": "Dropped", "t": "Ask for permission at first launch", "why": "Asking after a few days of use did better in the research."}]}, {"id": "n8", "type": "note", "x": 1820, "y": 3646, "w": 380, "h": 236, "group": "g4", "title": "Note", "lines": ["Decided: Few, and only about something new. There's a weekly limit across all kinds, a switch for each kind, and I'll only ask for system permission on day 3 or later. I judge them by how many people turn them off, not by clicks. Why: The long experiments I read found that fewer, more relevant notifications raise use over time.", "— Sven · nov 6"]}, {"id": "q2", "type": "question", "x": 40, "y": 2760, "w": 400, "h": 546, "group": "g5", "title": "Can NODE run Chrome extensions?", "lines": ["Status: resolved", "- Sven: Decided, 25 Oct 2026", "- Sven: Option: Ship uBlock Origin itself. Dropped. Electron is missing the parts it needs, and it could break with any update.", "- Sven: Option: Ship uBlock Origin Lite. Not possible. Electron doesn't enforce the blocking rules it relies on.", "- Sven: Option: Support the Chrome Web Store. Dropped. Most extensions would half-work.", "- Sven: Option: Use uBlock Origin's default filter lists in NODE's own blocker. Chosen. Covers what most people use it for.", "- Sven: Option: A Chromium build, which runs extensions. Later. Part of the engine question."], "options": [{"v": "Dropped", "t": "Ship uBlock Origin itself", "why": "Electron is missing the parts it needs, and it could break with any update."}, {"v": "Not possible", "t": "Ship uBlock Origin Lite", "why": "Electron doesn't enforce the blocking rules it relies on."}, {"v": "Dropped", "t": "Support the Chrome Web Store", "why": "Most extensions would half-work."}, {"v": "Chosen", "t": "Use uBlock Origin's default filter lists in NODE's own blocker", "why": "Covers what most people use it for."}, {"v": "Later", "t": "A Chromium build, which runs extensions", "why": "Part of the engine question."}]}, {"id": "n2", "type": "note", "x": 500, "y": 2760, "w": 380, "h": 176, "group": "g5", "title": "Note", "lines": ["Decided: No. Instead, NODE's built-in blocker uses the same filter lists uBlock Origin uses by default. Why: A beta tester asked for uBlock Origin, and this covers what they used it for without breaking NODE's own blocker.", "— Sven · oct 25"]}, {"id": "q1", "type": "question", "x": 40, "y": 3346, "w": 400, "h": 432, "group": "g5", "title": "Electron or a Chromium build?", "lines": ["Status: open", "- Sven: In progress, 18 Oct 2026", "- Sven: Option: Ship NODE as a Chrome extension. Dropped. Mosaic, address-bar suggestions and the agent tools can't work in an extension.", "- Sven: Option: Keep Electron for releases and build on Chromium alongside. Chosen. Google sign-in works on Chromium, and Electron keeps shipping meanwhile.", "- Sven: Option: Build on BrowserOS. Dropped. Its licence (AGPL) doesn't fit NODE's MIT licence, so I went with ungoogled-chromium."], "options": [{"v": "Dropped", "t": "Ship NODE as a Chrome extension", "why": "Mosaic, address-bar suggestions and the agent tools can't work in an extension."}, {"v": "Chosen", "t": "Keep Electron for releases and build on Chromium alongside", "why": "Google sign-in works on Chromium, and Electron keeps shipping meanwhile."}, {"v": "Dropped", "t": "Build on BrowserOS", "why": "Its licence (AGPL) doesn't fit NODE's MIT licence, so I went with ungoogled-chromium."}]}, {"id": "n1", "type": "note", "x": 500, "y": 3346, "w": 380, "h": 236, "group": "g5", "title": "Note", "lines": ["So far: Electron stays the release build. I've started a Chromium build on ungoogled-chromium, mainly so Google sign-in works inside NODE. Why: Google blocks sign-in inside Electron apps, and faking Chrome breaks Google's terms. Mosaic and the address-bar suggestions need changes to Chromium itself, so I'll only switch once it does everything the current build does.", "— Sven · oct 18"]}], "links": [{"from": "n15", "to": "q15", "kind": "you", "label": "decided"}, {"from": "n14", "to": "q14", "kind": "you", "label": "plan"}, {"from": "n13", "to": "q13", "kind": "you", "label": "plan"}, {"from": "n12", "to": "q12", "kind": "you", "label": "plan"}, {"from": "n11", "to": "q11", "kind": "you", "label": "plan"}, {"from": "n7", "to": "q7", "kind": "you", "label": "decided"}, {"from": "n6", "to": "q6", "kind": "you", "label": "decided"}, {"from": "n5", "to": "q5", "kind": "you", "label": "decided"}, {"from": "n4", "to": "q4", "kind": "you", "label": "for now"}, {"from": "n3", "to": "q3", "kind": "you", "label": "decided"}, {"from": "n16", "to": "q16", "kind": "you", "label": "thinking"}, {"from": "n10", "to": "q10", "kind": "you", "label": "decided"}, {"from": "n10", "to": "p10", "kind": "auto", "label": "shipped in"}, {"from": "n9", "to": "q9", "kind": "you", "label": "decided"}, {"from": "n9", "to": "p9", "kind": "auto", "label": "shipped in"}, {"from": "n8", "to": "q8", "kind": "you", "label": "decided"}, {"from": "n2", "to": "q2", "kind": "you", "label": "decided"}, {"from": "n1", "to": "q1", "kind": "you", "label": "so far"}], "steps": [{"card": "q1", "day": "OCT 18", "device": "", "time": ""}, {"card": "n1", "day": "OCT 18", "device": "", "time": ""}, {"card": "q2", "day": "OCT 25", "device": "", "time": ""}, {"card": "n2", "day": "OCT 25", "device": "", "time": ""}, {"card": "q3", "day": "NOV 3", "device": "", "time": ""}, {"card": "n3", "day": "NOV 3", "device": "", "time": ""}, {"card": "q4", "day": "NOV 3", "device": "", "time": ""}, {"card": "n4", "day": "NOV 3", "device": "", "time": ""}, {"card": "q5", "day": "NOV 5", "device": "", "time": ""}, {"card": "n5", "day": "NOV 5", "device": "", "time": ""}, {"card": "q6", "day": "NOV 5", "device": "", "time": ""}, {"card": "n6", "day": "NOV 5", "device": "", "time": ""}, {"card": "q7", "day": "NOV 5", "device": "", "time": ""}, {"card": "n7", "day": "NOV 5", "device": "", "time": ""}, {"card": "q8", "day": "NOV 6", "device": "", "time": ""}, {"card": "n8", "day": "NOV 6", "device": "", "time": ""}, {"card": "q9", "day": "NOV 15", "device": "", "time": ""}, {"card": "n9", "day": "NOV 15", "device": "", "time": ""}, {"card": "p9", "day": "NOV 15", "device": "", "time": ""}, {"card": "q10", "day": "NOV 18", "device": "", "time": ""}, {"card": "n10", "day": "NOV 18", "device": "", "time": ""}, {"card": "p10", "day": "NOV 18", "device": "", "time": ""}, {"card": "q11", "day": "NOV 18", "device": "", "time": ""}, {"card": "n11", "day": "NOV 18", "device": "", "time": ""}, {"card": "q12", "day": "NOV 18", "device": "", "time": ""}, {"card": "n12", "day": "NOV 18", "device": "", "time": ""}, {"card": "q13", "day": "NOV 18", "device": "", "time": ""}, {"card": "n13", "day": "NOV 18", "device": "", "time": ""}, {"card": "q14", "day": "NOV 18", "device": "", "time": ""}, {"card": "n14", "day": "NOV 18", "device": "", "time": ""}, {"card": "q15", "day": "NOV 18", "device": "", "time": ""}, {"card": "n15", "day": "NOV 18", "device": "", "time": ""}, {"card": "q16", "day": "NOV 18", "device": "", "time": ""}, {"card": "n16", "day": "NOV 18", "device": "", "time": ""}], "file": "blog.trail.md", "zoom": "actual", "verbs": {"question": "asked", "note": "answered", "page": "shipped"}};
+(function(){
+  var $=function(id){return document.getElementById(id)};
+  var stage=$("stage"), vp=$("viewport");
+  var byId={}; T.cards.forEach(function(c){byId[c.id]=c});
+  var W=0,H=0;
+  T.groups.concat(T.cards).forEach(function(o){W=Math.max(W,o.x+o.w);H=Math.max(H,o.y+o.h)});
+  W+=40;H+=40;
+  stage.style.width=W+"px";stage.style.height=H+"px";
+
+  function host(u){try{return new URL(u).hostname.replace(/^www\./,"")}catch(e){return ""}}
+  function el(tag,cls,text){var e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e}
+  function dayWord(d){
+    if(d==="today"){var p=(T.exportedAt||"").slice(5,10).split("-");var m=["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"][Number(p[0])-1];return m?m+" "+Number(p[1]):"TODAY"}
+    return (d||"").toUpperCase();
+  }
+
+  $("name").textContent=T.name; $("note").textContent=T.note; $("from").textContent="from "+T.from;
+  var sh=byId[T.startHere]; if(sh) $("start-title").textContent=sh.title; else $("start").hidden=true;
+
+  T.groups.forEach(function(g){
+    var d=el("div","group"+(g.resolved?" resolved":""));
+    d.style.cssText="left:"+g.x+"px;top:"+(g.y+28)+"px;width:"+g.w+"px;height:"+(g.h-28)+"px";
+    var n=el("span","label gname",g.name+(g.resolved?" · resolved":""));n.style.color="var(--ink-muted)";
+    d.appendChild(n);g.el=d;stage.appendChild(d);
+  });
+
+  var NS="http://www.w3.org/2000/svg";
+  var svg=document.createElementNS(NS,"svg");svg.setAttribute("class","links");svg.setAttribute("width",W);svg.setAttribute("height",H);
+  svg.innerHTML='<defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#a1a1a6"/></marker></defs>';
+  stage.appendChild(svg);
+
+  function line(t){return t.lines||[]}
+  T.cards.forEach(function(c){
+    var d=el("div","card "+c.type);d.id="card-"+c.id;
+    d.style.cssText="left:"+c.x+"px;top:"+c.y+"px;width:"+c.w+"px;height:"+c.h+"px";
+    var L=line(c), meta="", title=el("div","title"), body=null, kw=null;
+    if(c.url){var a=el("a",null,c.title);a.href=c.url;a.target="_blank";a.rel="noopener";title.appendChild(a)}else title.textContent=c.title;
+    if(c.type==="page"){meta="Page · "+host(c.url);body=L.filter(function(x){return x.indexOf("Keywords:")!==0})[0];var k=L.filter(function(x){return x.indexOf("Keywords:")===0})[0];if(k)kw=k.replace("Keywords: ","").split(", ").join(" · ")}
+    else if(c.type==="video"){meta="Video · "+host(c.url);body=L[0]}
+    else if(c.type==="question"){meta="Question · "+(L[0]||"").replace("Status: ","");body=(L[1]||"").replace(/^- /,"")}
+    var opts=c.options&&c.options.length?c.options:null;if(opts)body=(L[1]||"").replace(/^- /,"");
+    else if(c.type==="report"){meta="Report · "+(L[1]||"");body=(L[0]||"").replace(/\s*\[\d\](\[\d\])*/g,"")}
+    else if(c.type==="capture"){meta="Capture · "+(L[0]||"").replace("Captured from ","");title.className="title quote";title.textContent="“"+c.title+"”"}
+    else if(c.type==="note"){meta="Note · "+((L[1]||"").replace(/^— /,""));title.className="body";title.style.color="var(--ink)";title.textContent=L[0]||""}
+    var gg=T.groups.filter(function(g){return g.id===c.group})[0];if(gg)d.appendChild(el("div","gtag",gg.name));
+    d.appendChild(el("div","meta",meta));d.appendChild(title);
+    if(body){d.appendChild(el("p","body",body))}
+    if(opts){var ol=el("ol","opts");opts.forEach(function(o){var li=el("li","opt v-"+o.v.toLowerCase().replace(/ /g,"-"));li.appendChild(el("span","verdict",o.v));li.appendChild(el("span","otext",o.t));if(o.why)li.appendChild(el("span","owhy",o.why));ol.appendChild(li)});var lab=el("div","optlabel","Options");d.appendChild(lab);d.appendChild(ol)}
+    if(kw){d.appendChild(el("div","kw",kw))}
+    c.el=d;stage.appendChild(d);
+  });
+
+  function edge(c,tx,ty){
+    var cx=c.x+c.w/2,cy=c.y+c.h/2,dx=tx-cx,dy=ty-cy;if(!dx&&!dy)return[cx,cy];
+    var s=Math.min(Math.abs((c.w/2)/(dx||1e-9)),Math.abs((c.h/2)/(dy||1e-9)));return[cx+dx*s,cy+dy*s];
+  }
+  T.links.forEach(function(k){
+    var a=byId[k.from],b=byId[k.to];if(!a||!b)return;
+    var p=edge(a,b.x+b.w/2,b.y+b.h/2),q=edge(b,a.x+a.w/2,a.y+a.h/2);
+    var g=document.createElementNS(NS,"g");
+    var ln=document.createElementNS(NS,"line");
+    ln.setAttribute("x1",p[0]);ln.setAttribute("y1",p[1]);ln.setAttribute("x2",q[0]);ln.setAttribute("y2",q[1]);
+    var col=k.kind==="you"?"#ffffff":"#a1a1a6";ln.setAttribute("stroke",col);ln.setAttribute("stroke-width",k.kind==="you"?1.5:1.25);
+    if(k.kind==="auto")ln.setAttribute("stroke-dasharray","3 4");
+    if(k.kind==="nav")ln.setAttribute("marker-end","url(#arr)");
+    g.appendChild(ln);
+    if(k.kind==="you"){[p,q].forEach(function(pt){var c=document.createElementNS(NS,"circle");c.setAttribute("cx",pt[0]);c.setAttribute("cy",pt[1]);c.setAttribute("r",3.5);c.setAttribute("fill","#ffffff");g.appendChild(c)})}
+    if(k.label){
+      var mx=(p[0]+q[0])/2,my=(p[1]+q[1])/2,txt=k.label;
+      var w=txt.length*7+16,r=document.createElementNS(NS,"rect");
+      r.setAttribute("x",mx-w/2);r.setAttribute("y",my-11);r.setAttribute("width",w);r.setAttribute("height",22);r.setAttribute("rx",4);r.setAttribute("fill","#000000");r.setAttribute("stroke","#2a2a2d");
+      var t=document.createElementNS(NS,"text");t.setAttribute("x",mx);t.setAttribute("y",my+4);t.setAttribute("text-anchor","middle");t.setAttribute("fill","#a1a1a6");t.setAttribute("font-size","12");t.setAttribute("font-family","JetBrains Mono, ui-monospace, monospace");t.textContent=txt;
+      g.appendChild(r);g.appendChild(t);
+    }
+    k.el=g;svg.appendChild(g);
+  });
+
+  // Zoom: fit the canvas to the viewport, or show it at full size.
+  var mode=T.zoom||"fit";
+  function scale(){
+    var s=1;if(mode==="fit"){var aw=vp.clientWidth-80,ah=vp.clientHeight-80;s=Math.max(.35,Math.min(1,aw/W,ah/H))}
+    stage.style.transform="scale("+s+")";stage.style.width=W+"px";stage.style.height=H+"px";
+    stage.style.marginRight=(40-W*(1-s))+"px";stage.style.marginBottom=(40-H*(1-s))+"px";
+  }
+  $("fit").onclick=function(){mode="fit";scale()};$("actual").onclick=function(){mode="actual";scale()};
+  addEventListener("resize",scale);scale();
+
+  // Replay: steps follow the trail's timeline, oldest first.
+  var N=T.steps.length,k=N,timer=null;
+  var verb=T.verbs||{question:"asked",page:"read",video:"saved a video",report:"got a report",capture:"captured",note:"wrote a note"};
+  function render(){
+    var shown={};T.steps.slice(0,k).forEach(function(s){shown[s.card]=1});
+    T.cards.forEach(function(c){c.el.classList.toggle("hidden",!shown[c.id]);c.el.classList.remove("current")});
+    T.links.forEach(function(l){if(l.el)l.el.style.opacity=(shown[l.from]&&shown[l.to])?1:0});
+    T.groups.forEach(function(g){g.el.style.opacity=T.cards.some(function(c){return c.group===g.id&&shown[c.id]})?1:0});
+    var cap=$("caption");
+    if(k>=N){$("step").textContent=N+" steps";cap.innerHTML="";cap.appendChild(document.createTextNode("The whole trail. Press Play to see how it was built."));}
+    else{
+      var s=T.steps[k-1],c=byId[s.card];c.el.classList.add("current");
+      $("step").textContent="Step "+k+" of "+N;
+      cap.textContent="";var m=el("span","tele",[dayWord(s.day),(s.device||"").toUpperCase(),s.time].filter(Boolean).join(" · "));cap.appendChild(m);cap.appendChild(document.createElement("br"));
+      var b=el("b",null,T.from+" "+(verb[c.type]||"added")+": ");cap.appendChild(b);cap.appendChild(document.createTextNode(c.type==="note"?(c.lines[0]||""):c.title));
+      if(mode==="actual")c.el.scrollIntoView({block:"center",inline:"center",behavior:"smooth"});
+    }
+    $("prev").disabled=k<=1||k>=N;$("next").disabled=false;$("next").textContent=k>=N?"Step 1":"Next";$("end").disabled=k>=N;
+    $("play").textContent=timer?"Pause":"Play";
+  }
+  function stop(){if(timer){clearInterval(timer);timer=null}}
+  $("play").onclick=function(){
+    if(timer){stop();render();return}
+    if(k>=N)k=0;
+    timer=setInterval(function(){k++;if(k>=N){stop()}render()},1400);k++;render();
+    if(window.va)window.va("event",{name:"blog-replay"});
+  };
+  $("next").onclick=function(){stop();if(k>=N)k=0;k=Math.min(N,k+1);render()};
+  $("prev").onclick=function(){stop();k=Math.max(1,k-1);render()};
+  $("end").onclick=function(){stop();k=N;render()};
+  $("start").onclick=function(){
+    stop();k=N;render();var on=$("start").getAttribute("aria-pressed")!=="true";
+    $("start").setAttribute("aria-pressed",on);if(sh){sh.el.classList.toggle("focus",on);if(on)sh.el.scrollIntoView({block:"center",inline:"center",behavior:"smooth"})}
+  };
+  document.querySelectorAll("[data-track]").forEach(function(a){a.addEventListener("click",function(){if(window.va)window.va("event",{name:a.getAttribute("data-track")})})});
+  render();
+})();
+</script>
+</body>
+</html>

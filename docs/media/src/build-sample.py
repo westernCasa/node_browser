@@ -110,6 +110,16 @@ data = {"name": name, "note": note, "from": fm.get("exported-by", ""), "exported
         "file": src.name}
 html = template.replace("/*TRAIL_DATA*/null", json.dumps(data, ensure_ascii=False))
 html = html.replace("{{TRAIL_FILE}}", src.name)
+PAGE = {"TITLE": "Sourdough starters · a sample trail · NODE Research Browser",
+        "DESC": "A real trail made in NODE Research Browser and shared as one file: cards, groups, links, open questions and a Replay of how it was built.",
+        "URL": "https://noderesearch.app/sample", "HEAD_EXTRA": "",
+        "OG_TITLE": "Sourdough starters · a sample trail",
+        "OG_DESC": "A trail made in NODE Research Browser and shared as one file. Open it, replay how it was built, and see what is still open.",
+        "TAG": "Sample trail · read only",
+        "ABOUT": "This is a real trail made in NODE Research Browser and shared as one file. In NODE it opens like this, and you can save your own copy and keep going.",
+        "ABOUT_FOOT": "The file is plain Markdown. Any editor can read it.", "BODY_CLASS": ""}
+for k, v in PAGE.items():
+    html = html.replace("{{%s}}" % k, v)
 index = (out.parent / "index.html").read_text(encoding="utf-8")
 m = re.search(r'<svg[^>]*class="lockup".*?</svg>', index, re.S)
 html = html.replace("{{LOCKUP}}", m.group(0) if m else "NODE")
