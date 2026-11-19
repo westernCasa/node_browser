@@ -86,6 +86,15 @@ svg.links{position:absolute;left:0;top:0;overflow:visible;pointer-events:none;z-
 .card .quote{font-style:italic;color:var(--ink)}
 .card .kw{font:400 11px/16px var(--mono);color:var(--ink-muted);margin-top:auto}
 .card.question .title::before{content:"? ";color:var(--ink-muted)}
+.card .optlabel{font:600 11px/16px var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--ink-muted);border-top:1px solid var(--line);padding-top:var(--space-2)}
+.card ol.opts{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.card .opt{display:flex;flex-direction:column;gap:2px;padding-left:10px;border-left:2px solid var(--line)}
+.card .opt .verdict{font:400 11px/14px var(--mono);text-transform:uppercase;letter-spacing:.04em;color:var(--ink-muted)}
+.card .opt .otext{font:400 14px/20px var(--sans);color:var(--ink)}
+.card .opt .owhy{font:400 13px/18px var(--sans);color:var(--ink-muted)}
+.card .opt.v-chosen,.card .opt.v-leaning{border-left-color:var(--ink)}
+.card .opt.v-chosen .verdict,.card .opt.v-leaning .verdict{color:var(--ink)}
+.card .opt.v-dropped .otext,.card .opt.v-not-possible .otext{color:var(--ink-muted)}
 .card .gtag{display:none;font:600 11px/16px var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--ink-muted)}
 .card.hidden{opacity:0;pointer-events:none}
 .card.current{border-color:var(--signal);border-width:2px;padding:calc(var(--space-3) - 1px)}
@@ -199,12 +208,14 @@ var T = {"name": "Sourdough starters", "note": "Winter is solved. Still stuck on
     if(c.type==="page"){meta="Page · "+host(c.url);body=L.filter(function(x){return x.indexOf("Keywords:")!==0})[0];var k=L.filter(function(x){return x.indexOf("Keywords:")===0})[0];if(k)kw=k.replace("Keywords: ","").split(", ").join(" · ")}
     else if(c.type==="video"){meta="Video · "+host(c.url);body=L[0]}
     else if(c.type==="question"){meta="Question · "+(L[0]||"").replace("Status: ","");body=(L[1]||"").replace(/^- /,"")}
+    var opts=c.options&&c.options.length?c.options:null;if(opts)body=(L[1]||"").replace(/^- /,"");
     else if(c.type==="report"){meta="Report · "+(L[1]||"");body=(L[0]||"").replace(/\s*\[\d\](\[\d\])*/g,"")}
     else if(c.type==="capture"){meta="Capture · "+(L[0]||"").replace("Captured from ","");title.className="title quote";title.textContent="“"+c.title+"”"}
     else if(c.type==="note"){meta="Note · "+((L[1]||"").replace(/^— /,""));title.className="body";title.style.color="var(--ink)";title.textContent=L[0]||""}
     var gg=T.groups.filter(function(g){return g.id===c.group})[0];if(gg)d.appendChild(el("div","gtag",gg.name));
     d.appendChild(el("div","meta",meta));d.appendChild(title);
     if(body){d.appendChild(el("p","body",body))}
+    if(opts){var ol=el("ol","opts");opts.forEach(function(o){var li=el("li","opt v-"+o.v.toLowerCase().replace(/ /g,"-"));li.appendChild(el("span","verdict",o.v));li.appendChild(el("span","otext",o.t));if(o.why)li.appendChild(el("span","owhy",o.why));ol.appendChild(li)});var lab=el("div","optlabel","Options");d.appendChild(lab);d.appendChild(ol)}
     if(kw){d.appendChild(el("div","kw",kw))}
     c.el=d;stage.appendChild(d);
   });

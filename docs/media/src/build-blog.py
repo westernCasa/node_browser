@@ -22,7 +22,8 @@ SITE = "https://noderesearch.app"
 FIELDS = ["Topic", "Status", "Decision", "Why", "Next", "Read"]
 STATUSES = ["Open", "Proposed", "In progress", "Decided", "Parked"]
 LEAD = {"Decided": "Decided", "Proposed": "Plan", "Open": "Thinking", "Parked": "For now", "In progress": "So far"}
-TOPIC_ORDER = ["Who it's for", "Sharing", "Privacy", "Engine"]
+TOPIC_ORDER = ["First week", "Who it's for", "Sharing", "Privacy", "Engine"]
+VERDICTS = ["Chosen", "Leaning", "Also offered", "Also doing", "Fallback", "Later", "Parked", "Dropped", "Not possible"]
 MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
 # ---- Read the posts ----
@@ -32,6 +33,13 @@ for line in src.read_text(encoding="utf-8").splitlines():
     if m:
         cur = {"date": m.group(1), "q": m.group(2).strip()}
         posts.append(cur)
+        continue
+    m = re.match(r"Option: (.+)$", line)
+    if cur and m:
+        parts = [x.strip() for x in m.group(1).split("|")]
+        if len(parts) < 2 or parts[0] not in VERDICTS:
+            sys.exit(f"post {cur['date']}: option '{m.group(1)}' needs 'Verdict | option | why', verdict one of {', '.join(VERDICTS)}")
+        cur.setdefault("options", []).append({"v": parts[0], "t": parts[1], "why": parts[2] if len(parts) > 2 else ""})
         continue
     m = re.match(r"(%s): (.+)$" % "|".join(FIELDS), line)
     if cur and m:
@@ -64,8 +72,9 @@ def answer(p):
     return t
 
 # ---- Lay out the canvas: one group per topic, a row per post ----
-QW, NW, PW, PAD, GAP = 300, 380, 260, 40, 60
-q_h = lambda p: 100 + 22 * math.ceil(len(p["q"]) / 26)
+QW, NW, PW, PAD, GAP = 400, 380, 260, 40, 60
+opt_h = lambda o: 28 + 20 * math.ceil(len(o["t"]) / 46) + (18 * math.ceil(len(o["why"]) / 54) if o["why"] else 0)
+q_h = lambda p: 110 + 22 * math.ceil(len(p["q"]) / 34) + (28 + sum(opt_h(o) for o in p.get("options", [])) if p.get("options") else 0)
 n_h = lambda p: 76 + 20 * math.ceil(len(answer(p)) / 46)
 topics = sorted({p["Topic"] for p in posts}, key=lambda t: (TOPIC_ORDER.index(t) if t in TOPIC_ORDER else 99, t))
 groups, cards, links = [], [], []
@@ -84,7 +93,9 @@ for gi, topic in enumerate(topics):
         n = p["n"]
         p["qid"], p["nid"], p["pid"] = f"q{n}", f"n{n}", f"p{n}"
         cards.append({"id": p["qid"], "type": "question", "x": gx + PAD, "y": y, "w": QW, "h": q_h(p), "group": gid,
-                      "title": p["q"], "lines": ["Status: " + ("resolved" if p["Status"] == "Decided" else "open"), f"- Sven: {p['Status']}, {day(p['date'])}"]})
+                      "title": p["q"], "lines": ["Status: " + ("resolved" if p["Status"] == "Decided" else "open"), f"- Sven: {p['Status']}, {day(p['date'])}"]
+                      + [f"- Sven: Option: {o['t']}. {o['v']}." + (f" {o['why']}" if o["why"] else "") for o in p.get("options", [])],
+                      "options": p.get("options", [])})
         nx = gx + PAD + QW + GAP
         cards.append({"id": p["nid"], "type": "note", "x": nx, "y": y, "w": NW, "h": n_h(p), "group": gid,
                       "title": "Note", "lines": [answer(p), f"— Sven · {short(p['date'])}"]})
@@ -97,7 +108,7 @@ for gi, topic in enumerate(topics):
 
 open_posts = [p for p in posts if p["Status"] in ("Open", "Proposed")]
 start = (open_posts or posts)[0]
-intro = "I'm Sven, and I make NODE. This blog is a NODE trail: each question I ran into is a card, and my answer is the note linked to it."
+intro = "I'm Sven, and I make NODE. This blog is a NODE trail: each question I ran into is a card with the options I looked at, and my answer is the note linked to it."
 by_card = {c["id"]: c for c in cards}
 
 # Replay: oldest post first, the question then the answer then the release.
@@ -147,7 +158,7 @@ PAGE = {
     "OG_TITLE": "Building NODE · blog",
     "OG_DESC": "The questions I run into while building NODE, and what I decide. Laid out as a NODE trail.",
     "TAG": f"Blog · {len(posts)} posts · updated {day(updated)}",
-    "ABOUT": "Press Play to see the questions in the order I answered them, or Start here for what I'm working out now. Download the file to open this blog in NODE.",
+    "ABOUT": "Each question card lists the options I looked at, and the note linked to it says what I decided and why. Press Play to see them in the order I worked through them, or Start here for what I'm working out now. Download the file to open this blog in NODE.",
     "ABOUT_FOOT": 'Follow along with the <a href="/blog.xml">RSS feed</a>. The file is plain Markdown.',
     "BODY_CLASS": "phone-list",
 }
@@ -168,7 +179,7 @@ for p in posts:
     <guid isPermaLink="false">node-blog-{p["slug"]}-{p["Status"].lower().replace(" ", "-")}</guid>
     <pubDate>{rfc822(p["date"])}</pubDate>
     <category>{esc(p["Topic"])}</category>
-    <description>{esc(answer(p))}</description>
+    <description>{esc(" ".join(["Options: " + "; ".join(o["t"] + " (" + o["v"].lower() + ")" for o in p["options"]) + "."] if p.get("options") else []) + " " + answer(p)).strip()}</description>
   </item>''')
 (out / "blog.xml").write_text(f'''<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
