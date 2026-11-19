@@ -3918,7 +3918,7 @@ api?.onCommand?.((msg) => {
   else if (msg.cmd === "side-over") mirrorWhileImmersive(msg.shown);
   else if (msg.cmd === "trail-changed") {
     refreshCanvasData();
-    if (msg.remote) refreshSideTrails(true); // B50: names and trails from another device
+    if (msg.remote || msg.named) refreshSideTrails(true); // B50: from another device; B128: a new trail named
   } else if (msg.cmd === "sync-status") paintSync(msg);
   else if (msg.cmd === "session-reloaded") api.researchGet?.().then((s) => s && adoptSession(s));
 });

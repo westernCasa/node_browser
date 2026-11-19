@@ -363,4 +363,32 @@ const session = (id, extra) => ({
   assert.ok(per < 50, `snapshot of 200 cards took ${per} ms`);
   ok(`200 cards: built in ${t1 - t0} ms; snapshot ${per.toFixed(1)} ms`);
 }
+// B128: a new trail takes its name from its first search or first page.
+{
+  const { trailNameFrom } = require("../core/trail");
+  assert.strictEqual(trailNameFrom("How to build a levain | King Arthur Baking", { title: true }), "How to build a levain");
+  assert.strictEqual(trailNameFrom("Lactic acid bacteria in rye sourdough – Journal of Cereal Science", { title: true }), "Lactic acid bacteria in rye sourdough");
+  assert.ok(trailNameFrom("A very long page title about the hydration of sourdough starters in winter", { title: true }).length <= 41);
+  assert.strictEqual(trailNameFrom("https://example.com/page"), "");
+  const store = new TrailStore(memoryStorage(), { now });
+  const a = store.create().trail.id;
+  assert.ok(store.get(a).trail.autoName);
+  store.nameFromPage(a, "https://accounts.example.com/login", "Sign in | Example");
+  assert.ok(/^Research /.test(store.get(a).trail.name), "sign-in pages never name a trail");
+  store.nameFromPage(a, "https://www.google.com/search?q=rye+malt", "");
+  assert.strictEqual(store.get(a).trail.name, "rye malt");
+  store.nameFromPage(a, "https://example.com/x", "Something else");
+  assert.strictEqual(store.get(a).trail.name, "rye malt", "once only");
+  assert.ok(store.events(a).some((e) => e.type === "renamed" && e.data.auto));
+  store.applySession({ ...store.sessionView?.(a), id: a, name: store.get(a).trail.autoFrom });
+  assert.strictEqual(store.get(a).trail.name, "rye malt", "a stale session view doesn't undo it");
+  const b = store.create("Named").trail.id;
+  store.nameFromPage(b, "https://example.com/x", "Page title");
+  assert.strictEqual(store.get(b).trail.name, "Named");
+  const c = store.create().trail.id;
+  store.rename(c, "Mine");
+  store.nameFromPage(c, "https://example.com/x", "Page title");
+  assert.strictEqual(store.get(c).trail.name, "Mine");
+  ok("B128: a new trail is named by its first search or page, once; typed names stay");
+}
 console.log(`\n${n} checks passed (ENGAGED_MS ${ENGAGED_MS})`);

@@ -82,12 +82,36 @@ function monogram(name) {
 }
 const isReading = (url) => /^https?:/i.test(url || "") && !NOT_READING.test(url) && !isSensitiveUrl(url);
 
+// B128: a name for a new trail from its first search or first page. A search
+// keeps its words; a page title loses its site name ("How to build a levain
+// | King Arthur" → "How to build a levain"). At most 40 characters, cut at a
+// word. "" when there is nothing worth naming it.
+const NAME_MAX = 40;
+const DEFAULT_NAME = /^Research \d{1,4}[/.\-]\d{1,2}[/.\-]\d{1,4}\.?$/;
+function trailNameFrom(text, { title = false } = {}) {
+  let t = String(text || "").replace(/\s+/g, " ").trim();
+  if (!t || /^(https?:|www\.)/i.test(t) || /^[\w.-]+\.[a-z]{2,}(\/|$)/i.test(t)) return "";
+  if (title) {
+    const parts = t.split(/\s+[|·•—–-]\s+/);
+    if (parts.length > 1 && parts[parts.length - 1].length <= 30) parts.pop();
+    t = parts.join(" - ").trim();
+  }
+  if (t.length > NAME_MAX) {
+    const cut = t.slice(0, NAME_MAX + 1);
+    const sp = cut.lastIndexOf(" ");
+    t = (sp > 20 ? cut.slice(0, sp) : t.slice(0, NAME_MAX - 1)).replace(/[\s,;:.\-–—|]+$/, "") + "…";
+  }
+  return t.length >= 2 ? t : "";
+}
+
 function blankTrail(name, at = Date.now()) {
   const id = newId();
   const nm = String(name || "").trim().slice(0, 120) || `Research ${new Date(at).toLocaleDateString()}`;
   return {
     v: FORMAT,
-    trail: { id, name: nm, mono: monogram(nm), createdAt: at, lastAt: at, readonly: false, from: "", file: "", note: "", startHere: "" },
+    // autoName: still on its default name, so its first search or page names
+    // it (B128). Trails made before B128 don't have it, and keep their names.
+    trail: { id, name: nm, mono: monogram(nm), createdAt: at, lastAt: at, readonly: false, from: "", file: "", note: "", startHere: "", ...(String(name || "").trim() ? {} : { autoName: true }) },
     cards: [],
     groups: [],
     lines: [],
@@ -358,11 +382,36 @@ class TrailStore {
     const d = this.get(id);
     const nm = String(name || "").trim().slice(0, 120);
     if (!d || !nm || nm === d.trail.name) return d;
+    delete d.trail.autoName; // a name the person chose is never replaced (B128)
     d.trail.name = nm;
     d.trail.mono = monogram(nm);
     this.event(id, { type: "renamed", data: { trail: nm } });
     this.save(id);
     return d;
+  }
+  // B128: names a trail still on its default name from its first search or
+  // page, once. Returns the trail, or null when nothing changed.
+  autoName(id, text, { title = false, at = this.now() } = {}) {
+    const d = this.get(id);
+    if (!d || d.trail.readonly || !d.trail.autoName) return null;
+    const nm = trailNameFrom(text, { title });
+    if (!nm) return null;
+    d.trail.autoFrom = d.trail.name; // the default name, so a stale session view can't put it back
+    delete d.trail.autoName;
+    d.trail.name = nm;
+    d.trail.mono = monogram(nm);
+    this.event(id, { type: "renamed", at, data: { trail: nm, auto: true } });
+    this.save(id);
+    return d;
+  }
+  // A page started (url) or got its title: the trail's first search names it,
+  // or else its first page's title. Sign-in pages and start pages never do.
+  nameFromPage(id, url, title = "") {
+    if (!this.get(id)?.trail.autoName) return null;
+    const q = Prov.searchQuery(url || "");
+    if (q) return this.autoName(id, q);
+    if (!isReading(url) || !title) return null;
+    return this.autoName(id, title, { title: true });
   }
   // The switcher's list, most recently used first.
   list() {
@@ -664,6 +713,7 @@ class TrailStore {
     if (have) return have;
     const [w, h] = SIZE.search;
     const pos = placeNear({ cards: d.cards.filter((c) => !c.removed), groups: d.groups }, null, w, h, { near: near || this.below(id, w) });
+    this.autoName(id, q, { at }); // B128: the first search names a new trail
     return this.addCard(id, { kind: "search", query: q, title: `Search: ${q}`, url, x: pos.x, y: pos.y, placedAt: at }, { at, data: { query: q } });
   }
   // The search card for a results page: same address, or same query (the
@@ -990,7 +1040,12 @@ class TrailStore {
   applySession(session) {
     if (!session?.id) return null;
     let id = session.id;
-    if (!this.get(id)) this.create(session.name, { at: session.started || this.now(), id, current: false });
+    if (!this.get(id)) {
+      const made = this.create(session.name, { at: session.started || this.now(), id, current: false });
+      // A new session on its default name ("Research 18/11/2026", core/research.js)
+      // is named by its first search or page (B128).
+      if (DEFAULT_NAME.test(made.trail.name)) made.trail.autoName = true;
+    }
     const d = this.get(id);
     // An opened file (B109) is read only: pages read and renames made while
     // it is shown are not written into it.
@@ -998,7 +1053,10 @@ class TrailStore {
     const now = this.now();
     // A rename made through research:* is an event too, like rename().
     const nm = session.name ? String(session.name).trim().slice(0, 120) : "";
-    if (nm && nm !== d.trail.name) {
+    // B128: a session view read before the trail was named still has the
+    // default name; that isn't a rename.
+    if (nm && nm !== d.trail.name && !(d.trail.autoFrom && nm === d.trail.autoFrom)) {
+      delete d.trail.autoName;
       d.trail.name = nm;
       d.trail.mono = monogram(nm);
       this.event(id, { type: "renamed", data: { trail: nm } });
@@ -1266,4 +1324,4 @@ function sessionStorageOver(store) {
   };
 }
 
-module.exports = { TrailStore, migrateSessions, sessionStorageOver, monogram, hashId, mediaKindOf, SIZE, MEDIA_KINDS, MEDIA_SIZE, ENGAGED_MS, SESSION_GAP_MS, EVENT_TYPES, CARD_KINDS, LINE_KINDS };
+module.exports = { trailNameFrom, TrailStore, migrateSessions, sessionStorageOver, monogram, hashId, mediaKindOf, SIZE, MEDIA_KINDS, MEDIA_SIZE, ENGAGED_MS, SESSION_GAP_MS, EVENT_TYPES, CARD_KINDS, LINE_KINDS };

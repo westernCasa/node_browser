@@ -148,6 +148,14 @@ function Browser({ services }) {
       store: services.trails,
       trailOf: () => services.research.current.id,
       onCard: () => setTrailVersion((v) => v + 1),
+      // B128: a new trail was named from its first search or page.
+      onNamed: (id) => {
+        if (id === services.research.current.id) {
+          services.research.saveNow?.();
+          services.research.reload?.();
+        }
+        setTrailVersion((v) => v + 1);
+      },
     });
   }
   const onScreenRef = useRef([]); // tab ids on screen now, for time on page

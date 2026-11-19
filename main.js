@@ -615,6 +615,21 @@ function pageStarted(tab, url) {
   tab.page = { url, from, via: pageVia(tab, prev, from), played: false, media: false, startedAt: Date.now(), shownMs: 0, engaged: false, trail: tab.trail };
   tab.nextVia = null;
   tab.openedFrom = "";
+  nameTrailFrom(tab.trail, url, "", tab.page.via);
+}
+// B128: a new trail (still on its default name) takes its name from its first
+// search, or else from the title of its first page. Once; a name the person
+// typed is never replaced. via: the search a page was reached from counts too.
+function nameTrailFrom(trail, url, title, via) {
+  if (!trailStore || !trail || !trailStore.get(trail)?.trail.autoName) return;
+  const named = (via?.how === "search" && via.query && trailStore.autoName(trail, via.query)) || trailStore.nameFromPage(trail, url, title);
+  if (!named) return;
+  if (trail === currentTrail()) {
+    research.saveNow();
+    research.reload();
+    sendUi("session-reloaded");
+  }
+  sendUi("trail-changed", { trail, named: true });
 }
 function pageEnded(tab) {
   const p = tab.page;
@@ -1105,6 +1120,12 @@ function attachListeners(tab) {
   });
   on("page-title-updated", (_e, title) => {
     if (!tab.private) historyStore.updateTitle(wc.getURL(), title);
+    // B128: the first page's title names a new trail, once the title settles.
+    if (!tab.private && tab.page && trailStore?.get(tab.page.trail)?.trail.autoName) {
+      clearTimeout(tab.nameTimer);
+      const page = tab.page;
+      tab.nameTimer = setTimeout(() => tab.page === page && !wc.isDestroyed() && nameTrailFrom(page.trail, page.url, wc.getTitle()), 1500);
+    }
     // Google refuses sign-in in apps built on Electron. Say so, and offer the
     // system browser for tasks that need a Google account.
     if (/(^|\.)accounts\.google\.com$/.test(hostOf(wc.getURL())) && /couldn.t sign you in/i.test(title)) {
