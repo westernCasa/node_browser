@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Decision log · NODE Research Browser</title>
+<meta name="description" content="The questions we asked while building NODE Research Browser, and what we decided. Newest first.">
+<link rel="canonical" href="https://noderesearch.app/log">
+<link rel="alternate" type="application/rss+xml" title="NODE decision log" href="https://noderesearch.app/log.xml">
+<meta name="theme-color" content="#000000">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta property="og:type" content="website">
+<meta property="og:title" content="NODE decision log">
+<meta property="og:description" content="The questions we asked while building NODE Research Browser, and what we decided.">
+<meta property="og:url" content="https://noderesearch.app/log">
+<meta property="og:image" content="https://noderesearch.app/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<script>window.va=window.va||function(){(window.vaq=window.vaq||[]).push(arguments)};</script>
+<script defer src="/_vercel/insights/script.js"></script>
+<style>
+@font-face{font-family:"Barlow";font-weight:400;font-display:swap;src:url(/fonts/barlow-latin-400-normal.woff2) format("woff2")}
+@font-face{font-family:"Barlow";font-weight:600;font-display:swap;src:url(/fonts/barlow-latin-600-normal.woff2) format("woff2")}
+@font-face{font-family:"Barlow";font-weight:700;font-display:swap;src:url(/fonts/barlow-latin-700-normal.woff2) format("woff2")}
+@font-face{font-family:"JetBrains Mono";font-weight:400;font-display:swap;src:url(/fonts/jetbrains-mono-latin-400-normal.woff2) format("woff2")}
+:root{--surface:#000;--raised:#0e0e0f;--line:#2a2a2d;--ink:#fff;--muted:#a1a1a6;--signal:#b18cff;
+  --sans:"Barlow","Helvetica Neue",Arial,sans-serif;--mono:"JetBrains Mono",ui-monospace,Menlo,monospace;color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--surface);color:var(--ink);font:400 16px/24px var(--sans);-webkit-font-smoothing:antialiased}
+a{color:var(--ink);text-underline-offset:3px}
+a:focus-visible,button:focus-visible{outline:2px solid var(--signal);outline-offset:2px}
+.label{font:600 12px/16px var(--sans);letter-spacing:.12em;text-transform:uppercase}
+.tele{font:400 13px/20px var(--mono);color:var(--muted)}
+header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px max(24px,env(safe-area-inset-left));border-bottom:1px solid var(--line)}
+header .lockup{height:22px;width:auto;display:block}
+.btn{display:inline-flex;align-items:center;height:36px;padding:0 16px;border:1px solid var(--ink);border-radius:2px;font:600 12px/1 var(--sans);letter-spacing:.12em;text-transform:uppercase;text-decoration:none}
+.btn:hover{background:var(--ink);color:var(--surface)}
+main{max-width:960px;margin:0 auto;padding:56px 24px 96px}
+h1{font:700 clamp(36px,6vw,56px)/1 var(--sans);letter-spacing:.04em;text-transform:uppercase;margin:0 0 16px}
+.lead{color:var(--muted);max-width:60ch;margin:0 0 24px}
+.filters{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 40px}
+.chip{appearance:none;background:none;border:1px solid var(--line);border-radius:2px;color:var(--muted);height:32px;padding:0 12px;cursor:pointer;font:600 11px/1 var(--sans);letter-spacing:.12em;text-transform:uppercase}
+.chip:hover{color:var(--ink)}
+.chip[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--surface)}
+.entry{display:grid;grid-template-columns:160px minmax(0,1fr);gap:24px;padding:32px 0;border-top:1px solid var(--line)}
+.entry[hidden]{display:none}
+.meta{display:flex;flex-direction:column;gap:8px;align-items:flex-start}
+.status{font:600 11px/1 var(--sans);letter-spacing:.12em;text-transform:uppercase;padding:5px 8px;border:1px solid var(--line);border-radius:2px;color:var(--muted)}
+.s-open,.s-proposed{border-color:var(--ink);color:var(--ink)}
+.s-parked,.s-in-progress{border-style:dashed}
+.q{font:600 24px/30px var(--sans);margin:0 0 16px;text-wrap:balance}
+.q a{text-decoration:none}
+.q a:hover{text-decoration:underline}
+dl{display:grid;grid-template-columns:96px minmax(0,1fr);gap:10px 16px;margin:0}
+dt{color:var(--muted);padding-top:4px}
+dd{margin:0;max-width:62ch;overflow-wrap:anywhere}
+footer{border-top:1px solid var(--line);padding-top:24px;margin-top:8px;display:flex;flex-wrap:wrap;gap:8px 24px}
+@media (max-width:700px){
+  main{padding:40px 16px 72px}
+  header{padding:16px}
+  .entry{grid-template-columns:minmax(0,1fr);gap:12px}
+  .meta{flex-direction:row;align-items:center;gap:12px}
+  .q{font-size:20px;line-height:26px}
+  dl{grid-template-columns:minmax(0,1fr);gap:4px}
+  dd{margin-bottom:10px}
+}
+</style>
+</head>
+<body>
+<header>
+  <a href="/" aria-label="NODE Research Browser home"><svg xmlns="http://www.w3.org/2000/svg" viewBox="100 100 647 140" class="lockup" aria-hidden="true"><g fill="currentColor"><g transform="translate(100,100) scale(5.83333)"><path transform="matrix(1.20193,0,0,1.20193,-1.2237,-2.42319)" d="M10.004,12.998L1.067,12.998C1.035,12.67 1.018,12.337 1.018,12C1.018,11.663 1.035,11.33 1.067,11.002L8.593,11.002L3.273,5.682C3.696,5.166 4.169,4.693 4.684,4.271L10.004,9.591L10.004,2.065C10.332,2.033 10.665,2.016 11.002,2.016C11.339,2.016 11.672,2.033 12,2.065L12,11.002L20.937,11.002C20.969,11.33 20.986,11.663 20.986,12C20.986,12.337 20.969,12.67 20.937,12.998L13.411,12.998L18.731,18.318C18.309,18.834 17.836,19.307 17.32,19.729L12,14.409L12,21.935C11.672,21.967 11.339,21.984 11.002,21.984C10.665,21.984 10.332,21.967 10.004,21.935L10.004,12.998Z"></path></g><path d="M407.85714285714283 120.0H424.57142857142856Q425.2857142857143 120.0 425.7857142857143 120.5Q426.2857142857143 121.0 426.2857142857143 121.71428571428572V218.28571428571428Q426.2857142857143 219.0 425.7857142857143 219.5Q425.2857142857143 220.0 424.57142857142856 220.0H408.42857142857144Q407.0 220.0 406.42857142857144 218.85714285714286L369.42857142857144 157.71428571428572Q369.14285714285717 157.28571428571428 368.8571428571429 157.35714285714286Q368.57142857142856 157.42857142857144 368.57142857142856 158.0L368.85714285714283 218.28571428571428Q368.85714285714283 219.0 368.35714285714283 219.5Q367.85714285714283 220.0 367.14285714285717 220.0H350.42857142857144Q349.7142857142857 220.0 349.2142857142857 219.5Q348.7142857142857 219.0 348.7142857142857 218.28571428571428V121.71428571428572Q348.7142857142857 121.0 349.2142857142857 120.5Q349.7142857142857 120.0 350.42857142857144 120.0H366.57142857142856Q368.0 120.0 368.57142857142856 121.14285714285715L405.42857142857144 182.0Q405.7142857142857 182.42857142857144 406.0 182.35714285714286Q406.2857142857143 182.28571428571428 406.2857142857143 181.71428571428572L406.1428571428571 121.71428571428572Q406.1428571428571 121.0 406.6428571428571 120.5Q407.1428571428571 120.0 407.85714285714283 120.0Z M458.85714285714283 185.28571428571428V154.71428571428572Q458.85714285714283 144.14285714285717 463.57142857142856 136.0Q468.2857142857143 127.85714285714286 476.7857142857142 123.35714285714286Q485.2857142857142 118.85714285714286 496.4285714285714 118.85714285714286Q507.71428571428567 118.85714285714286 516.2142857142857 123.35714285714286Q524.7142857142857 127.85714285714286 529.4285714285713 136.0Q534.1428571428571 144.14285714285717 534.1428571428571 154.71428571428572V185.28571428571428Q534.1428571428571 196.0 529.4285714285713 204.28571428571428Q524.7142857142857 212.57142857142858 516.2142857142857 217.07142857142858Q507.71428571428567 221.57142857142858 496.4285714285714 221.57142857142858Q485.2857142857142 221.57142857142858 476.7857142857142 217.0Q468.2857142857143 212.42857142857142 463.57142857142856 204.21428571428572Q458.85714285714283 196.0 458.85714285714283 185.28571428571428ZM514.0 186.0V154.57142857142856Q514.0 146.28571428571428 509.21428571428567 141.21428571428572Q504.4285714285714 136.14285714285717 496.4285714285714 136.14285714285717Q488.57142857142856 136.14285714285717 483.7857142857142 141.21428571428572Q478.99999999999994 146.28571428571428 478.99999999999994 154.57142857142856V186.0Q478.99999999999994 194.28571428571428 483.7857142857142 199.28571428571428Q488.57142857142856 204.28571428571428 496.4285714285714 204.28571428571428Q504.2857142857142 204.28571428571428 509.1428571428571 199.28571428571428Q514.0 194.28571428571428 514.0 186.0Z M566.7142857142857 218.28571428571428V121.71428571428572Q566.7142857142857 121.0 567.2142857142857 120.5Q567.7142857142857 120.0 568.4285714285714 120.0H604.1428571428571Q614.8571428571429 120.0 622.9285714285714 123.78571428571429Q631.0 127.57142857142858 635.4285714285714 134.42857142857144Q639.8571428571429 141.28571428571428 639.8571428571429 150.28571428571428V189.71428571428572Q639.8571428571429 198.71428571428572 635.4285714285714 205.57142857142856Q631.0 212.42857142857142 622.9285714285714 216.21428571428572Q614.8571428571429 220.0 604.1428571428571 220.0H568.4285714285714Q567.7142857142857 220.0 567.2142857142857 219.5Q566.7142857142857 219.0 566.7142857142857 218.28571428571428ZM587.5714285714286 202.71428571428572H604.8571428571429Q611.4285714285714 202.71428571428572 615.5 198.28571428571428Q619.5714285714286 193.85714285714286 619.7142857142857 186.42857142857144V153.57142857142856Q619.7142857142857 146.14285714285717 615.6428571428571 141.71428571428572Q611.5714285714286 137.28571428571428 604.7142857142857 137.28571428571428H587.5714285714286Q586.8571428571429 137.28571428571428 586.8571428571429 138.0V202.0Q586.8571428571429 202.71428571428572 587.5714285714286 202.71428571428572Z M739.8571428571429 137.28571428571428H693.0Q692.2857142857143 137.28571428571428 692.2857142857143 138.0V160.14285714285714Q692.2857142857143 160.85714285714286 693.0 160.85714285714286H723.7142857142858Q724.4285714285714 160.85714285714286 724.9285714285714 161.35714285714286Q725.4285714285714 161.85714285714286 725.4285714285714 162.57142857142858V176.42857142857144Q725.4285714285714 177.14285714285714 724.9285714285714 177.64285714285714Q724.4285714285714 178.14285714285714 723.7142857142858 178.14285714285714H693.0Q692.2857142857143 178.14285714285714 692.2857142857143 178.85714285714286V202.0Q692.2857142857143 202.71428571428572 693.0 202.71428571428572H739.8571428571429Q740.5714285714286 202.71428571428572 741.0714285714286 203.21428571428572Q741.5714285714286 203.71428571428572 741.5714285714286 204.42857142857142V218.28571428571428Q741.5714285714286 219.0 741.0714285714286 219.5Q740.5714285714286 220.0 739.8571428571429 220.0H673.8571428571429Q673.1428571428571 220.0 672.6428571428571 219.5Q672.1428571428571 219.0 672.1428571428571 218.28571428571428V121.71428571428572Q672.1428571428571 121.0 672.6428571428571 120.5Q673.1428571428571 120.0 673.8571428571429 120.0H739.8571428571429Q740.5714285714286 120.0 741.0714285714286 120.5Q741.5714285714286 121.0 741.5714285714286 121.71428571428572V135.57142857142856Q741.5714285714286 136.28571428571428 741.0714285714286 136.78571428571428Q740.5714285714286 137.28571428571428 739.8571428571429 137.28571428571428Z"></path></g></svg></a>
+  <a class="btn" href="/#downloads" data-track="log-get">Get NODE</a>
+</header>
+<main>
+  <p class="tele">Decision log · 13 entries · updated 18 Nov 2026</p>
+  <h1>Questions and decisions</h1>
+  <p class="lead">What we asked while building NODE, what we decided and why. Newest first. Open and proposed items can still change. <a href="/log.xml">RSS feed</a>.</p>
+  <div class="filters" role="group" aria-label="Filter by status"><button type="button" class="chip" aria-pressed="true" data-f="all">All · 13</button><button type="button" class="chip" aria-pressed="false" data-f="Open">Open · 1</button><button type="button" class="chip" aria-pressed="false" data-f="Proposed">Proposed · 2</button><button type="button" class="chip" aria-pressed="false" data-f="In progress">In progress · 1</button><button type="button" class="chip" aria-pressed="false" data-f="Decided">Decided · 8</button><button type="button" class="chip" aria-pressed="false" data-f="Parked">Parked · 1</button></div>
+    <article class="entry" id="2026-11-18-how-do-we-know-if-people-come-back-without-tracking-them" data-status="Open">
+      <div class="meta"><time class="tele" datetime="2026-11-18">18 Nov 2026</time><span class="status s-open">Open</span></div>
+      <div class="body">
+        <h2 class="q"><a href="#2026-11-18-how-do-we-know-if-people-come-back-without-tracking-them">How do we know if people come back, without tracking them?</a></h2>
+        <dl><dt class="label">Decision</dt><dd>Not decided. The proposal is to add a &quot;days since install&quot; bucket (0, 1, 2 to 7, 8 to 30, 31 and up) to the anonymous daily count.</dd><dt class="label">Why</dt><dd>The daily count has no id, so it can&#x27;t tell a new user from an old one. A bucket with no id gives a retention curve across everyone without following anyone.</dd><dt class="label">Next</dt><dd>Until this is decided, the 5-person usability test is the only measure of the first week.</dd></dl>
+      </div>
+    </article>
+    <article class="entry" id="2026-11-18-what-should-the-first-five-minutes-of-node-feel-like" data-status="Proposed">
+      <div class="meta"><time class="tele" datetime="2026-11-18">18 Nov 2026</time><span class="status s-proposed">Proposed</span></div>
+      <div class="body">
+        <h2 class="q"><a href="#2026-11-18-what-should-the-first-five-minutes-of-node-feel-like">What should the first five minutes of NODE feel like?</a></h2>
+        <dl><dt class="label">Decision</dt><dd>First launch asks &quot;What are you looking into?&quot; instead of asking for API keys. Every way in ends with a trail of 3 cards, the canvas open, and an offer to send it.</dd><dt class="label">Why</dt><dd>Today the first screen is a setup form, and the trail, the part that makes NODE different, shows up later on a screen nobody is pointed to.</dd><dt class="label">Next</dt><dd>Build for 0.13 and test with 5 people. Pass: 4 of 5 reach 3 cards and the canvas without help in under 5 minutes.</dd></dl>
+      </div>
+    </article>
+    <article class="entry" id="2026-11-18-how-far-do-we-go-to-make-node-a-habit" data-status="Proposed">
+      <div class="meta"><time class="tele" datetime="2026-11-18">18 Nov 2026</time><span class="status s-proposed">Proposed</span></div>
+      <div class="body">
+        <h2 class="q"><a href="#2026-11-18-how-far-do-we-go-to-make-node-a-habit">How far do we go to make NODE a habit?</a></h2>
+        <dl><dt class="label">Decision</dt><dd>No feed, no streaks, no fake urgency, a switch for every notice kind, and first-week events counted only on the user&#x27;s computer. A change that raises visits but also raises opt-outs gets rolled back.</dd><dt class="label">Why</dt><dd>People chose NODE partly for privacy, and long experiments at Facebook and Pinterest found that pushing harder loses people over months.</dd></dl>
+      </div>
+    </article>
+    <article class="entry" id="2026-11-18-should-syncing-between-devices-need-an-account" data-status="Decided">
+      <div class="meta"><time class="tele" datetime="2026-11-18">18 Nov 2026</time><span class="status s-decided">Decided</span></div>
+      <div class="body">
+        <h2 class="q"><a href="#2026-11-18-should-syncing-between-devices-need-an-account">Should syncing between devices need an account?</a></h2>
+        <dl><dt class="label">Decision</dt><dd>No. Devices pair with a code or QR code, and trails are encrypted on the device before they&#x27;re sent. The server deletes each change once the other devices have it, after 30 days at most. Shipped in 0.12.0.</dd><dt class="label">Why</dt><dd>An account would be the first thing NODE knows about a person. A pairing code is enough to prove two devices belong together.</dd><dt class="label">Read</dt><dd><a href="https://github.com/westernCasa/node_browser/releases/tag/v0.12.0">github.com/westernCasa/node_browser/releases/tag/v0.12.0</a></dd></dl>
+      </div>
+    </article>
+    <article class="entry" id="2026-11-15-should-node-count-how-many-people-use-it" data-status="Decided">
+      <div class="meta"><time class="tele" datetime="2026-11-15">15 Nov 2026</time><span class="status s-decided">Decided</span></div>
+      <div class="body">
+        <h2 class="q"><a href="#2026-11-15-should-node-count-how-many-people-use-it">Should NODE count how many people use it?</a></h2>
+        <dl><dt class="label">Decision</dt><dd>Yes, with one anonymous count a day: the version and the operating system, with no id. It can be turned off in Settings → Help. Shipped in 0.11.0.</dd><dt class="label">Why</dt><dd>Download numbers don&#x27;t say whether anyone kept using NODE. Nothing about what people read or search is sent.</dd><dt class="label">Read</dt><dd><a href="https://github.com/westernCasa/node_browser/releases/tag/v0.11.0">github.com/westernCasa/node_browser/releases/tag/v0.11.0</a></dd></dl>
+      </div>
+    </article>
+    <article class="entry" id="2026-11-06-how-many-notifications-should-node-send" data-status="Decided">
+      <div class="meta"><time class="tele" datetime="2026-11-06">6 Nov 2026</time><span class="status s-decided">Decided</span></div>
+      <div class="body">
+        <h2 class="q"><a href="#2026-11-06-how-many-notifications-should-node-send">How many notifications should NODE send?</a></h2>
+        <dl><dt class="label">Decision</dt><dd>Few, and only about something new. A weekly budget across all kinds, a switch for each kind, system permission asked on day 3 or later, and opt-outs as the measure instead of clicks.</dd><dt class="label">Why</dt><dd>Long experiments found that fewer, more relevant notifications raise use over time, while more of them raise visits for a while and then raise opt-outs.</dd></dl>
+      </div>
+    </article>
+    <article class="entry" id="2026-11-05-who-is-node-for" data-status="Decided">
+      <div class="meta"><time class="tele" datetime="2026-11-05">5 Nov 2026</time><span class="status s-decided">Decided</span></div>
+      <div class="body">
+        <h2 class="q"><a href="#2026-11-05-who-is-node-for">Who is NODE for?</a></h2>
+        <dl><dt class="label">Decision</dt><dd>Knowledge networking between peers and small groups: one person maps what they read, and sends the whole trail to a friend or a group as one file.</dd><dt class="label">Why</dt><dd>Research gets passed on as a list of links, and the next person starts over. NODE already records the path, so sending it needs no copying.</dd></dl>
+      </div>
+    </article>
+    <article class="entry" id="2026-11-05-what-should-node-be-called" data-status="Decided">
+      <div class="meta"><time class="tele" datetime="2026-11-05">5 Nov 2026</time><span class="status s-decided">Decided</span></div>
+      <div class="body">
+        <h2 class="q"><a href="#2026-11-05-what-should-node-be-called">What should NODE be called?</a></h2>
+        <dl><dt class="label">Decision</dt><dd>NODE Research Browser. Scout and NODE R-X were dropped.</dd><dt class="label">Why</dt><dd>&quot;Research Browser&quot; says what it is. &quot;Node Browser&quot; alone collides with Node.js, and an X in the name reads as a tie to xAI.</dd></dl>
+      </div>
+    </article>
+    <article class="entry" id="2026-11-05-do-we-share-trails-as-links-or-as-files" data-status="Decided">
+      <div class="meta"><time class="tele" datetime="2026-11-05">5 Nov 2026</time><span class="status s-decided">Decided</span></div>
+      <div class="body">
+        <h2 class="q"><a href="#2026-11-05-do-we-share-trails-as-links-or-as-files">Do we share trails as links or as files?</a></h2>
+        <dl><dt class="label">Decision</dt><dd>As one plain Markdown file first. Links come once the share server works for everyone.</dd><dt class="label">Why</dt><dd>A file works today, anyone can read it in a text editor, and it outlives the app.</dd></dl>
+      </div>
+    </article>
+    <article class="entry" id="2026-11-03-should-two-people-s-trails-merge-into-one" data-status="Parked">
+      <div class="meta"><time class="tele" datetime="2026-11-03">3 Nov 2026</time><span class="status s-parked">Parked</span></div>
+      <div class="body">
+        <h2 class="q"><a href="#2026-11-03-should-two-people-s-trails-merge-into-one">Should two people&#x27;s trails merge into one?</a></h2>
+        <dl><dt class="label">Decision</dt><dd>Not yet. The work goes to one person building a trail and sharing it. When merging comes back, it starts with showing both trails on one canvas before combining anything.</dd><dt class="label">Why</dt><dd>No study was found on whether people understand two merged research maps, and Git-style merging is a model most researchers don&#x27;t share.</dd></dl>
+      </div>
+    </article>
+    <article class="entry" id="2026-11-03-is-a-trail-a-timeline-or-a-map" data-status="Decided">
+      <div class="meta"><time class="tele" datetime="2026-11-03">3 Nov 2026</time><span class="status s-decided">Decided</span></div>
+      <div class="body">
+        <h2 class="q"><a href="#2026-11-03-is-a-trail-a-timeline-or-a-map">Is a trail a timeline or a map?</a></h2>
+        <dl><dt class="label">Decision</dt><dd>A canvas, with the timeline kept beside it and Replay for whoever receives it. NODE draws the links it already knows; drawing your own is optional.</dd><dt class="label">Why</dt><dd>In studies people rarely draw links by hand, and a bare map has no clear starting point. A map plus a replay of how it was built gave 71% of facts understood at handoff, against 50%.</dd></dl>
+      </div>
+    </article>
+    <article class="entry" id="2026-10-25-can-node-run-chrome-extensions" data-status="Decided">
+      <div class="meta"><time class="tele" datetime="2026-10-25">25 Oct 2026</time><span class="status s-decided">Decided</span></div>
+      <div class="body">
+        <h2 class="q"><a href="#2026-10-25-can-node-run-chrome-extensions">Can NODE run Chrome extensions?</a></h2>
+        <dl><dt class="label">Decision</dt><dd>No. Instead, NODE&#x27;s built-in blocker uses the filter lists uBlock Origin uses by default.</dd><dt class="label">Why</dt><dd>Electron loads extensions but lacks the APIs ad blockers need, and the one path that works conflicts with NODE&#x27;s own blocker.</dd></dl>
+      </div>
+    </article>
+    <article class="entry" id="2026-10-18-electron-or-a-chromium-build" data-status="In progress">
+      <div class="meta"><time class="tele" datetime="2026-10-18">18 Oct 2026</time><span class="status s-in-progress">In progress</span></div>
+      <div class="body">
+        <h2 class="q"><a href="#2026-10-18-electron-or-a-chromium-build">Electron or a Chromium build?</a></h2>
+        <dl><dt class="label">Decision</dt><dd>Electron stays the release build. A Chromium build on ungoogled-chromium has started, mainly so Google sign-in works inside NODE.</dd><dt class="label">Why</dt><dd>Google blocks sign-in inside Electron apps, and faking Chrome breaks Google&#x27;s terms. Mosaic and address-bar suggestions need Chromium patches, so the switch waits until it reaches parity.</dd></dl>
+      </div>
+    </article>
+  <footer class="tele"><a href="/">noderesearch.app</a><a href="https://github.com/westernCasa/node_browser/blob/main/docs/decision-log.md">Source of this page</a><a href="https://github.com/westernCasa/node_browser/releases">Releases</a></footer>
+</main>
+<script>
+(function(){
+  var chips=document.querySelectorAll(".chip"),rows=document.querySelectorAll(".entry");
+  chips.forEach(function(c){c.addEventListener("click",function(){
+    var f=c.getAttribute("data-f");
+    chips.forEach(function(x){x.setAttribute("aria-pressed",String(x===c))});
+    rows.forEach(function(r){r.hidden=f!=="all"&&r.getAttribute("data-status")!==f});
+  })});
+  document.querySelectorAll("[data-track]").forEach(function(a){a.addEventListener("click",function(){window.va("event",{name:a.getAttribute("data-track")})})});
+})();
+</script>
+</body>
+</html>

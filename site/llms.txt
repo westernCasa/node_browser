@@ -8,6 +8,8 @@
 - [Sample trail](https://noderesearch.app/sample): a real shared trail, with Replay, viewable without installing
 - [Sample trail file](https://noderesearch.app/sourdough-starters.trail.md): the same trail as the plain Markdown file NODE shares
 
+- [Decision log](https://noderesearch.app/log): questions asked while building NODE and what was decided, newest first
+
 ## Project
 
 - [Source code](https://github.com/westernCasa/node_browser): MIT licence
