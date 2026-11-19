@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Build the decision log page and its feed from docs/decision-log.md.
+"""Build the blog page and its feed from docs/blog.md.
 
-    python3 docs/media/src/build-log.py docs/decision-log.md site
+    python3 docs/media/src/build-blog.py docs/blog.md site
 
-Writes site/log.html and site/log.xml (RSS). Entry format is described at the
-top of docs/decision-log.md.
+Writes site/blog.html and site/blog.xml (RSS). Post format is described at the
+top of docs/blog.md.
 """
 import html, re, sys
 from datetime import datetime, timezone
@@ -46,7 +46,8 @@ counts = {s: sum(1 for e in entries if e["Status"] == s) for s in STATUSES}
 
 items = []
 for e in entries:
-    rows = [f'<dt class="label">Decision</dt><dd>{esc(e["Decision"])}</dd>']
+    lead = {"Decided": "Decided", "Proposed": "Plan", "Open": "Thinking", "Parked": "For now", "In progress": "So far"}[e["Status"]]
+    rows = [f'<dt class="label">{lead}</dt><dd>{esc(e["Decision"])}</dd>']
     if e.get("Why"):
         rows.append(f'<dt class="label">Why</dt><dd>{esc(e["Why"])}</dd>')
     if e.get("Next"):
@@ -70,17 +71,17 @@ page = f'''<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Decision log · NODE Research Browser</title>
-<meta name="description" content="The questions we asked while building NODE Research Browser, and what we decided. Newest first.">
-<link rel="canonical" href="{SITE}/log">
-<link rel="alternate" type="application/rss+xml" title="NODE decision log" href="{SITE}/log.xml">
+<title>Blog · NODE Research Browser</title>
+<meta name="description" content="Sven on the questions he asks while building NODE Research Browser, and what he decides. Newest first.">
+<link rel="canonical" href="{SITE}/blog">
+<link rel="alternate" type="application/rss+xml" title="NODE blog" href="{SITE}/blog.xml">
 <meta name="theme-color" content="#000000">
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <meta property="og:type" content="website">
-<meta property="og:title" content="NODE decision log">
-<meta property="og:description" content="The questions we asked while building NODE Research Browser, and what we decided.">
-<meta property="og:url" content="{SITE}/log">
+<meta property="og:title" content="NODE blog">
+<meta property="og:description" content="Sven on the questions he asks while building NODE Research Browser, and what he decides.">
+<meta property="og:url" content="{SITE}/blog">
 <meta property="og:image" content="{SITE}/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <script>window.va=window.va||function(){{(window.vaq=window.vaq||[]).push(arguments)}};</script>
@@ -137,15 +138,15 @@ footer{{border-top:1px solid var(--line);padding-top:24px;margin-top:8px;display
 <body>
 <header>
   <a href="/" aria-label="NODE Research Browser home">{lockup}</a>
-  <a class="btn" href="/#downloads" data-track="log-get">Get NODE</a>
+  <a class="btn" href="/#downloads" data-track="blog-get">Get NODE</a>
 </header>
 <main>
-  <p class="tele">Decision log · {len(entries)} entries · updated {day(entries[0]["date"])}</p>
-  <h1>Questions and decisions</h1>
-  <p class="lead">What we asked while building NODE, what we decided and why. Newest first. Open and proposed items can still change. <a href="/log.xml">RSS feed</a>.</p>
-  <div class="filters" role="group" aria-label="Filter by status">{filters}</div>
+  <p class="tele">Blog · {len(entries)} posts · updated {day(entries[0]["date"])}</p>
+  <h1>Building NODE</h1>
+  <p class="lead">I'm Sven, and I make NODE. These are the questions I run into while building it, what I decide and why. Newest first. Anything marked open or proposed can still change. <a href="/blog.xml">RSS feed</a>.</p>
+  <div class="filters" role="group" aria-label="Filter posts by status">{filters}</div>
 {chr(10).join(items)}
-  <footer class="tele"><a href="/">noderesearch.app</a><a href="https://github.com/westernCasa/node_browser/blob/main/docs/decision-log.md">Source of this page</a><a href="https://github.com/westernCasa/node_browser/releases">Releases</a></footer>
+  <footer class="tele"><a href="/">noderesearch.app</a><a href="https://github.com/westernCasa/node_browser/blob/main/docs/blog.md">Source of this page</a><a href="https://github.com/westernCasa/node_browser/releases">Releases</a></footer>
 </main>
 <script>
 (function(){{
@@ -161,7 +162,7 @@ footer{{border-top:1px solid var(--line);padding-top:24px;margin-top:8px;display
 </body>
 </html>
 '''
-(out / "log.html").write_text(page, encoding="utf-8")
+(out / "blog.html").write_text(page, encoding="utf-8")
 
 def rfc822(d):
     return format_datetime(datetime.strptime(d, "%Y-%m-%d").replace(hour=12, tzinfo=timezone.utc))
@@ -171,23 +172,23 @@ for e in entries:
     desc = f'{e["Status"]}. {e["Decision"]}' + (f' Why: {e["Why"]}' if e.get("Why") else "") + (f' Next: {e["Next"]}' if e.get("Next") else "")
     rss_items.append(f'''  <item>
     <title>{esc(e["q"])}</title>
-    <link>{SITE}/log#{e["id"]}</link>
-    <guid isPermaLink="false">node-log-{e["id"]}-{e["Status"].lower().replace(" ", "-")}</guid>
+    <link>{SITE}/blog#{e["id"]}</link>
+    <guid isPermaLink="false">node-blog-{e["id"]}-{e["Status"].lower().replace(" ", "-")}</guid>
     <pubDate>{rfc822(e["date"])}</pubDate>
     <description>{esc(desc)}</description>
   </item>''')
 rss = f'''<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
 <channel>
-  <title>NODE decision log</title>
-  <link>{SITE}/log</link>
-  <atom:link href="{SITE}/log.xml" rel="self" type="application/rss+xml"/>
-  <description>Questions asked while building NODE Research Browser, and what was decided.</description>
+  <title>NODE blog</title>
+  <link>{SITE}/blog</link>
+  <atom:link href="{SITE}/blog.xml" rel="self" type="application/rss+xml"/>
+  <description>Sven on the questions he asks while building NODE Research Browser, and what he decides.</description>
   <language>en</language>
   <lastBuildDate>{rfc822(entries[0]["date"])}</lastBuildDate>
 {chr(10).join(rss_items)}
 </channel>
 </rss>
 '''
-(out / "log.xml").write_text(rss, encoding="utf-8")
-print(f"{out}/log.html, {out}/log.xml: {len(entries)} entries")
+(out / "blog.xml").write_text(rss, encoding="utf-8")
+print(f"{out}/blog.html, {out}/blog.xml: {len(entries)} posts")
