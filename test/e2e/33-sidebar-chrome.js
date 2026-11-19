@@ -1,6 +1,6 @@
 // The sidebar (B103, handoff spec 2), NODE's only chrome since the trail
 // canvas. No top bar and no layout switch. Top to bottom: trail switcher,
-// address bar, tabs (the canvas first), timeline, tool grid (4 × 2). On the
+// address bar, tabs (the canvas first), timeline, tool grid (one row, B122). On the
 // canvas it always shows; pages, Mosaic and private tabs fill the window and
 // the sidebar comes over them in its own layer. Private tabs: no trail, no
 // history.
@@ -61,10 +61,12 @@ const inSidebar = (ui, sel) => ui.evaluate((s) => Boolean(document.querySelector
   check("order: switcher, address bar, tabs, timeline, tool grid", order);
   check("Back, Forward and Reload sit on the address bar's row", (await inSidebar(ui, ".sb-addr-row #back")) && (await inSidebar(ui, ".sb-addr-row #reload")));
   const tiles = await ui.$$eval(".sb-tools .tb", (b) => b.filter((x) => x.offsetParent).map((x) => x.dataset.label));
-  check("tool grid 4 × 2: Mosaic, Capture, Suggest, Sound, Private, Open, History, Menu", tiles.join() === "Mosaic,Capture,Suggest,Sound,Private,Open,History,Menu", tiles.join());
+  check("tools: Mosaic, Capture, Suggest, Sound, Private, Open, History, Menu", tiles.join() === "Mosaic,Capture,Suggest,Sound,Private,Open,History,Menu", tiles.join());
   const tile = await ui.$eval("#layout-btn", (b) => b.getBoundingClientRect().height);
   const side = await ui.$eval("#sidebar", (s) => s.getBoundingClientRect().width);
-  check("sidebar 300 px, tool tiles 52 px", side === 300 && tile === 52, `${side} ${tile}`);
+  const rowsOfTools = await ui.$$eval(".sb-tools .tb", (b) => new Set(b.filter((x) => x.offsetParent).map((x) => Math.round(x.getBoundingClientRect().top))).size);
+  check("sidebar 300 px, tools in one row of 32 px icons (B122)", side === 300 && tile === 32 && rowsOfTools === 1, `${side} ${tile} ${rowsOfTools}`);
+  check("each tool still names itself on hover", await ui.$$eval(".sb-tools .tb", (b) => b.filter((x) => x.offsetParent).every((x) => x.dataset.tip && x.getAttribute("aria-label"))));
   check("agent, downloads and full screen moved to the Menu", await ui.evaluate(() => ["agent-btn", "agent-share-btn", "dl-btn", "fullscreen-btn"].every((id) => document.querySelector(`#menu-overlay #${id}`))));
   check("on the canvas the sidebar shows and no layer is needed", (await ui.evaluate(() => !document.getElementById("canvas").hidden)) && !(await layer(app)));
 
