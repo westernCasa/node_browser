@@ -19,6 +19,17 @@ Decision: I haven't decided yet. I'm leaning toward the first two together, sinc
 Why: The daily count has no id, so it can't tell a new user from an old one. Picking the moment that makes people stay without any data to check it would be a guess.
 Next: Until I decide, the usability test is the only way I'll know how the first week goes.
 
+## 2026-11-18 · How do I test these changes?
+Topic: First week
+Status: Decided
+Option: Chosen | A/B test the three biggest changes, one at a time, on new installs | It shows whether each change works, not just whether people like it.
+Option: Also doing | Usability tests with 5 people | They explain why something works or doesn't, but they're too few to count.
+Option: Dropped | Ship to everyone and compare before and after | Other changes and the time of year would mix into the numbers.
+Option: Dropped | Only count people who opt in | Too few people, and only the most engaged ones.
+Decision: I'll A/B test the first screen, the first-card note and the Continue page, one at a time, on new installs from 0.13. Each test only looks for a big difference, because NODE doesn't have the traffic to see small ones yet. I'll set the sample size before each test starts, decide once it's reached, and post the result here, win or not.
+Why: These are my biggest guesses about the first week, and I'd rather know than assume. Existing users won't be in any test, and Settings will say which version you're in, with a switch to leave.
+Next: First I need to decide whether NODE can send one anonymous count after your first session, with the test version and whether you reached 3 cards. That's more than it sends today, so I'll post that decision here before any test starts.
+
 ## 2026-11-18 · What brings people back after the first day?
 Topic: First week
 Status: Proposed
@@ -28,7 +39,7 @@ Option: Dropped | A weekly email | It would need your email address, and NODE ha
 Option: Dropped | Nothing, and rely on tabs reopening | It gives no reason to come back.
 Decision: A Continue page that replaces the blank new tab. It shows your open trails, each with its open question and the next suggested search.
 Why: An open question is the best reason to come back, and the new tab is the moment you can act on it. Notifications that do the job forever, without that reason, wear thin.
-Next: Aiming for 0.14.
+Next: Aiming for 0.14, as an A/B test against a blank new tab.
 
 ## 2026-11-18 · How should you notice your first card?
 Topic: First week
@@ -38,7 +49,7 @@ Option: Dropped | Stay silent and let people find the canvas | That's how it wor
 Option: Later | A "3 cards to your first trail" checklist | Unfinished tasks can pull people back, but the evidence for it is mixed and it feels like a game. I'll only try it if the note doesn't work.
 Decision: After about 20 seconds of reading, a short note says "First card on your trail" and the Canvas tab pulses once. At 3 cards, one notice offers to show the trail.
 Why: Today a page becomes a card with no sign at all.
-Next: Part of the 0.13 first run.
+Next: Part of the 0.13 first run, as an A/B test against staying silent.
 
 ## 2026-11-18 · What should the first five minutes of NODE feel like?
 Topic: First week
@@ -49,7 +60,7 @@ Option: Fallback | No start screen, just a helpful empty first tab | Simpler. I'
 Option: Dropped | Keep the setup form, cut to one screen with Skip | It still asks for things before you've seen anything worth it, and most people keep the defaults anyway.
 Decision: I want first launch to ask "What are you looking into?" instead of asking for API keys. Every way in should end with a trail of 3 cards, the canvas open, and an offer to send it.
 Why: Right now the first screen is a setup form. The trail, the part that makes NODE different, shows up later on a screen I never point anyone to.
-Next: I'm aiming to build it for 0.13 and test it with 5 people. It passes if 4 of 5 get to 3 cards and the canvas on their own in under 5 minutes.
+Next: I'm aiming to build it for 0.13 and A/B test it against the empty first tab, alongside a 5-person usability test.
 
 ## 2026-11-18 · How far do I go to make NODE a habit?
 Topic: First week
