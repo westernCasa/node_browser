@@ -10,7 +10,7 @@ const Prov = require("../../core/provenance");
 
 const ENGAGE_MS = 20000;
 
-function createEngagement({ store, trailOf, onCard = () => {}, now = () => Date.now() }) {
+function createEngagement({ store, trailOf, onCard = () => {}, onNamed = () => {}, now = () => Date.now() }) {
   const pages = new Map(); // tab id -> { url, from, via, trail, shownMs, engaged }
   const lastUrl = new Map(); // tab id -> the page before
 
@@ -22,6 +22,14 @@ function createEngagement({ store, trailOf, onCard = () => {}, now = () => Date.
     pages.delete(tabId);
   }
 
+  // B128: a new trail takes its name from its first search, or else from its
+  // first page's title (core/trail.js nameFromPage).
+  function nameTrail(p) {
+    if (!store.get(p.trail)?.trail.autoName) return;
+    const named = (p.via?.how === "search" && p.via.query && store.autoName(p.trail, p.via.query)) || store.nameFromPage(p.trail, p.url, p.title);
+    if (named) onNamed(p.trail);
+  }
+
   return {
     ENGAGE_MS,
     // A tab loaded a new page. openedFrom: the page that opened this tab.
@@ -31,11 +39,16 @@ function createEngagement({ store, trailOf, onCard = () => {}, now = () => Date.
       ended(tabId);
       if (!/^https?:/i.test(url || "")) return;
       const from = lastUrl.get(tabId) || openedFrom || "";
-      pages.set(tabId, { url, from, via: Prov.fromPage(from), trail: trailOf(), title, shownMs: 0, engaged: false });
+      const p = { url, from, via: Prov.fromPage(from), trail: trailOf(), title, shownMs: 0, engaged: false };
+      pages.set(tabId, p);
+      nameTrail(p);
     },
     title(tabId, title) {
       const p = pages.get(tabId);
-      if (p && title) p.title = title;
+      if (p && title) {
+        p.title = title;
+        nameTrail(p);
+      }
     },
     ended,
     closed(tabId) {

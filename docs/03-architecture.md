@@ -289,6 +289,12 @@ Built in parts: the logic in `core/` (PR #84), the relay (PR #85), the desktop (
 - **Main:** `placeCard` calls `readCite(id, url)` for a new page card when a tab (not private) shows that address. `trail:export-citations` (trail id) saves `.bib` or `.json` by the file type chosen in the Save dialog; an empty trail gets a notice and no file. Test hook `nodeTest.setCitationSavePath`.
 - **Window:** "Export citations…" in each trail's … menu in the switcher, read-only trails too.
 
+## Trails name themselves (B128)
+
+- **Store:** a trail made with no name (`blankTrail`), or a new session on the default name `Research <date>` (`applySession`), gets `trail.autoName`. `autoName(id, text, { title })` names it once with `trailNameFrom` (a search keeps its words; a title loses a last part of 30 characters or less after ` | `, ` - `, ` – `, ` — ` or ` · `; at most 40 characters, cut at a word), keeps the old name in `autoFrom`, drops `autoName` and records a `renamed` event with `data.auto`. `nameFromPage(id, url, title)` uses the search query of a results page (`Prov.searchQuery`), else the title of a reading page (not sign-in or start pages). `searchCard` names the trail by its query. `rename` drops `autoName`; `applySession` drops it on a real rename and ignores a session name equal to `autoFrom` (a session view read before the naming).
+- **Desktop:** `pageStarted` calls `nameTrailFrom(trail, url, "", via)` (a page reached from a search names the trail by that query); `page-title-updated` calls it 1.5 s after the title settles. When the current trail is named, the research session is saved and reloaded, and the window gets `session-reloaded` and `trail-changed` with `named`.
+- **Phone:** `mobile/src/engagement.js` does the same in `started` and `title`, with `onNamed`.
+
 ## Renaming and deleting trails (B115)
 
 - **Store:** `TrailStore.remove(id)` takes a trail out of `index.order` into `index.deleted` (`{id, at}`) and keeps its files; if it was current, the most recently used other trail becomes current, or a new trail is made when none is left. `restore(id)` puts it back first in the list and current. `purge()` deletes the folders of deleted trails through the storage's `remove(name)` (`fs-storage.js`: a file or folder inside its own folder, never the folder itself; `memoryStorage`: the name and everything under `name/`). `main.js` purges at start-up, before the trail store is used, so Undo works until NODE quits. A trail file opened again after its trail was deleted is taken off the deleted list by `create()`.
