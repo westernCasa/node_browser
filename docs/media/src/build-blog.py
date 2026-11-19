@@ -1,194 +1,186 @@
 #!/usr/bin/env python3
-"""Build the blog page and its feed from docs/blog.md.
+"""Build the blog as a NODE trail from docs/blog.md.
 
     python3 docs/media/src/build-blog.py docs/blog.md site
 
-Writes site/blog.html and site/blog.xml (RSS). Post format is described at the
-top of docs/blog.md.
+Writes:
+  site/blog.trail.md  the blog as a node-trail v2 file (docs/26-trail-file-format.md), which NODE opens
+  site/blog.html      the same trail on a canvas, read only, with Replay (docs/media/src/sample-template.html)
+  site/blog.xml       an RSS feed of the posts
+
+Each post becomes a question card (the question) and a note card (my answer), linked.
+A post with a Read: link also gets a page card. Posts are grouped by Topic.
+Post format is described at the top of docs/blog.md.
 """
-import html, re, sys
+import html, json, math, re, sys
 from datetime import datetime, timezone
 from email.utils import format_datetime
 from pathlib import Path
 
 src, out = Path(sys.argv[1]), Path(sys.argv[2])
 SITE = "https://noderesearch.app"
-FIELDS = ["Status", "Decision", "Why", "Next", "Read"]
+FIELDS = ["Topic", "Status", "Decision", "Why", "Next", "Read"]
 STATUSES = ["Open", "Proposed", "In progress", "Decided", "Parked"]
+LEAD = {"Decided": "Decided", "Proposed": "Plan", "Open": "Thinking", "Parked": "For now", "In progress": "So far"}
+TOPIC_ORDER = ["Who it's for", "Sharing", "Privacy", "Engine"]
+MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
-entries, cur = [], None
+# ---- Read the posts ----
+posts, cur = [], None
 for line in src.read_text(encoding="utf-8").splitlines():
     m = re.match(r"## (\d{4}-\d{2}-\d{2}) · (.+)$", line)
     if m:
         cur = {"date": m.group(1), "q": m.group(2).strip()}
-        entries.append(cur)
+        posts.append(cur)
         continue
     m = re.match(r"(%s): (.+)$" % "|".join(FIELDS), line)
     if cur and m:
         cur[m.group(1)] = m.group(2).strip()
+for p in posts:
+    for f in ("Topic", "Status", "Decision"):
+        if not p.get(f):
+            sys.exit(f"post {p['date']} '{p['q']}' needs {f}")
+    if p["Status"] not in STATUSES:
+        sys.exit(f"post {p['date']} '{p['q']}': Status must be one of {', '.join(STATUSES)}")
+    p["slug"] = f"{p['date']}-" + re.sub(r"[^a-z0-9]+", "-", p["q"].lower()).strip("-")[:60].rstrip("-")
+posts.sort(key=lambda p: p["date"], reverse=True)  # newest first; stable for same-day posts
+for i, p in enumerate(posts):
+    p["n"] = len(posts) - i  # oldest post is 1
 
-for e in entries:
-    if e.get("Status") not in STATUSES or "Decision" not in e:
-        sys.exit(f"entry {e['date']} '{e['q']}' needs Status ({', '.join(STATUSES)}) and Decision")
-    slug = re.sub(r"[^a-z0-9]+", "-", e["q"].lower()).strip("-")[:60].rstrip("-")
-    e["id"] = f"{e['date']}-{slug}"
-entries.sort(key=lambda e: e["date"], reverse=True)
-
-esc = html.escape
-MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 day = lambda d: f"{int(d[8:])} {MONTHS[int(d[5:7]) - 1]} {d[:4]}"
-link = lambda u: f'<a href="{esc(u)}">{esc(re.sub(r"^https?://(www\\.)?", "", u).rstrip("/"))}</a>'
+short = lambda d: f"{MONTHS[int(d[5:7]) - 1].lower()} {int(d[8:])}"
+host = lambda u: re.sub(r"^https?://(www\.)?", "", u).split("/")[0]
 
+def release_title(u):
+    m = re.search(r"/releases/tag/v([\d.]+)", u)
+    return f"NODE {m.group(1)} release notes" if m else host(u)
+
+def answer(p):
+    t = f"{LEAD[p['Status']]}: {p['Decision']}"
+    if p.get("Why"):
+        t += f" Why: {p['Why']}"
+    if p.get("Next"):
+        t += f" Next: {p['Next']}"
+    return t
+
+# ---- Lay out the canvas: one group per topic, a row per post ----
+QW, NW, PW, PAD, GAP = 300, 380, 260, 40, 60
+q_h = lambda p: 100 + 22 * math.ceil(len(p["q"]) / 26)
+n_h = lambda p: 76 + 20 * math.ceil(len(answer(p)) / 46)
+topics = sorted({p["Topic"] for p in posts}, key=lambda t: (TOPIC_ORDER.index(t) if t in TOPIC_ORDER else 99, t))
+groups, cards, links = [], [], []
+col_x, col_y = [0, 0], [0, 0]
+group_w = PAD + QW + GAP + NW + GAP + PW + PAD
+for gi, topic in enumerate(topics):
+    rows = [p for p in posts if p["Topic"] == topic]
+    h = 60 + sum(max(q_h(p), n_h(p)) + 40 for p in rows)
+    c = 0 if col_y[0] <= col_y[1] else 1
+    gx, gy = c * (group_w + 80), col_y[c]
+    col_y[c] += h + 80
+    gid = f"g{gi + 1}"
+    groups.append({"id": gid, "name": topic, "x": gx, "y": gy, "w": group_w, "h": h, "resolved": all(p["Status"] == "Decided" for p in rows)})
+    y = gy + 60
+    for p in rows:
+        n = p["n"]
+        p["qid"], p["nid"], p["pid"] = f"q{n}", f"n{n}", f"p{n}"
+        cards.append({"id": p["qid"], "type": "question", "x": gx + PAD, "y": y, "w": QW, "h": q_h(p), "group": gid,
+                      "title": p["q"], "lines": ["Status: " + ("resolved" if p["Status"] == "Decided" else "open"), f"- Sven: {p['Status']}, {day(p['date'])}"]})
+        nx = gx + PAD + QW + GAP
+        cards.append({"id": p["nid"], "type": "note", "x": nx, "y": y, "w": NW, "h": n_h(p), "group": gid,
+                      "title": "Note", "lines": [answer(p), f"— Sven · {short(p['date'])}"]})
+        links.append({"from": p["nid"], "to": p["qid"], "kind": "you", "label": LEAD[p["Status"]].lower()})
+        if p.get("Read"):
+            cards.append({"id": p["pid"], "type": "page", "x": nx + NW + GAP, "y": y, "w": PW, "h": 150, "group": gid,
+                          "title": release_title(p["Read"]), "url": p["Read"], "lines": ["Where this shipped."]})
+            links.append({"from": p["nid"], "to": p["pid"], "kind": "auto", "label": "shipped in"})
+        y += max(q_h(p), n_h(p)) + 40
+
+open_posts = [p for p in posts if p["Status"] in ("Open", "Proposed")]
+start = (open_posts or posts)[0]
+intro = "I'm Sven, and I make NODE. This blog is a NODE trail: each question I ran into is a card, and my answer is the note linked to it."
+by_card = {c["id"]: c for c in cards}
+
+# Replay: oldest post first, the question then the answer then the release.
+steps = []
+for p in reversed(posts):
+    for cid in (p["qid"], p["nid"], p["pid"]):
+        if cid in by_card:
+            steps.append({"card": cid, "day": short(p["date"]).upper(), "device": "", "time": ""})
+
+# ---- The trail file ----
+updated = posts[0]["date"]
+lines = ["---", "node-trail: 2", "id: trail-node-blog", "name: Building NODE", "exported-by: Sven",
+         f"exported-at: {updated}T12:00:00Z", f"start-here: {start['qid']}", "---", "# Building NODE", "", intro, "",
+         f"**Start here:** [{start['q']}](#{start['qid']})", ""]
+for g in groups:
+    lines += [f"## {g['name']}", f"<!-- group:{g['id']} at:{g['x']},{g['y']} size:{g['w']}x{g['h']}{' resolved' if g['resolved'] else ''} -->", ""]
+    for c in [c for c in cards if c["group"] == g["id"]]:
+        if c["type"] == "question":
+            head = f"### ? {c['title']}"
+        elif c["type"] == "note":
+            head = "### Note"
+        else:
+            head = f"### [{c['title']}]({c['url']})"
+        lines += [head, f"<!-- id:{c['id']} type:{c['type']} at:{c['x']},{c['y']} size:{c['w']}x{c['h']} -->", *c["lines"], ""]
+lines += ["## Links", ""]
+name_of = lambda c: c["title"] if c["type"] != "note" else c["lines"][0].split(". ")[0].rstrip(".")
+for k in links:
+    a, b = by_card[k["from"]], by_card[k["to"]]
+    label = f"drawn · {k['label']}" if k["kind"] == "you" else k["label"]
+    lines.append(f"- [{name_of(a)}](#{a['id']}) → [{name_of(b)}](#{b['id']}) · {label} <!-- from:{a['id']} to:{b['id']} kind:{k['kind']} -->")
+(out / "blog.trail.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+# ---- The canvas page ----
+data = {"name": "Building NODE", "note": intro, "from": "Sven", "exportedAt": f"{updated}T12:00:00Z",
+        "startHere": start["qid"], "groups": groups, "cards": cards, "links": links, "steps": steps,
+        "file": "blog.trail.md", "zoom": "actual", "verbs": {"question": "asked", "note": "answered", "page": "shipped"}}
+tpl = (Path(__file__).parent / "sample-template.html").read_text(encoding="utf-8")
+page = tpl.replace("/*TRAIL_DATA*/null", json.dumps(data, ensure_ascii=False)).replace("{{TRAIL_FILE}}", "blog.trail.md")
 index = (out / "index.html").read_text(encoding="utf-8")
 m = re.search(r'<svg[^>]*class="lockup".*?</svg>', index, re.S)
-lockup = m.group(0) if m else "NODE"
-counts = {s: sum(1 for e in entries if e["Status"] == s) for s in STATUSES}
-
-items = []
-for e in entries:
-    lead = {"Decided": "Decided", "Proposed": "Plan", "Open": "Thinking", "Parked": "For now", "In progress": "So far"}[e["Status"]]
-    rows = [f'<dt class="label">{lead}</dt><dd>{esc(e["Decision"])}</dd>']
-    if e.get("Why"):
-        rows.append(f'<dt class="label">Why</dt><dd>{esc(e["Why"])}</dd>')
-    if e.get("Next"):
-        rows.append(f'<dt class="label">Next</dt><dd>{esc(e["Next"])}</dd>')
-    if e.get("Read"):
-        rows.append(f'<dt class="label">Read</dt><dd>{link(e["Read"])}</dd>')
-    st = e["Status"]
-    items.append(f'''    <article class="entry" id="{e["id"]}" data-status="{esc(st)}">
-      <div class="meta"><time class="tele" datetime="{e["date"]}">{day(e["date"])}</time><span class="status s-{st.lower().replace(" ", "-")}">{esc(st)}</span></div>
-      <div class="body">
-        <h2 class="q"><a href="#{e["id"]}">{esc(e["q"])}</a></h2>
-        <dl>{"".join(rows)}</dl>
-      </div>
-    </article>''')
-
-filters = '<button type="button" class="chip" aria-pressed="true" data-f="all">All · ' + str(len(entries)) + "</button>" + "".join(
-    f'<button type="button" class="chip" aria-pressed="false" data-f="{s}">{s} · {counts[s]}</button>' for s in STATUSES if counts[s])
-
-page = f'''<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Blog · NODE Research Browser</title>
-<meta name="description" content="Sven on the questions he asks while building NODE Research Browser, and what he decides. Newest first.">
-<link rel="canonical" href="{SITE}/blog">
-<link rel="alternate" type="application/rss+xml" title="NODE blog" href="{SITE}/blog.xml">
-<meta name="theme-color" content="#000000">
-<link rel="icon" href="/favicon.ico" sizes="any">
-<link rel="apple-touch-icon" href="/apple-touch-icon.png">
-<meta property="og:type" content="website">
-<meta property="og:title" content="NODE blog">
-<meta property="og:description" content="Sven on the questions he asks while building NODE Research Browser, and what he decides.">
-<meta property="og:url" content="{SITE}/blog">
-<meta property="og:image" content="{SITE}/og.png">
-<meta name="twitter:card" content="summary_large_image">
-<script>window.va=window.va||function(){{(window.vaq=window.vaq||[]).push(arguments)}};</script>
-<script defer src="/_vercel/insights/script.js"></script>
-<style>
-@font-face{{font-family:"Barlow";font-weight:400;font-display:swap;src:url(/fonts/barlow-latin-400-normal.woff2) format("woff2")}}
-@font-face{{font-family:"Barlow";font-weight:600;font-display:swap;src:url(/fonts/barlow-latin-600-normal.woff2) format("woff2")}}
-@font-face{{font-family:"Barlow";font-weight:700;font-display:swap;src:url(/fonts/barlow-latin-700-normal.woff2) format("woff2")}}
-@font-face{{font-family:"JetBrains Mono";font-weight:400;font-display:swap;src:url(/fonts/jetbrains-mono-latin-400-normal.woff2) format("woff2")}}
-:root{{--surface:#000;--raised:#0e0e0f;--line:#2a2a2d;--ink:#fff;--muted:#a1a1a6;--signal:#b18cff;
-  --sans:"Barlow","Helvetica Neue",Arial,sans-serif;--mono:"JetBrains Mono",ui-monospace,Menlo,monospace;color-scheme:dark}}
-*{{box-sizing:border-box}}
-html,body{{margin:0}}
-body{{background:var(--surface);color:var(--ink);font:400 16px/24px var(--sans);-webkit-font-smoothing:antialiased}}
-a{{color:var(--ink);text-underline-offset:3px}}
-a:focus-visible,button:focus-visible{{outline:2px solid var(--signal);outline-offset:2px}}
-.label{{font:600 12px/16px var(--sans);letter-spacing:.12em;text-transform:uppercase}}
-.tele{{font:400 13px/20px var(--mono);color:var(--muted)}}
-header{{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px max(24px,env(safe-area-inset-left));border-bottom:1px solid var(--line)}}
-header .lockup{{height:22px;width:auto;display:block}}
-.btn{{display:inline-flex;align-items:center;height:36px;padding:0 16px;border:1px solid var(--ink);border-radius:2px;font:600 12px/1 var(--sans);letter-spacing:.12em;text-transform:uppercase;text-decoration:none}}
-.btn:hover{{background:var(--ink);color:var(--surface)}}
-main{{max-width:960px;margin:0 auto;padding:56px 24px 96px}}
-h1{{font:700 clamp(36px,6vw,56px)/1 var(--sans);letter-spacing:.04em;text-transform:uppercase;margin:0 0 16px}}
-.lead{{color:var(--muted);max-width:60ch;margin:0 0 24px}}
-.filters{{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 40px}}
-.chip{{appearance:none;background:none;border:1px solid var(--line);border-radius:2px;color:var(--muted);height:32px;padding:0 12px;cursor:pointer;font:600 11px/1 var(--sans);letter-spacing:.12em;text-transform:uppercase}}
-.chip:hover{{color:var(--ink)}}
-.chip[aria-pressed="true"]{{background:var(--ink);border-color:var(--ink);color:var(--surface)}}
-.entry{{display:grid;grid-template-columns:160px minmax(0,1fr);gap:24px;padding:32px 0;border-top:1px solid var(--line)}}
-.entry[hidden]{{display:none}}
-.meta{{display:flex;flex-direction:column;gap:8px;align-items:flex-start}}
-.status{{font:600 11px/1 var(--sans);letter-spacing:.12em;text-transform:uppercase;padding:5px 8px;border:1px solid var(--line);border-radius:2px;color:var(--muted)}}
-.s-open,.s-proposed{{border-color:var(--ink);color:var(--ink)}}
-.s-parked,.s-in-progress{{border-style:dashed}}
-.q{{font:600 24px/30px var(--sans);margin:0 0 16px;text-wrap:balance}}
-.q a{{text-decoration:none}}
-.q a:hover{{text-decoration:underline}}
-dl{{display:grid;grid-template-columns:96px minmax(0,1fr);gap:10px 16px;margin:0}}
-dt{{color:var(--muted);padding-top:4px}}
-dd{{margin:0;max-width:62ch;overflow-wrap:anywhere}}
-footer{{border-top:1px solid var(--line);padding-top:24px;margin-top:8px;display:flex;flex-wrap:wrap;gap:8px 24px}}
-@media (max-width:700px){{
-  main{{padding:40px 16px 72px}}
-  header{{padding:16px}}
-  .entry{{grid-template-columns:minmax(0,1fr);gap:12px}}
-  .meta{{flex-direction:row;align-items:center;gap:12px}}
-  .q{{font-size:20px;line-height:26px}}
-  dl{{grid-template-columns:minmax(0,1fr);gap:4px}}
-  dd{{margin-bottom:10px}}
-}}
-</style>
-</head>
-<body>
-<header>
-  <a href="/" aria-label="NODE Research Browser home">{lockup}</a>
-  <a class="btn" href="/#downloads" data-track="blog-get">Get NODE</a>
-</header>
-<main>
-  <p class="tele">Blog · {len(entries)} posts · updated {day(entries[0]["date"])}</p>
-  <h1>Building NODE</h1>
-  <p class="lead">I'm Sven, and I make NODE. These are the questions I run into while building it, what I decide and why. Newest first. Anything marked open or proposed can still change. <a href="/blog.xml">RSS feed</a>.</p>
-  <div class="filters" role="group" aria-label="Filter posts by status">{filters}</div>
-{chr(10).join(items)}
-  <footer class="tele"><a href="/">noderesearch.app</a><a href="https://github.com/westernCasa/node_browser/blob/main/docs/blog.md">Source of this page</a><a href="https://github.com/westernCasa/node_browser/releases">Releases</a></footer>
-</main>
-<script>
-(function(){{
-  var chips=document.querySelectorAll(".chip"),rows=document.querySelectorAll(".entry");
-  chips.forEach(function(c){{c.addEventListener("click",function(){{
-    var f=c.getAttribute("data-f");
-    chips.forEach(function(x){{x.setAttribute("aria-pressed",String(x===c))}});
-    rows.forEach(function(r){{r.hidden=f!=="all"&&r.getAttribute("data-status")!==f}});
-  }})}});
-  document.querySelectorAll("[data-track]").forEach(function(a){{a.addEventListener("click",function(){{window.va("event",{{name:a.getAttribute("data-track")}})}})}});
-}})();
-</script>
-</body>
-</html>
-'''
+page = page.replace("{{LOCKUP}}", m.group(0) if m else "NODE")
+PAGE = {
+    "TITLE": "Building NODE · blog · NODE Research Browser",
+    "DESC": "Sven on the questions he runs into while building NODE Research Browser and what he decides, laid out as a NODE trail.",
+    "URL": f"{SITE}/blog",
+    "HEAD_EXTRA": f'\n<link rel="alternate" type="application/rss+xml" title="Building NODE" href="{SITE}/blog.xml">',
+    "OG_TITLE": "Building NODE · blog",
+    "OG_DESC": "The questions I run into while building NODE, and what I decide. Laid out as a NODE trail.",
+    "TAG": f"Blog · {len(posts)} posts · updated {day(updated)}",
+    "ABOUT": "Press Play to see the questions in the order I answered them, or Start here for what I'm working out now. Download the file to open this blog in NODE.",
+    "ABOUT_FOOT": 'Follow along with the <a href="/blog.xml">RSS feed</a>. The file is plain Markdown.',
+    "BODY_CLASS": "phone-list",
+}
+for k, v in PAGE.items():
+    page = page.replace("{{%s}}" % k, v)
+page = page.replace('data-track="sample-', 'data-track="blog-').replace('name:"sample-replay"', 'name:"blog-replay"')
 (out / "blog.html").write_text(page, encoding="utf-8")
 
+# ---- RSS ----
+esc = html.escape
 def rfc822(d):
     return format_datetime(datetime.strptime(d, "%Y-%m-%d").replace(hour=12, tzinfo=timezone.utc))
-
-rss_items = []
-for e in entries:
-    desc = f'{e["Status"]}. {e["Decision"]}' + (f' Why: {e["Why"]}' if e.get("Why") else "") + (f' Next: {e["Next"]}' if e.get("Next") else "")
-    rss_items.append(f'''  <item>
-    <title>{esc(e["q"])}</title>
-    <link>{SITE}/blog#{e["id"]}</link>
-    <guid isPermaLink="false">node-blog-{e["id"]}-{e["Status"].lower().replace(" ", "-")}</guid>
-    <pubDate>{rfc822(e["date"])}</pubDate>
-    <description>{esc(desc)}</description>
+items = []
+for p in posts:
+    items.append(f'''  <item>
+    <title>{esc(p["q"])}</title>
+    <link>{SITE}/blog#card-{p["qid"]}</link>
+    <guid isPermaLink="false">node-blog-{p["slug"]}-{p["Status"].lower().replace(" ", "-")}</guid>
+    <pubDate>{rfc822(p["date"])}</pubDate>
+    <category>{esc(p["Topic"])}</category>
+    <description>{esc(answer(p))}</description>
   </item>''')
-rss = f'''<?xml version="1.0" encoding="UTF-8"?>
+(out / "blog.xml").write_text(f'''<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
 <channel>
-  <title>NODE blog</title>
+  <title>Building NODE</title>
   <link>{SITE}/blog</link>
   <atom:link href="{SITE}/blog.xml" rel="self" type="application/rss+xml"/>
-  <description>Sven on the questions he asks while building NODE Research Browser, and what he decides.</description>
+  <description>Sven on the questions he runs into while building NODE Research Browser, and what he decides.</description>
   <language>en</language>
-  <lastBuildDate>{rfc822(entries[0]["date"])}</lastBuildDate>
-{chr(10).join(rss_items)}
+  <lastBuildDate>{rfc822(updated)}</lastBuildDate>
+{chr(10).join(items)}
 </channel>
 </rss>
-'''
-(out / "blog.xml").write_text(rss, encoding="utf-8")
-print(f"{out}/blog.html, {out}/blog.xml: {len(entries)} posts")
+''', encoding="utf-8")
+print(f"{out}/blog.html, blog.trail.md, blog.xml: {len(posts)} posts, {len(groups)} groups, {len(cards)} cards, {len(links)} links, {len(steps)} steps")
