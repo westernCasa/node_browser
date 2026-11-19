@@ -8,16 +8,26 @@ Each post: `## YYYY-MM-DD · The question`, then `Topic:` (a group on the canvas
 
 An option line is `Option: Verdict | The option | Why, in one sentence`. Verdicts: Chosen, Leaning, Also offered, Also doing, Fallback, Later, Parked, Dropped, Not possible. The why is optional; leave it out rather than guess. Only list options that were really on the table.
 
+## 2026-11-18 · Can NODE send one count after your first session?
+Topic: Privacy
+Status: Decided
+Option: Chosen | One anonymous count after your first session | It's the only way to tell whether a test version helps, and it carries no id.
+Option: Dropped | Only count people who opt in | Too few people, and only the most engaged ones.
+Option: Dropped | No A/B tests, only usability tests | Five people can show me why something fails, but not whether a change helps most people.
+Decision: Yes. After your first session, NODE sends one anonymous count: which test version you're in, and yes or no for reaching 3 cards, opening the canvas, and sending a trail or pairing a device. There's no id, and nothing about what you read or search. The same switch in Settings → Help turns it off.
+Why: Without it I'd be running tests I can't read. It's more than NODE sends today, so it'll be said plainly on the welcome screen, in the privacy page and in the release notes before it ships.
+Next: It ships with the first test, in 0.13. The site's privacy section changes in that release, not before.
+
 ## 2026-11-18 · How do I know if people come back, without tracking them?
 Topic: Privacy
-Status: Open
-Option: Leaning | Add a "days since install" bucket to the anonymous daily count | It gives a rough curve of how long people stay, but it can't tell which week someone started, so I'd label it an estimate.
-Option: Leaning | Keep first-week milestones on your computer, with an opt-in to share a summary | It's the only way to check whether my guess about the "aha" moment is right, and it's off unless you turn it on.
+Status: Decided
+Option: Chosen | Add a "days since install" bucket to the anonymous daily count | It gives a rough curve of how long people stay, but it can't tell which week someone started, so I'll label it an estimate.
+Option: Also doing | Keep first-week milestones on your computer, with an opt-in to share a summary | It's the only way to check whether my guess about the "aha" moment is right, and it's off unless you turn it on.
 Option: Also doing | Usability tests with 5 people | Good for finding out why, not for counting.
 Option: Dropped | An install id | That's tracking, and a lot of you picked NODE for privacy.
-Decision: I haven't decided yet. I'm leaning toward the first two together, since neither one is enough alone.
+Decision: The daily count gets a "days since install" bucket and the test version. First-week milestones stay on your computer unless you choose to share a summary.
 Why: The daily count has no id, so it can't tell a new user from an old one. Picking the moment that makes people stay without any data to check it would be a guess.
-Next: Until I decide, the usability test is the only way I'll know how the first week goes.
+Next: Both are on the backlog for 0.13, after their screens are designed.
 
 ## 2026-11-18 · How do I test these changes?
 Topic: First week
@@ -28,7 +38,7 @@ Option: Dropped | Ship to everyone and compare before and after | Other changes 
 Option: Dropped | Only count people who opt in | Too few people, and only the most engaged ones.
 Decision: I'll A/B test the first screen, the first-card note and the Continue page, one at a time, on new installs from 0.13. Each test only looks for a big difference, because NODE doesn't have the traffic to see small ones yet. I'll set the sample size before each test starts, decide once it's reached, and post the result here, win or not.
 Why: These are my biggest guesses about the first week, and I'd rather know than assume. Existing users won't be in any test, and Settings will say which version you're in, with a switch to leave.
-Next: First I need to decide whether NODE can send one anonymous count after your first session, with the test version and whether you reached 3 cards. That's more than it sends today, so I'll post that decision here before any test starts.
+Next: Nothing gets built until I've designed the screens for it and I'm happy with them. Then the first screen goes first, in 0.13. The count these tests need is decided in "Can NODE send one count after your first session?"
 
 ## 2026-11-18 · What brings people back after the first day?
 Topic: First week

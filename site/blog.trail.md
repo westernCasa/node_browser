@@ -4,13 +4,13 @@ id: trail-node-blog
 name: Building NODE
 exported-by: Sven
 exported-at: 2026-11-18T12:00:00Z
-start-here: q16
+start-here: q14
 ---
 # Building NODE
 
 I'm Sven, and I make NODE. This blog is a NODE trail: each question I ran into is a card with the options I looked at, and my answer is the note linked to it.
 
-**Start here:** [How do I know if people come back, without tracking them?](#q16)
+**Start here:** [What brings people back after the first day?](#q14)
 
 ## First week
 <!-- group:g1 at:0,0 size:1240x2620 -->
@@ -26,7 +26,7 @@ Status: resolved
 
 ### Note
 <!-- id:n15 type:note at:500,60 size:380x416 -->
-Decided: I'll A/B test the first screen, the first-card note and the Continue page, one at a time, on new installs from 0.13. Each test only looks for a big difference, because NODE doesn't have the traffic to see small ones yet. I'll set the sample size before each test starts, decide once it's reached, and post the result here, win or not. Why: These are my biggest guesses about the first week, and I'd rather know than assume. Existing users won't be in any test, and Settings will say which version you're in, with a switch to leave. Next: First I need to decide whether NODE can send one anonymous count after your first session, with the test version and whether you reached 3 cards. That's more than it sends today, so I'll post that decision here before any test starts.
+Decided: I'll A/B test the first screen, the first-card note and the Continue page, one at a time, on new installs from 0.13. Each test only looks for a big difference, because NODE doesn't have the traffic to see small ones yet. I'll set the sample size before each test starts, decide once it's reached, and post the result here, win or not. Why: These are my biggest guesses about the first week, and I'd rather know than assume. Existing users won't be in any test, and Settings will say which version you're in, with a switch to leave. Next: Nothing gets built until I've designed the screens for it and I'm happy with them. Then the first screen goes first, in 0.13. The count these tests need is decided in "Can NODE send one count after your first session?"
 — Sven · nov 18
 
 ### ? What brings people back after the first day?
@@ -151,54 +151,67 @@ Decided: A canvas, with the timeline kept beside it and Replay for whoever recei
 — Sven · nov 3
 
 ## Privacy
-<!-- group:g4 at:1320,2362 size:1240x1778 -->
+<!-- group:g4 at:1320,2362 size:1240x2234 resolved -->
+
+### ? Can NODE send one count after your first session?
+<!-- id:q17 type:question at:1360,2422 size:400x416 -->
+Status: resolved
+- Sven: Decided, 18 Nov 2026
+- Sven: Option: One anonymous count after your first session. Chosen. It's the only way to tell whether a test version helps, and it carries no id.
+- Sven: Option: Only count people who opt in. Dropped. Too few people, and only the most engaged ones.
+- Sven: Option: No A/B tests, only usability tests. Dropped. Five people can show me why something fails, but not whether a change helps most people.
+
+### Note
+<!-- id:n17 type:note at:1820,2422 size:380x356 -->
+Decided: Yes. After your first session, NODE sends one anonymous count: which test version you're in, and yes or no for reaching 3 cards, opening the canvas, and sending a trail or pairing a device. There's no id, and nothing about what you read or search. The same switch in Settings → Help turns it off. Why: Without it I'd be running tests I can't read. It's more than NODE sends today, so it'll be said plainly on the welcome screen, in the privacy page and in the release notes before it ships. Next: It ships with the first test, in 0.13. The site's privacy section changes in that release, not before.
+— Sven · nov 18
 
 ### ? How do I know if people come back, without tracking them?
-<!-- id:q16 type:question at:1360,2422 size:400x576 -->
-Status: open
-- Sven: Open, 18 Nov 2026
-- Sven: Option: Add a "days since install" bucket to the anonymous daily count. Leaning. It gives a rough curve of how long people stay, but it can't tell which week someone started, so I'd label it an estimate.
-- Sven: Option: Keep first-week milestones on your computer, with an opt-in to share a summary. Leaning. It's the only way to check whether my guess about the "aha" moment is right, and it's off unless you turn it on.
+<!-- id:q16 type:question at:1360,2878 size:400x576 -->
+Status: resolved
+- Sven: Decided, 18 Nov 2026
+- Sven: Option: Add a "days since install" bucket to the anonymous daily count. Chosen. It gives a rough curve of how long people stay, but it can't tell which week someone started, so I'll label it an estimate.
+- Sven: Option: Keep first-week milestones on your computer, with an opt-in to share a summary. Also doing. It's the only way to check whether my guess about the "aha" moment is right, and it's off unless you turn it on.
 - Sven: Option: Usability tests with 5 people. Also doing. Good for finding out why, not for counting.
 - Sven: Option: An install id. Dropped. That's tracking, and a lot of you picked NODE for privacy.
 
 ### Note
-<!-- id:n16 type:note at:1820,2422 size:380x236 -->
-Thinking: I haven't decided yet. I'm leaning toward the first two together, since neither one is enough alone. Why: The daily count has no id, so it can't tell a new user from an old one. Picking the moment that makes people stay without any data to check it would be a guess. Next: Until I decide, the usability test is the only way I'll know how the first week goes.
+<!-- id:n16 type:note at:1820,2878 size:380x256 -->
+Decided: The daily count gets a "days since install" bucket and the test version. First-week milestones stay on your computer unless you choose to share a summary. Why: The daily count has no id, so it can't tell a new user from an old one. Picking the moment that makes people stay without any data to check it would be a guess. Next: Both are on the backlog for 0.13, after their screens are designed.
 — Sven · nov 18
 
 ### ? Should syncing between devices need an account?
-<!-- id:q10 type:question at:1360,3038 size:400x332 -->
+<!-- id:q10 type:question at:1360,3494 size:400x332 -->
 Status: resolved
 - Sven: Decided, 18 Nov 2026
 - Sven: Option: Pair devices with a code or a QR code. Chosen. Nothing about you is needed, and the code stays on your devices.
 - Sven: Option: Sign in with an account. Dropped. It would be the first thing NODE knows about you.
 
 ### Note
-<!-- id:n10 type:note at:1820,3038 size:380x216 -->
+<!-- id:n10 type:note at:1820,3494 size:380x216 -->
 Decided: No. You pair devices with a code or a QR code, and your trails are encrypted on your device before they're sent. The server deletes each change once your other devices have it, after 30 days at most. This shipped in 0.12.0. Why: A pairing code is enough to prove two devices belong together.
 — Sven · nov 18
 
 ### [NODE 0.12.0 release notes](https://github.com/westernCasa/node_browser/releases/tag/v0.12.0)
-<!-- id:p10 type:page at:2260,3038 size:260x150 -->
+<!-- id:p10 type:page at:2260,3494 size:260x150 -->
 Where this shipped.
 
 ### ? Should NODE count how many people use it?
-<!-- id:q9 type:question at:1360,3410 size:400x154 -->
+<!-- id:q9 type:question at:1360,3866 size:400x154 -->
 Status: resolved
 - Sven: Decided, 15 Nov 2026
 
 ### Note
-<!-- id:n9 type:note at:1820,3410 size:380x196 -->
+<!-- id:n9 type:note at:1820,3866 size:380x196 -->
 Decided: Yes, with one anonymous count a day: the version and your operating system, with no id. You can turn it off in Settings → Help. This shipped in 0.11.0. Why: Download numbers didn't tell me whether anyone kept using NODE. Nothing about what you read or search is sent.
 — Sven · nov 15
 
 ### [NODE 0.11.0 release notes](https://github.com/westernCasa/node_browser/releases/tag/v0.11.0)
-<!-- id:p9 type:page at:2260,3410 size:260x150 -->
+<!-- id:p9 type:page at:2260,3866 size:260x150 -->
 Where this shipped.
 
 ### ? How many notifications should NODE send?
-<!-- id:q8 type:question at:1360,3646 size:400x454 -->
+<!-- id:q8 type:question at:1360,4102 size:400x454 -->
 Status: resolved
 - Sven: Decided, 6 Nov 2026
 - Sven: Option: Send more to bring people back. Dropped. It raises visits for a while, then more people turn notifications off or uninstall.
@@ -206,7 +219,7 @@ Status: resolved
 - Sven: Option: Ask for permission at first launch. Dropped. Asking after a few days of use did better in the research.
 
 ### Note
-<!-- id:n8 type:note at:1820,3646 size:380x236 -->
+<!-- id:n8 type:note at:1820,4102 size:380x236 -->
 Decided: Few, and only about something new. There's a weekly limit across all kinds, a switch for each kind, and I'll only ask for system permission on day 3 or later. I judge them by how many people turn them off, not by clicks. Why: The long experiments I read found that fewer, more relevant notifications raise use over time.
 — Sven · nov 6
 
@@ -253,7 +266,8 @@ So far: Electron stays the release build. I've started a Chromium build on ungoo
 - [Decided: As one plain Markdown file first](#n5) → [Do I share trails as links or as files?](#q5) · drawn · decided <!-- from:n5 to:q5 kind:you -->
 - [For now: Not yet](#n4) → [Should two people's trails merge into one?](#q4) · drawn · for now <!-- from:n4 to:q4 kind:you -->
 - [Decided: A canvas, with the timeline kept beside it and Replay for whoever receives it](#n3) → [Is a trail a timeline or a map?](#q3) · drawn · decided <!-- from:n3 to:q3 kind:you -->
-- [Thinking: I haven't decided yet](#n16) → [How do I know if people come back, without tracking them?](#q16) · drawn · thinking <!-- from:n16 to:q16 kind:you -->
+- [Decided: Yes](#n17) → [Can NODE send one count after your first session?](#q17) · drawn · decided <!-- from:n17 to:q17 kind:you -->
+- [Decided: The daily count gets a "days since install" bucket and the test version](#n16) → [How do I know if people come back, without tracking them?](#q16) · drawn · decided <!-- from:n16 to:q16 kind:you -->
 - [Decided: No](#n10) → [Should syncing between devices need an account?](#q10) · drawn · decided <!-- from:n10 to:q10 kind:you -->
 - [Decided: No](#n10) → [NODE 0.12.0 release notes](#p10) · shipped in <!-- from:n10 to:p10 kind:auto -->
 - [Decided: Yes, with one anonymous count a day: the version and your operating system, with no id](#n9) → [Should NODE count how many people use it?](#q9) · drawn · decided <!-- from:n9 to:q9 kind:you -->

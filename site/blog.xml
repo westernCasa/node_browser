@@ -8,12 +8,20 @@
   <language>en</language>
   <lastBuildDate>Wed, 18 Nov 2026 12:00:00 +0000</lastBuildDate>
   <item>
-    <title>How do I know if people come back, without tracking them?</title>
-    <link>https://noderesearch.app/blog#card-q16</link>
-    <guid isPermaLink="false">node-blog-2026-11-18-how-do-i-know-if-people-come-back-without-tracking-them-open</guid>
+    <title>Can NODE send one count after your first session?</title>
+    <link>https://noderesearch.app/blog#card-q17</link>
+    <guid isPermaLink="false">node-blog-2026-11-18-can-node-send-one-count-after-your-first-session-decided</guid>
     <pubDate>Wed, 18 Nov 2026 12:00:00 +0000</pubDate>
     <category>Privacy</category>
-    <description>Options: Add a &quot;days since install&quot; bucket to the anonymous daily count (leaning); Keep first-week milestones on your computer, with an opt-in to share a summary (leaning); Usability tests with 5 people (also doing); An install id (dropped). Thinking: I haven&#x27;t decided yet. I&#x27;m leaning toward the first two together, since neither one is enough alone. Why: The daily count has no id, so it can&#x27;t tell a new user from an old one. Picking the moment that makes people stay without any data to check it would be a guess. Next: Until I decide, the usability test is the only way I&#x27;ll know how the first week goes.</description>
+    <description>Options: One anonymous count after your first session (chosen); Only count people who opt in (dropped); No A/B tests, only usability tests (dropped). Decided: Yes. After your first session, NODE sends one anonymous count: which test version you&#x27;re in, and yes or no for reaching 3 cards, opening the canvas, and sending a trail or pairing a device. There&#x27;s no id, and nothing about what you read or search. The same switch in Settings → Help turns it off. Why: Without it I&#x27;d be running tests I can&#x27;t read. It&#x27;s more than NODE sends today, so it&#x27;ll be said plainly on the welcome screen, in the privacy page and in the release notes before it ships. Next: It ships with the first test, in 0.13. The site&#x27;s privacy section changes in that release, not before.</description>
+  </item>
+  <item>
+    <title>How do I know if people come back, without tracking them?</title>
+    <link>https://noderesearch.app/blog#card-q16</link>
+    <guid isPermaLink="false">node-blog-2026-11-18-how-do-i-know-if-people-come-back-without-tracking-them-decided</guid>
+    <pubDate>Wed, 18 Nov 2026 12:00:00 +0000</pubDate>
+    <category>Privacy</category>
+    <description>Options: Add a &quot;days since install&quot; bucket to the anonymous daily count (chosen); Keep first-week milestones on your computer, with an opt-in to share a summary (also doing); Usability tests with 5 people (also doing); An install id (dropped). Decided: The daily count gets a &quot;days since install&quot; bucket and the test version. First-week milestones stay on your computer unless you choose to share a summary. Why: The daily count has no id, so it can&#x27;t tell a new user from an old one. Picking the moment that makes people stay without any data to check it would be a guess. Next: Both are on the backlog for 0.13, after their screens are designed.</description>
   </item>
   <item>
     <title>How do I test these changes?</title>
@@ -21,7 +29,7 @@
     <guid isPermaLink="false">node-blog-2026-11-18-how-do-i-test-these-changes-decided</guid>
     <pubDate>Wed, 18 Nov 2026 12:00:00 +0000</pubDate>
     <category>First week</category>
-    <description>Options: A/B test the three biggest changes, one at a time, on new installs (chosen); Usability tests with 5 people (also doing); Ship to everyone and compare before and after (dropped); Only count people who opt in (dropped). Decided: I&#x27;ll A/B test the first screen, the first-card note and the Continue page, one at a time, on new installs from 0.13. Each test only looks for a big difference, because NODE doesn&#x27;t have the traffic to see small ones yet. I&#x27;ll set the sample size before each test starts, decide once it&#x27;s reached, and post the result here, win or not. Why: These are my biggest guesses about the first week, and I&#x27;d rather know than assume. Existing users won&#x27;t be in any test, and Settings will say which version you&#x27;re in, with a switch to leave. Next: First I need to decide whether NODE can send one anonymous count after your first session, with the test version and whether you reached 3 cards. That&#x27;s more than it sends today, so I&#x27;ll post that decision here before any test starts.</description>
+    <description>Options: A/B test the three biggest changes, one at a time, on new installs (chosen); Usability tests with 5 people (also doing); Ship to everyone and compare before and after (dropped); Only count people who opt in (dropped). Decided: I&#x27;ll A/B test the first screen, the first-card note and the Continue page, one at a time, on new installs from 0.13. Each test only looks for a big difference, because NODE doesn&#x27;t have the traffic to see small ones yet. I&#x27;ll set the sample size before each test starts, decide once it&#x27;s reached, and post the result here, win or not. Why: These are my biggest guesses about the first week, and I&#x27;d rather know than assume. Existing users won&#x27;t be in any test, and Settings will say which version you&#x27;re in, with a switch to leave. Next: Nothing gets built until I&#x27;ve designed the screens for it and I&#x27;m happy with them. Then the first screen goes first, in 0.13. The count these tests need is decided in &quot;Can NODE send one count after your first session?&quot;</description>
   </item>
   <item>
     <title>What brings people back after the first day?</title>
