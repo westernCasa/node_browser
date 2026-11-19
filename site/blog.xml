@@ -8,6 +8,54 @@
   <language>en</language>
   <lastBuildDate>Wed, 18 Nov 2026 12:00:00 +0000</lastBuildDate>
   <item>
+    <title>What happens to tabs that aren&#x27;t on the canvas?</title>
+    <link>https://noderesearch.app/blog#card-q23</link>
+    <guid isPermaLink="false">node-blog-2026-11-18-what-happens-to-tabs-that-aren-t-on-the-canvas-decided</guid>
+    <pubDate>Wed, 18 Nov 2026 12:00:00 +0000</pubDate>
+    <category>Motion</category>
+    <description>Options: They fly into their row in the sidebar timeline (dropped); They fade out (chosen). Decided: When you reach the canvas, tabs that aren&#x27;t cards fade out where they are, and they fade back in when you come down to the Gallery. Why: The canvas only shows pages you&#x27;ve spent time on. A tab you just opened isn&#x27;t a card yet, and it&#x27;s still in the timeline.</description>
+  </item>
+  <item>
+    <title>What happens when you pinch from a page out to the canvas?</title>
+    <link>https://noderesearch.app/blog#card-q22</link>
+    <guid isPermaLink="false">node-blog-2026-11-18-what-happens-when-you-pinch-from-a-page-out-to-the-canvas-decided</guid>
+    <pubDate>Wed, 18 Nov 2026 12:00:00 +0000</pubDate>
+    <category>Motion</category>
+    <description>Options: Swap one view for the next (dropped); Each page travels to its place in the next view (chosen). Decided: Each page is one object. Pinch out and it shrinks into its Mosaic tile, then its Gallery thumbnail, then flies to its card on the canvas. Going up takes 320 ms and coming back takes 200 ms. Labels and lines show up after the pages land. Why: It&#x27;s the same page at every level, so it should look like it. Next: In NODE pages are native views, so the Gallery and canvas steps will move still pictures of each page, then swap the live page back in.</description>
+  </item>
+  <item>
+    <title>Where else should NODE move?</title>
+    <link>https://noderesearch.app/blog#card-q21</link>
+    <guid isPermaLink="false">node-blog-2026-11-18-where-else-should-node-move-proposed</guid>
+    <pubDate>Wed, 18 Nov 2026 12:00:00 +0000</pubDate>
+    <category>Motion</category>
+    <description>Plan: I went through every spec and listed the places that still cut from one state to the next. The trail canvas and sharing had almost no motion. First five: the zoom ladder, a page becoming a card, Replay, the highlight in the command bar, and a flash of light when you take a screenshot. Why: The first three show how a trail grows, which is the main idea in NODE. The last two are small and used all the time. Next: A page becoming a card.</description>
+  </item>
+  <item>
+    <title>How should NODE show it&#x27;s reading the page and finding suggestions?</title>
+    <link>https://noderesearch.app/blog#card-q20</link>
+    <guid isPermaLink="false">node-blog-2026-11-18-how-should-node-show-it-s-reading-the-page-and-finding-sugge-decided</guid>
+    <pubDate>Wed, 18 Nov 2026 12:00:00 +0000</pubDate>
+    <category>Motion</category>
+    <description>Options: The page loader&#x27;s line doing both jobs (dropped); A readout of how NODE scores each word (dropped); Light that splits into keywords (chosen). Decided: A line fills while NODE reads the page. It splits into a thin drop of light for each keyword, each a faint colour of the spectrum, and the keyword lands at the foot of its drop. Each result card draws its left edge in light, then fades in. With the suggestions panel closed and the sidebar hidden, it runs on the right edge of the window, where the panel opens: a tick for each keyword, then a dash for each result that stays in grey as a count. With the sidebar showing, it runs inside the Suggest button. Why: Reading a page takes a few seconds, and until now you couldn&#x27;t see it happen.</description>
+  </item>
+  <item>
+    <title>Should the page loader look like glass?</title>
+    <link>https://noderesearch.app/blog#card-q19</link>
+    <guid isPermaLink="false">node-blog-2026-11-18-should-the-page-loader-look-like-glass-decided</guid>
+    <pubDate>Wed, 18 Nov 2026 12:00:00 +0000</pubDate>
+    <category>Motion</category>
+    <description>Options: A glass lens that slides across the address bar (dropped); Light as a wave, then as particles once data arrives (dropped); White light split into a spectrum (dropped); Light twisted into colour by sugar water (dropped); One line with light and a little refraction at its tip (chosen). Decided: One 2 px line. Nothing shows for the first 200 ms, so fast pages never flash a loader. While the site hasn&#x27;t answered, a short segment crosses every 1.2 s. Then the line fills with progress, flashes once and fades. If the page fails, it fills red. Its light builds toward the tip and falls softly onto the page. At the tip the light splits into a faint spectrum: red a pixel behind, blue a pixel ahead. I kept the glow small and the colour subtle. Why: I wanted refraction, and trying the bigger ideas showed me a loader on every page has to stay quiet. Next: The glow and the extra colour break NODE&#x27;s own brand guide, so I need to decide whether the loader gets an exception.</description>
+  </item>
+  <item>
+    <title>Where can a loader go when pages sit on top of NODE?</title>
+    <link>https://noderesearch.app/blog#card-q18</link>
+    <guid isPermaLink="false">node-blog-2026-11-18-where-can-a-loader-go-when-pages-sit-on-top-of-node-decided</guid>
+    <pubDate>Wed, 18 Nov 2026 12:00:00 +0000</pubDate>
+    <category>Motion</category>
+    <description>Options: A thin layer on the edge of the window (chosen); A bar across the top of the page (dropped); Only in the sidebar (dropped). Decided: The loader runs on the left edge of the window, in its own thin layer, the same way the full-screen toolbar does. When the sidebar is open, it sits on the sidebar&#x27;s edge. Why: With the sidebar hidden, the page fills the window, and the edge is the only place left.</description>
+  </item>
+  <item>
     <title>Can NODE send one count after your first session?</title>
     <link>https://noderesearch.app/blog#card-q17</link>
     <guid isPermaLink="false">node-blog-2026-11-18-can-node-send-one-count-after-your-first-session-decided</guid>

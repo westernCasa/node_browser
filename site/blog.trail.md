@@ -4,13 +4,13 @@ id: trail-node-blog
 name: Building NODE
 exported-by: Sven
 exported-at: 2026-11-18T12:00:00Z
-start-here: q14
+start-here: q21
 ---
 # Building NODE
 
 I'm Sven, and I make NODE. This blog is a NODE trail: each question I ran into is a card with the options I looked at, and my answer is the note linked to it.
 
-**Start here:** [What brings people back after the first day?](#q14)
+**Start here:** [Where else should NODE move?](#q21)
 
 ## First week
 <!-- group:g1 at:0,0 size:1240x2668 -->
@@ -255,6 +255,84 @@ Status: open
 So far: Electron stays the release build. I've started a Chromium build on ungoogled-chromium, mainly so Google sign-in works inside NODE. Why: Google blocks sign-in inside Electron apps, and faking Chrome breaks Google's terms. Mosaic and the address-bar suggestions need changes to Chromium itself, so I'll only switch once it does everything the current build does.
 — Sven · oct 18
 
+## Motion
+<!-- group:g6 at:0,3946 size:1240x2648 -->
+
+### ? What happens to tabs that aren't on the canvas?
+<!-- id:q23 type:question at:40,4006 size:400x352 -->
+Status: resolved
+- Sven: Decided, 18 Nov 2026
+- Sven: Option: They fly into their row in the sidebar timeline. Dropped. More movement than it's worth.
+- Sven: Option: They fade out. Chosen. They're still listed in the timeline as not on the canvas, with a button to put them there.
+
+### Note
+<!-- id:n23 type:note at:500,4006 size:380x196 -->
+Decided: When you reach the canvas, tabs that aren't cards fade out where they are, and they fade back in when you come down to the Gallery. Why: The canvas only shows pages you've spent time on. A tab you just opened isn't a card yet, and it's still in the timeline.
+— Sven · nov 18
+
+### ? What happens when you pinch from a page out to the canvas?
+<!-- id:q22 type:question at:40,4398 size:400x352 -->
+Status: resolved
+- Sven: Decided, 18 Nov 2026
+- Sven: Option: Swap one view for the next. Dropped. That's how it works now, and you lose track of your page.
+- Sven: Option: Each page travels to its place in the next view. Chosen. You always see where your page went.
+
+### Note
+<!-- id:n22 type:note at:500,4398 size:380x276 -->
+Decided: Each page is one object. Pinch out and it shrinks into its Mosaic tile, then its Gallery thumbnail, then flies to its card on the canvas. Going up takes 320 ms and coming back takes 200 ms. Labels and lines show up after the pages land. Why: It's the same page at every level, so it should look like it. Next: In NODE pages are native views, so the Gallery and canvas steps will move still pictures of each page, then swap the live page back in.
+— Sven · nov 18
+
+### ? Where else should NODE move?
+<!-- id:q21 type:question at:40,4790 size:400x132 -->
+Status: open
+- Sven: Proposed, 18 Nov 2026
+
+### Note
+<!-- id:n21 type:note at:500,4790 size:380x276 -->
+Plan: I went through every spec and listed the places that still cut from one state to the next. The trail canvas and sharing had almost no motion. First five: the zoom ladder, a page becoming a card, Replay, the highlight in the command bar, and a flash of light when you take a screenshot. Why: The first three show how a trail grows, which is the main idea in NODE. The last two are small and used all the time. Next: A page becoming a card.
+— Sven · nov 18
+
+### ? How should NODE show it's reading the page and finding suggestions?
+<!-- id:q20 type:question at:40,5106 size:400x380 -->
+Status: resolved
+- Sven: Decided, 18 Nov 2026
+- Sven: Option: The page loader's line doing both jobs. Dropped.
+- Sven: Option: A readout of how NODE scores each word. Dropped. The most information, but the busiest.
+- Sven: Option: Light that splits into keywords. Chosen. It carries the light from the page loader into what NODE does with the page.
+
+### Note
+<!-- id:n20 type:note at:500,5106 size:380x336 -->
+Decided: A line fills while NODE reads the page. It splits into a thin drop of light for each keyword, each a faint colour of the spectrum, and the keyword lands at the foot of its drop. Each result card draws its left edge in light, then fades in. With the suggestions panel closed and the sidebar hidden, it runs on the right edge of the window, where the panel opens: a tick for each keyword, then a dash for each result that stays in grey as a count. With the sidebar showing, it runs inside the Suggest button. Why: Reading a page takes a few seconds, and until now you couldn't see it happen.
+— Sven · nov 18
+
+### ? Should the page loader look like glass?
+<!-- id:q19 type:question at:40,5526 size:400x572 -->
+Status: resolved
+- Sven: Decided, 18 Nov 2026
+- Sven: Option: A glass lens that slides across the address bar. Dropped. It looked like a bubble.
+- Sven: Option: Light as a wave, then as particles once data arrives. Dropped. Too much going on for something you see on every page.
+- Sven: Option: White light split into a spectrum. Dropped. Same problem.
+- Sven: Option: Light twisted into colour by sugar water. Dropped. Not right for a loader.
+- Sven: Option: One line with light and a little refraction at its tip. Chosen. It reads as light without asking for attention.
+
+### Note
+<!-- id:n19 type:note at:500,5526 size:380x376 -->
+Decided: One 2 px line. Nothing shows for the first 200 ms, so fast pages never flash a loader. While the site hasn't answered, a short segment crosses every 1.2 s. Then the line fills with progress, flashes once and fades. If the page fails, it fills red. Its light builds toward the tip and falls softly onto the page. At the tip the light splits into a faint spectrum: red a pixel behind, blue a pixel ahead. I kept the glow small and the colour subtle. Why: I wanted refraction, and trying the bigger ideas showed me a loader on every page has to stay quiet. Next: The glow and the extra colour break NODE's own brand guide, so I need to decide whether the loader gets an exception.
+— Sven · nov 18
+
+### ? Where can a loader go when pages sit on top of NODE?
+<!-- id:q18 type:question at:40,6138 size:400x416 -->
+Status: resolved
+- Sven: Decided, 18 Nov 2026
+- Sven: Option: A thin layer on the edge of the window. Chosen. It's the one place that's always free, and it's where the sidebar comes from.
+- Sven: Option: A bar across the top of the page. Dropped. Pages are native views on top of NODE's own interface, so nothing NODE draws can cover them.
+- Sven: Option: Only in the sidebar. Dropped. The sidebar is hidden most of the time.
+
+### Note
+<!-- id:n18 type:note at:500,6138 size:380x196 -->
+Decided: The loader runs on the left edge of the window, in its own thin layer, the same way the full-screen toolbar does. When the sidebar is open, it sits on the sidebar's edge. Why: With the sidebar hidden, the page fills the window, and the edge is the only place left.
+— Sven · nov 18
+
 ## Links
 
 - [Decided: I'll A/B test the first screen, the first-card note and the Continue page all at once, on new installs from 0.13](#n15) → [How do I test these changes?](#q15) · drawn · decided <!-- from:n15 to:q15 kind:you -->
@@ -276,3 +354,9 @@ So far: Electron stays the release build. I've started a Chromium build on ungoo
 - [Decided: Few, and only about something new](#n8) → [How many notifications should NODE send?](#q8) · drawn · decided <!-- from:n8 to:q8 kind:you -->
 - [Decided: No](#n2) → [Can NODE run Chrome extensions?](#q2) · drawn · decided <!-- from:n2 to:q2 kind:you -->
 - [So far: Electron stays the release build](#n1) → [Electron or a Chromium build?](#q1) · drawn · so far <!-- from:n1 to:q1 kind:you -->
+- [Decided: When you reach the canvas, tabs that aren't cards fade out where they are, and they fade back in when you come down to the Gallery](#n23) → [What happens to tabs that aren't on the canvas?](#q23) · drawn · decided <!-- from:n23 to:q23 kind:you -->
+- [Decided: Each page is one object](#n22) → [What happens when you pinch from a page out to the canvas?](#q22) · drawn · decided <!-- from:n22 to:q22 kind:you -->
+- [Plan: I went through every spec and listed the places that still cut from one state to the next](#n21) → [Where else should NODE move?](#q21) · drawn · plan <!-- from:n21 to:q21 kind:you -->
+- [Decided: A line fills while NODE reads the page](#n20) → [How should NODE show it's reading the page and finding suggestions?](#q20) · drawn · decided <!-- from:n20 to:q20 kind:you -->
+- [Decided: One 2 px line](#n19) → [Should the page loader look like glass?](#q19) · drawn · decided <!-- from:n19 to:q19 kind:you -->
+- [Decided: The loader runs on the left edge of the window, in its own thin layer, the same way the full-screen toolbar does](#n18) → [Where can a loader go when pages sit on top of NODE?](#q18) · drawn · decided <!-- from:n18 to:q18 kind:you -->

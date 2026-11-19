@@ -4,9 +4,63 @@ Sven's notes on the questions I ask while building NODE Research Browser, the op
 
     python3 docs/media/src/build-blog.py docs/blog.md site
 
-Each post: `## YYYY-MM-DD · The question`, then `Topic:` (a group on the canvas: Who it's for, First week, Privacy, Sharing, Engine, or a new one), `Status:` (Decided, Proposed, Open, Parked or In progress), any number of `Option:` lines, `Decision:`, `Why:`, and optionally `Next:` and `Read:` (a link). One to three short sentences per field.
+Each post: `## YYYY-MM-DD · The question`, then `Topic:` (a group on the canvas: Who it's for, First week, Privacy, Sharing, Engine, Motion, or a new one), `Status:` (Decided, Proposed, Open, Parked or In progress), any number of `Option:` lines, `Decision:`, `Why:`, and optionally `Next:` and `Read:` (a link). One to three short sentences per field.
 
 An option line is `Option: Verdict | The option | Why, in one sentence`. Verdicts: Chosen, Leaning, Also offered, Also doing, Fallback, Later, Parked, Dropped, Not possible. The why is optional; leave it out rather than guess. Only list options that were really on the table.
+
+## 2026-11-18 · What happens to tabs that aren't on the canvas?
+Topic: Motion
+Status: Decided
+Option: Dropped | They fly into their row in the sidebar timeline | More movement than it's worth.
+Option: Chosen | They fade out | They're still listed in the timeline as not on the canvas, with a button to put them there.
+Decision: When you reach the canvas, tabs that aren't cards fade out where they are, and they fade back in when you come down to the Gallery.
+Why: The canvas only shows pages you've spent time on. A tab you just opened isn't a card yet, and it's still in the timeline.
+
+## 2026-11-18 · What happens when you pinch from a page out to the canvas?
+Topic: Motion
+Status: Decided
+Option: Dropped | Swap one view for the next | That's how it works now, and you lose track of your page.
+Option: Chosen | Each page travels to its place in the next view | You always see where your page went.
+Decision: Each page is one object. Pinch out and it shrinks into its Mosaic tile, then its Gallery thumbnail, then flies to its card on the canvas. Going up takes 320 ms and coming back takes 200 ms. Labels and lines show up after the pages land.
+Why: It's the same page at every level, so it should look like it.
+Next: In NODE pages are native views, so the Gallery and canvas steps will move still pictures of each page, then swap the live page back in.
+
+## 2026-11-18 · Where else should NODE move?
+Topic: Motion
+Status: Proposed
+Decision: I went through every spec and listed the places that still cut from one state to the next. The trail canvas and sharing had almost no motion. First five: the zoom ladder, a page becoming a card, Replay, the highlight in the command bar, and a flash of light when you take a screenshot.
+Why: The first three show how a trail grows, which is the main idea in NODE. The last two are small and used all the time.
+Next: A page becoming a card.
+
+## 2026-11-18 · How should NODE show it's reading the page and finding suggestions?
+Topic: Motion
+Status: Decided
+Option: Dropped | The page loader's line doing both jobs
+Option: Dropped | A readout of how NODE scores each word | The most information, but the busiest.
+Option: Chosen | Light that splits into keywords | It carries the light from the page loader into what NODE does with the page.
+Decision: A line fills while NODE reads the page. It splits into a thin drop of light for each keyword, each a faint colour of the spectrum, and the keyword lands at the foot of its drop. Each result card draws its left edge in light, then fades in. With the suggestions panel closed and the sidebar hidden, it runs on the right edge of the window, where the panel opens: a tick for each keyword, then a dash for each result that stays in grey as a count. With the sidebar showing, it runs inside the Suggest button.
+Why: Reading a page takes a few seconds, and until now you couldn't see it happen.
+
+## 2026-11-18 · Should the page loader look like glass?
+Topic: Motion
+Status: Decided
+Option: Dropped | A glass lens that slides across the address bar | It looked like a bubble.
+Option: Dropped | Light as a wave, then as particles once data arrives | Too much going on for something you see on every page.
+Option: Dropped | White light split into a spectrum | Same problem.
+Option: Dropped | Light twisted into colour by sugar water | Not right for a loader.
+Option: Chosen | One line with light and a little refraction at its tip | It reads as light without asking for attention.
+Decision: One 2 px line. Nothing shows for the first 200 ms, so fast pages never flash a loader. While the site hasn't answered, a short segment crosses every 1.2 s. Then the line fills with progress, flashes once and fades. If the page fails, it fills red. Its light builds toward the tip and falls softly onto the page. At the tip the light splits into a faint spectrum: red a pixel behind, blue a pixel ahead. I kept the glow small and the colour subtle.
+Why: I wanted refraction, and trying the bigger ideas showed me a loader on every page has to stay quiet.
+Next: The glow and the extra colour break NODE's own brand guide, so I need to decide whether the loader gets an exception.
+
+## 2026-11-18 · Where can a loader go when pages sit on top of NODE?
+Topic: Motion
+Status: Decided
+Option: Chosen | A thin layer on the edge of the window | It's the one place that's always free, and it's where the sidebar comes from.
+Option: Dropped | A bar across the top of the page | Pages are native views on top of NODE's own interface, so nothing NODE draws can cover them.
+Option: Dropped | Only in the sidebar | The sidebar is hidden most of the time.
+Decision: The loader runs on the left edge of the window, in its own thin layer, the same way the full-screen toolbar does. When the sidebar is open, it sits on the sidebar's edge.
+Why: With the sidebar hidden, the page fills the window, and the edge is the only place left.
 
 ## 2026-11-18 · Can NODE send one count after your first session?
 Topic: Privacy
