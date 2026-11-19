@@ -32,13 +32,14 @@ Next: Both are on the backlog for 0.13, after their screens are designed.
 ## 2026-11-18 · How do I test these changes?
 Topic: First week
 Status: Decided
-Option: Chosen | A/B test the three biggest changes, one at a time, on new installs | It shows whether each change works, not just whether people like it.
+Option: Chosen | A/B test the three biggest changes at the same time, on new installs | It shows whether each change works, not just whether people like it, and all three answers come in together.
+Option: Dropped | A/B test them one at a time
 Option: Also doing | Usability tests with 5 people | They explain why something works or doesn't, but they're too few to count.
 Option: Dropped | Ship to everyone and compare before and after | Other changes and the time of year would mix into the numbers.
 Option: Dropped | Only count people who opt in | Too few people, and only the most engaged ones.
-Decision: I'll A/B test the first screen, the first-card note and the Continue page, one at a time, on new installs from 0.13. Each test only looks for a big difference, because NODE doesn't have the traffic to see small ones yet. I'll set the sample size before each test starts, decide once it's reached, and post the result here, win or not.
+Decision: I'll A/B test the first screen, the first-card note and the Continue page all at once, on new installs from 0.13. Each new install gets its own coin flip for each change, so every test still compares half of new installs with the other half. Each test only looks for a big difference, because NODE doesn't have the traffic to see small ones yet. I'll set the sample size before each test starts, decide once it's reached, and post the result here, win or not.
 Why: These are my biggest guesses about the first week, and I'd rather know than assume. Existing users won't be in any test, and Settings will say which version you're in, with a switch to leave.
-Next: Nothing gets built until I've designed the screens for it and I'm happy with them. Then the first screen goes first, in 0.13. The count these tests need is decided in "Can NODE send one count after your first session?"
+Next: Nothing gets built until I've designed the screens for it and I'm happy with them. All three ship together in 0.13. The count these tests need is decided in "Can NODE send one count after your first session?"
 
 ## 2026-11-18 · What brings people back after the first day?
 Topic: First week
@@ -49,7 +50,7 @@ Option: Dropped | A weekly email | It would need your email address, and NODE ha
 Option: Dropped | Nothing, and rely on tabs reopening | It gives no reason to come back.
 Decision: A Continue page that replaces the blank new tab. It shows your open trails, each with its open question and the next suggested search.
 Why: An open question is the best reason to come back, and the new tab is the moment you can act on it. Notifications that do the job forever, without that reason, wear thin.
-Next: Aiming for 0.14, as an A/B test against a blank new tab.
+Next: Aiming for 0.13, as an A/B test against a blank new tab, running alongside the other two tests.
 
 ## 2026-11-18 · How should you notice your first card?
 Topic: First week

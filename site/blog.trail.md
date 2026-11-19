@@ -13,24 +13,25 @@ I'm Sven, and I make NODE. This blog is a NODE trail: each question I ran into i
 **Start here:** [What brings people back after the first day?](#q14)
 
 ## First week
-<!-- group:g1 at:0,0 size:1240x2620 -->
+<!-- group:g1 at:0,0 size:1240x2668 -->
 
 ### ? How do I test these changes?
-<!-- id:q15 type:question at:40,60 size:400x498 -->
+<!-- id:q15 type:question at:40,60 size:400x546 -->
 Status: resolved
 - Sven: Decided, 18 Nov 2026
-- Sven: Option: A/B test the three biggest changes, one at a time, on new installs. Chosen. It shows whether each change works, not just whether people like it.
+- Sven: Option: A/B test the three biggest changes at the same time, on new installs. Chosen. It shows whether each change works, not just whether people like it, and all three answers come in together.
+- Sven: Option: A/B test them one at a time. Dropped.
 - Sven: Option: Usability tests with 5 people. Also doing. They explain why something works or doesn't, but they're too few to count.
 - Sven: Option: Ship to everyone and compare before and after. Dropped. Other changes and the time of year would mix into the numbers.
 - Sven: Option: Only count people who opt in. Dropped. Too few people, and only the most engaged ones.
 
 ### Note
-<!-- id:n15 type:note at:500,60 size:380x416 -->
-Decided: I'll A/B test the first screen, the first-card note and the Continue page, one at a time, on new installs from 0.13. Each test only looks for a big difference, because NODE doesn't have the traffic to see small ones yet. I'll set the sample size before each test starts, decide once it's reached, and post the result here, win or not. Why: These are my biggest guesses about the first week, and I'd rather know than assume. Existing users won't be in any test, and Settings will say which version you're in, with a switch to leave. Next: Nothing gets built until I've designed the screens for it and I'm happy with them. Then the first screen goes first, in 0.13. The count these tests need is decided in "Can NODE send one count after your first session?"
+<!-- id:n15 type:note at:500,60 size:380x476 -->
+Decided: I'll A/B test the first screen, the first-card note and the Continue page all at once, on new installs from 0.13. Each new install gets its own coin flip for each change, so every test still compares half of new installs with the other half. Each test only looks for a big difference, because NODE doesn't have the traffic to see small ones yet. I'll set the sample size before each test starts, decide once it's reached, and post the result here, win or not. Why: These are my biggest guesses about the first week, and I'd rather know than assume. Existing users won't be in any test, and Settings will say which version you're in, with a switch to leave. Next: Nothing gets built until I've designed the screens for it and I'm happy with them. All three ship together in 0.13. The count these tests need is decided in "Can NODE send one count after your first session?"
 — Sven · nov 18
 
 ### ? What brings people back after the first day?
-<!-- id:q14 type:question at:40,598 size:400x540 -->
+<!-- id:q14 type:question at:40,646 size:400x540 -->
 Status: open
 - Sven: Proposed, 18 Nov 2026
 - Sven: Option: A Continue page on every new tab, with your open questions and the next search. Leaning. It shows up when you're already in NODE and can act on it.
@@ -39,12 +40,12 @@ Status: open
 - Sven: Option: Nothing, and rely on tabs reopening. Dropped. It gives no reason to come back.
 
 ### Note
-<!-- id:n14 type:note at:500,598 size:380x256 -->
-Plan: A Continue page that replaces the blank new tab. It shows your open trails, each with its open question and the next suggested search. Why: An open question is the best reason to come back, and the new tab is the moment you can act on it. Notifications that do the job forever, without that reason, wear thin. Next: Aiming for 0.14, as an A/B test against a blank new tab.
+<!-- id:n14 type:note at:500,646 size:380x276 -->
+Plan: A Continue page that replaces the blank new tab. It shows your open trails, each with its open question and the next suggested search. Why: An open question is the best reason to come back, and the new tab is the moment you can act on it. Notifications that do the job forever, without that reason, wear thin. Next: Aiming for 0.13, as an A/B test against a blank new tab, running alongside the other two tests.
 — Sven · nov 18
 
 ### ? How should you notice your first card?
-<!-- id:q13 type:question at:40,1178 size:400x452 -->
+<!-- id:q13 type:question at:40,1226 size:400x452 -->
 Status: open
 - Sven: Proposed, 18 Nov 2026
 - Sven: Option: A short note and one pulse on the Canvas tab. Leaning. It turns something that happens silently into something you see, then gets out of the way.
@@ -52,12 +53,12 @@ Status: open
 - Sven: Option: A "3 cards to your first trail" checklist. Later. Unfinished tasks can pull people back, but the evidence for it is mixed and it feels like a game. I'll only try it if the note doesn't work.
 
 ### Note
-<!-- id:n13 type:note at:500,1178 size:380x216 -->
+<!-- id:n13 type:note at:500,1226 size:380x216 -->
 Plan: After about 20 seconds of reading, a short note says "First card on your trail" and the Canvas tab pulses once. At 3 cards, one notice offers to show the trail. Why: Today a page becomes a card with no sign at all. Next: Part of the 0.13 first run, as an A/B test against staying silent.
 — Sven · nov 18
 
 ### ? What should the first five minutes of NODE feel like?
-<!-- id:q12 type:question at:40,1670 size:400x614 -->
+<!-- id:q12 type:question at:40,1718 size:400x614 -->
 Status: open
 - Sven: Proposed, 18 Nov 2026
 - Sven: Option: A start screen that asks "What are you looking into?". Leaning. Setup waits until you need it, and you get to something useful faster. Example questions help if you don't have one in mind.
@@ -66,17 +67,17 @@ Status: open
 - Sven: Option: Keep the setup form, cut to one screen with Skip. Dropped. It still asks for things before you've seen anything worth it, and most people keep the defaults anyway.
 
 ### Note
-<!-- id:n12 type:note at:500,1670 size:380x276 -->
+<!-- id:n12 type:note at:500,1718 size:380x276 -->
 Plan: I want first launch to ask "What are you looking into?" instead of asking for API keys. Every way in should end with a trail of 3 cards, the canvas open, and an offer to send it. Why: Right now the first screen is a setup form. The trail, the part that makes NODE different, shows up later on a screen I never point anyone to. Next: I'm aiming to build it for 0.13 and A/B test it against the empty first tab, alongside a 5-person usability test.
 — Sven · nov 18
 
 ### ? How far do I go to make NODE a habit?
-<!-- id:q11 type:question at:40,2324 size:400x154 -->
+<!-- id:q11 type:question at:40,2372 size:400x154 -->
 Status: open
 - Sven: Proposed, 18 Nov 2026
 
 ### Note
-<!-- id:n11 type:note at:500,2324 size:380x256 -->
+<!-- id:n11 type:note at:500,2372 size:380x256 -->
 Plan: No feed, no streaks and no fake urgency. Every kind of notice gets its own switch, and first-week milestones are counted only on your computer. If a change brings more visits but also more people turning notices off, I roll it back. Why: A lot of you picked NODE for privacy. And the long experiments I read, at Facebook and Pinterest, found that pushing harder loses people over a few months.
 — Sven · nov 18
 
@@ -224,10 +225,10 @@ Decided: Few, and only about something new. There's a weekly limit across all ki
 — Sven · nov 6
 
 ## Engine
-<!-- group:g5 at:0,2700 size:1240x1118 -->
+<!-- group:g5 at:0,2748 size:1240x1118 -->
 
 ### ? Can NODE run Chrome extensions?
-<!-- id:q2 type:question at:40,2760 size:400x546 -->
+<!-- id:q2 type:question at:40,2808 size:400x546 -->
 Status: resolved
 - Sven: Decided, 25 Oct 2026
 - Sven: Option: Ship uBlock Origin itself. Dropped. Electron is missing the parts it needs, and it could break with any update.
@@ -237,12 +238,12 @@ Status: resolved
 - Sven: Option: A Chromium build, which runs extensions. Later. Part of the engine question.
 
 ### Note
-<!-- id:n2 type:note at:500,2760 size:380x176 -->
+<!-- id:n2 type:note at:500,2808 size:380x176 -->
 Decided: No. Instead, NODE's built-in blocker uses the same filter lists uBlock Origin uses by default. Why: A beta tester asked for uBlock Origin, and this covers what they used it for without breaking NODE's own blocker.
 — Sven · oct 25
 
 ### ? Electron or a Chromium build?
-<!-- id:q1 type:question at:40,3346 size:400x432 -->
+<!-- id:q1 type:question at:40,3394 size:400x432 -->
 Status: open
 - Sven: In progress, 18 Oct 2026
 - Sven: Option: Ship NODE as a Chrome extension. Dropped. Mosaic, address-bar suggestions and the agent tools can't work in an extension.
@@ -250,13 +251,13 @@ Status: open
 - Sven: Option: Build on BrowserOS. Dropped. Its licence (AGPL) doesn't fit NODE's MIT licence, so I went with ungoogled-chromium.
 
 ### Note
-<!-- id:n1 type:note at:500,3346 size:380x236 -->
+<!-- id:n1 type:note at:500,3394 size:380x236 -->
 So far: Electron stays the release build. I've started a Chromium build on ungoogled-chromium, mainly so Google sign-in works inside NODE. Why: Google blocks sign-in inside Electron apps, and faking Chrome breaks Google's terms. Mosaic and the address-bar suggestions need changes to Chromium itself, so I'll only switch once it does everything the current build does.
 — Sven · oct 18
 
 ## Links
 
-- [Decided: I'll A/B test the first screen, the first-card note and the Continue page, one at a time, on new installs from 0.13](#n15) → [How do I test these changes?](#q15) · drawn · decided <!-- from:n15 to:q15 kind:you -->
+- [Decided: I'll A/B test the first screen, the first-card note and the Continue page all at once, on new installs from 0.13](#n15) → [How do I test these changes?](#q15) · drawn · decided <!-- from:n15 to:q15 kind:you -->
 - [Plan: A Continue page that replaces the blank new tab](#n14) → [What brings people back after the first day?](#q14) · drawn · plan <!-- from:n14 to:q14 kind:you -->
 - [Plan: After about 20 seconds of reading, a short note says "First card on your trail" and the Canvas tab pulses once](#n13) → [How should you notice your first card?](#q13) · drawn · plan <!-- from:n13 to:q13 kind:you -->
 - [Plan: I want first launch to ask "What are you looking into?" instead of asking for API keys](#n12) → [What should the first five minutes of NODE feel like?](#q12) · drawn · plan <!-- from:n12 to:q12 kind:you -->
